@@ -1180,6 +1180,10 @@ export function TaskDetail({
                 </AddButton>
               </div>
               <Progress
+                label={t(
+                  `پیشرفت زیرکارهای ${task.title}`,
+                  `Subtask progress for ${task.title}`,
+                )}
                 value={task.children_progress.done}
                 max={task.children_progress.total}
               />

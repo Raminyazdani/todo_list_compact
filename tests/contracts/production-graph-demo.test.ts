@@ -13,6 +13,7 @@ import {
   writeExclusivePrivateJson,
 } from "../../scripts/ops/private-paths.mjs";
 import { ownerCookie, origin, scopedToken } from "./http-fixture";
+import { TOOL_CATALOG } from "../../server/mcp/catalog";
 import type {
   ChecklistDTO,
   ActivityDTO,
@@ -25,8 +26,13 @@ import type {
 } from "../../shared/contracts";
 
 /** Coordinator-only remote proof. No cleanup: these exact IDs are restore/UI evidence. */
-const enabled = process.env.RUN_PRODUCTION_GRAPH_DEMO === "1";
-const target = "https://ramin-life-os.vercel.app";
+const production = process.env.RUN_PRODUCTION_GRAPH_DEMO === "1";
+const rehearsal = process.env.RUN_PRODUCTION_GRAPH_REHEARSAL === "1";
+const enabled = production || rehearsal;
+const proofMode = production ? "production" : "staging_rehearsal";
+const target = production
+  ? "https://ramin-life-os.vercel.app"
+  : "http://localhost:3000";
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 type Input = Record<string, unknown>;
 type Token = Awaited<ReturnType<typeof scopedToken>>;
@@ -42,6 +48,7 @@ type RecordedOperation = {
 type Report = {
   format: "ramin-life-os-production-graph-proof/1";
   status: "pending" | "failed" | "passed";
+  proof_mode: "production" | "staging_rehearsal";
   origin: string;
   run_id: string;
   started_at: string;
@@ -86,12 +93,106 @@ function graphState(tasks: TaskDTO[]) {
 }
 
 it.skipIf(!enabled)(
-  "production: real OAuth MCP writes and REST SQL reads prove synthetic ALL/ANY, reopen, checklists, templates, recurrence and scope denial",
+  `${proofMode}: real OAuth MCP writes and REST SQL reads prove synthetic ALL/ANY, reopen, checklists, templates, recurrence and scope denial`,
   async () => {
     // Reserve and pin the private journal before any sign-in, OAuth registration or write.
     // Re-running requires a NEW report file; pending writes must be inspected, not repeated.
     try {
+      check(production !== rehearsal, "GRAPH_PROOF_EXACTLY_ONE_MODE_REQUIRED");
       check(origin === target, "PRODUCTION_GRAPH_EXACT_ORIGIN_REQUIRED");
+      // Validate the complete authored MCP vocabulary before sign-in or any
+      // registration. These are schema admissions, not remote acceptance evidence.
+      const offlineId = "synthetic-schema-admission",
+        offlineKey = "synthetic-operation-admission";
+      const authoredArguments: [QueryName | CommandName, Input][] = [
+        ["task_get", { task_id: offlineId }],
+        [
+          "task_dependency_add_preview",
+          {
+            task_id: offlineId,
+            prerequisites: [
+              { task_id: "synthetic-prerequisite", mode: "hard" },
+            ],
+            operator: "ALL",
+          },
+        ],
+        [
+          "task_template_instantiate_preview",
+          {
+            template_id: offlineId,
+            project_id: offlineId,
+            preserve_external_links: false,
+          },
+        ],
+        ...(
+          [
+            ["project_create", { title: "Synthetic admission project" }],
+            [
+              "task_create",
+              {
+                title: "Synthetic admission task",
+                project_id: offlineId,
+                source_reference: "synthetic-admission",
+              },
+            ],
+            [
+              "subtask_create",
+              {
+                title: "Synthetic admission child",
+                project_id: offlineId,
+                parent_task_id: offlineId,
+                source_reference: "synthetic-admission",
+              },
+            ],
+            ["task_dependency_add_commit", { preview_id: offlineId }],
+            ["task_complete", { task_id: offlineId }],
+            ["task_reopen", { task_id: offlineId }],
+            ["task_update", { task_id: offlineId, status: "In progress" }],
+            [
+              "task_checklist_create",
+              { task_id: offlineId, title: "Synthetic admission checklist" },
+            ],
+            [
+              "task_checklist_item_add",
+              { checklist_id: offlineId, title: "Synthetic admission item" },
+            ],
+            ["task_checklist_item_check", { item_id: offlineId }],
+            ["task_checklist_item_uncheck", { item_id: offlineId }],
+            [
+              "task_checklist_item_promote",
+              { item_id: offlineId, original: "keep_reference" },
+            ],
+            [
+              "task_template_create",
+              {
+                title: "Synthetic admission template",
+                root_task_id: offlineId,
+              },
+            ],
+            ["task_template_instantiate_commit", { preview_id: offlineId }],
+            [
+              "task_recurrence_create",
+              {
+                template_id: offlineId,
+                title: "Synthetic admission recurrence",
+                start_date: "2026-10-14",
+                timezone: "Europe/Berlin",
+                rrule: "FREQ=DAILY;COUNT=1",
+              },
+            ],
+          ] as [CommandName, Input][]
+        ).map(([name, input]): [CommandName, Input] => [
+          name,
+          { input, operation_id: offlineKey, expected_revision: 1 },
+        ]),
+      ];
+      for (const [name, args] of authoredArguments) {
+        const offered = TOOL_CATALOG.find((entry) => entry.name === name);
+        check(
+          offered?.schema.safeParse(args).success,
+          "AUTHORED_MCP_ARGUMENT_SCHEMA_INVALID",
+        );
+      }
       check(
         process.env.TEST_CREDENTIALS_PATH,
         "PRODUCTION_GRAPH_PRIVATE_CREDENTIALS_REQUIRED",
@@ -107,7 +208,8 @@ it.skipIf(!enabled)(
       const report: Report = {
         format: "ramin-life-os-production-graph-proof/1",
         status: "pending",
-        origin: target,
+        proof_mode: proofMode,
+        origin,
         run_id: randomUUID(),
         started_at: new Date().toISOString(),
         cleanup: "retain_until_coordinator_restore_and_redeploy_proof",
@@ -177,6 +279,16 @@ it.skipIf(!enabled)(
             args: Input,
             readonly = false,
           ) {
+            const definition = TOOL_CATALOG.find(
+              (entry) => entry.name === name,
+            );
+            check(definition, "OFFERED_MCP_TOOL_REQUIRED");
+            // Queries take their direct strict fields; commands take the
+            // published {input,operation_id,expected_revision} envelope.
+            check(
+              definition.schema.safeParse(args).success,
+              "MCP_ARGUMENTS_MUST_MATCH_PUBLISHED_CATALOG",
+            );
             let conn = readonly ? reader : writer;
             check(conn, "MCP_CONNECTION_REQUIRED");
             try {
@@ -497,7 +609,9 @@ it.skipIf(!enabled)(
           }
           try {
             await persist();
-            cookie = await ownerCookie({ productionGraphDemo: true });
+            cookie = await ownerCookie(
+              production ? { productionGraphDemo: true } : {},
+            );
             writer = await connection(scopes);
             // Only automation state is read here, never legacy tasks/files. The owner job is
             // global, so it is refused if any unrelated configured work could be delivered.
