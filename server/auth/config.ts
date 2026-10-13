@@ -111,7 +111,13 @@ export function createAuth(bootstrap = false) {
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         clientRegistrationDefaultScopes: ["openid", "tasks:read"],
-        clientRegistrationAllowedScopes: [...OWNER_SCOPES, "offline_access"],
+        clientRegistrationAllowedScopes: [
+          ...OWNER_SCOPES,
+          "openid",
+          "profile",
+          "email",
+          "offline_access",
+        ],
         resources: [
           {
             identifier: resource,
