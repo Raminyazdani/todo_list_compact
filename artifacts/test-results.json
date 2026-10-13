@@ -42,11 +42,23 @@
     },
     {
       "command": "pnpm test:e2e",
-      "status": "PARTIAL",
-      "tests_passed": 6,
+      "status": "PASS_LOCAL_SUBSETS",
+      "tests_passed": 9,
       "tests_skipped": 1,
       "duration_minutes": 3.9,
-      "limitation": "Initial six passed; later graph boundary, persistent create/MCP, real lost-response retry and timezone/recurrence preservation passed. Visual assertion found and fixed a dashboard fetch loop; its rerun and actual production redeploy remain pending."
+      "limitation": "All nine local browser scenarios passed across unchanged and affected reruns. Four full-page WCAG2A/AA axe checks passed. Actual production redeploy and the subsequent bounded UI additions remain separate checks."
+    },
+    {
+      "command": "node scripts/ops/runtime-smoke.mjs PRIVATE_PRODUCTION_CREDENTIALS https://ramin-life-os.vercel.app",
+      "status": "PASS",
+      "observed_at": "2026-10-13T22:07:15Z",
+      "origin": "https://ramin-life-os.vercel.app",
+      "tools_listed": 113,
+      "oauth_pkce": true,
+      "canonical_write_readback": true,
+      "idempotent_retry": true,
+      "fixture_cleanup": "archived",
+      "limitation": "Initial deployment preflight; final reviewed production revision and migration remain pending."
     },
     {
       "command": "pnpm exec tsx scripts/ops/public-safety.ts --private-source PRIVATE_SNAPSHOT",

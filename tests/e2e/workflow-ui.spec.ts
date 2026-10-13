@@ -68,11 +68,30 @@ test.beforeAll(async () => {
 });
 
 async function signIn(request: APIRequestContext) {
-  const response = await safePost(request, "/api/auth/sign-in/email", {
-    headers: { Origin: origin },
-    data: { email: credentials.email, password: credentials.password },
-  });
-  expect(response.ok(), "Isolated staging owner authentication").toBeTruthy();
+  let response: APIResponse | undefined;
+  let waited = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    response = await safePost(request, "/api/auth/sign-in/email", {
+      headers: { Origin: origin },
+      data: { email: credentials.email, password: credentials.password },
+    });
+    if (response.status() !== 429 || attempt === 2) break;
+    const headers = response.headers();
+    const retry = headers["x-retry-after"] ?? headers["retry-after"];
+    const seconds = retry
+      ? Number.isFinite(Number(retry))
+        ? Number(retry)
+        : (Date.parse(retry) - Date.now()) / 1000
+      : NaN;
+    const delay = Math.ceil(seconds * 1000);
+    if (!Number.isFinite(delay) || delay < 0 || waited + delay > 30000) break;
+    waited += delay;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  expect(
+    response?.ok(),
+    `Isolated staging owner authentication must succeed (HTTP ${response?.status() ?? "unavailable"}); only a bounded 429 retry is permitted.`,
+  ).toBeTruthy();
 }
 async function readTask(
   request: APIRequestContext,
@@ -335,6 +354,7 @@ test("dependency_graph_works_after_redeploy_and_fresh_login", async ({
   request,
   context,
 }) => {
+  test.setTimeout(25 * 60 * 1000);
   const redeployScript = process.env.E2E_REDEPLOY_SCRIPT;
   test.skip(
     !redeployScript,

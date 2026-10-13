@@ -21,11 +21,17 @@ pnpm exec tsx scripts/migration/cli.ts PRIVATE_SNAPSHOT --staging-dry-run
 
 The staging mode opens two disposable PostgreSQL engines, imports, reconciles exact original attrs, replays the batch, exports a full backup, restores into the second fresh engine and reconciles again. Neither production nor the source is written. Real production imports require the centrally owned schema to be migrated first and a fresh private live-read checkpoint with `verified_at`, `source_modified_time`, and `source_hash` matching the input. The checkpoint expires after ten minutes.
 
-```
-pnpm exec tsx --env-file=.env.local scripts/migration/commit.ts PRIVATE_SNAPSHOT PRIVATE_CHECKPOINT PRIVATE_REPORT --commit
+The repository's legitimate `.env.local` targets development/staging and must not select a production import. Replace the following example paths with actual absolute private paths outside Git. Verify the private production `DATABASE_URL` endpoint/branch and `OWNER_ID` against the separately recorded approved production resource and owner before committing; a successful staging rehearsal does not verify that destination.
+
+```powershell
+$productionEnvFile = 'C:/PRIVATE_LIFE_OS/production.env'
+$privateSnapshot = 'C:/PRIVATE_LIFE_OS/migration-input.json'
+$privateCheckpoint = 'C:/PRIVATE_LIFE_OS/source-checkpoint.json'
+$privateReport = 'C:/PRIVATE_LIFE_OS/production-reconciliation.json'
+pnpm exec tsx --env-file=$productionEnvFile scripts/migration/commit.ts $privateSnapshot $privateCheckpoint $privateReport --commit
 ```
 
-`DATABASE_URL` and `OWNER_ID` select the authenticated owner namespace. No credential is printed. The script repeats rehearsal, imports through the canonical `legacy_import` command and saves exact reconciliation privately. Repeated batch input uses the same idempotency key. It does not edit source Google data or enable any legacy writer.
+`DATABASE_URL` and `OWNER_ID` select the owner namespace, independently from the authentication user's ID. Only the coordinator runs this production command after destination/schema admission, a private rollback export and the fresh source checkpoint. No credential is printed. The script repeats rehearsal, imports through the canonical `legacy_import` command and saves exact reconciliation privately. Repeated batch input uses the same idempotency key. It does not edit source Google data or enable any legacy writer.
 
 ## Concurrency, rollback and cutover
 

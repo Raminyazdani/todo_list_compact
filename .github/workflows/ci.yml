@@ -1,7 +1,7 @@
 name: Verify Life OS
 on:
   push:
-    branches: [master, feat/life-os]
+    branches: [master]
   pull_request:
 permissions:
   contents: read
@@ -19,7 +19,7 @@ jobs:
           POSTGRES_DB: lifeos_test
         ports: [5432:5432]
         options: >-
-          --health-cmd pg_isready --health-interval 10s
+          --health-cmd "pg_isready -U postgres -d lifeos_test" --health-interval 10s
           --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

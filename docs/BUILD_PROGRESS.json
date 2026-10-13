@@ -1,9 +1,17 @@
 {
-  "updated_at": "2026-10-13T21:22:37.238Z",
+  "updated_at": "2026-10-13T22:12:25.727Z",
   "branch": "feat/life-os",
-  "commit": "4b231aec8648ebb8f3278252c09fc02ad68082f7",
-  "phase": "final_preflight",
-  "deployed_url": null,
+  "commit": "b3ee29f43e4da9515c8fa6cbca41965e771ad8e3",
+  "phase": "bounded_features_and_ci_repair",
+  "deployed_url": "https://ramin-life-os.vercel.app",
+  "production_verified": false,
+  "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
+  "initial_deployment": {
+    "id": "dpl_DYEdvoPd32LP6PhgeM5pNEwTTHuo",
+    "commit": "0ff748b8415e70e14c921c2db5f18f5fc2f0393f",
+    "state": "READY",
+    "limitation": "Vercel made the first repository-linked deployment production automatically. Final reviewed default-branch release, persistence drill and source migration are still required."
+  },
   "completed": [
     "empty_repository_verified_and_cloned",
     "private_handoff_checksum_verified",
@@ -14,21 +22,25 @@
     "actual_oauth_pkce_mcp_create_and_web_api_readback",
     "actual_postgres_concurrent_cycle_guards",
     "source_staging_import_replay_restore_reconciliation",
-    "actual_jwt_expiry_and_read_scope_denial"
+    "actual_jwt_expiry_and_read_scope_denial",
+    "actual_immediate_owner_client_revocation",
+    "actual_production_oauth_mcp_preflight",
+    "pre_import_private_encrypted_export_verified",
+    "four_synthetic_desktop_axe_checks"
   ],
   "active": [
-    "final_browser_risk_checks",
-    "independent_release_review",
+    "bounded_calendar_planning_files_connections_ui",
+    "linux_ci_signin_rate_limit_harness_repair",
     "github_ci_and_production_release"
   ],
   "tests": [
     {
       "evidence": "artifacts/test-results.json",
-      "unit_integration_passed": 156,
-      "opt_in_skipped": 12,
-      "domain_statements_percent": 91.16,
-      "domain_branches_percent": 85.35,
-      "browser_passed": 6,
+      "unit_integration_passed": 187,
+      "opt_in_skipped": 13,
+      "domain_statements_percent": 91.68,
+      "domain_branches_percent": 86.15,
+      "browser_passed": 9,
       "browser_redeploy_skipped": 1,
       "actual_postgres_passed": 2,
       "actual_mcp_tools": 113
@@ -37,7 +49,7 @@
   "task_graph_status": {
     "domain": "implemented_and_verified_locally",
     "migration": "actual_source_rehearsal_verified",
-    "ui": "final_retry_and_calendar_preservation_checks",
+    "ui": "core_nine_browser_scenarios_passed_additional_workflows_in_progress",
     "release": "pending"
   },
   "migration": {
@@ -55,7 +67,8 @@
   },
   "open_severity": {
     "production_gates": "NOT_RUN",
-    "known_p0_code_defects": "final_browser_regressions_pending",
+    "known_p0_code_defects": "none_observed_in_verified_snapshot",
+    "known_p1_checks": "Linux fast-runner sign-in throttling in test harness; bounded feature additions not yet built",
     "external_provider_gates": "EXTERNALLY_BLOCKED"
   },
   "blockers": [

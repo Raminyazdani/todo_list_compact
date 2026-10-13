@@ -27,6 +27,7 @@ import {
   EXPECTED_PROJECT,
   provisionSecrets,
 } from "../../scripts/ops/provision-secrets.mjs";
+import { createCiEnvironment } from "../../scripts/ops/ci-environment.mjs";
 const exec = promisify(execFile);
 let root: string, repository: string, privateDir: string, output: string;
 const email = "synthetic-owner@example.invalid",
@@ -69,6 +70,30 @@ afterEach(async () => {
   await rm(canonical, { recursive: true, force: true });
 });
 describe("operator admission uses actual isolated filesystem and mocked hosted services", () => {
+  it("CI-only environment generation cannot overwrite a real development file", async () => {
+    const target = join(repository, ".env.local"),
+      original = "SYNTHETIC_PRESERVED=original-value\n";
+    await expect(
+      createCiEnvironment({ directory: repository, ci: "false" }),
+    ).rejects.toThrow(/explicit CI/);
+    await expect(stat(target)).rejects.toMatchObject({ code: "ENOENT" });
+    await writeFile(target, original);
+    await expect(
+      createCiEnvironment({ directory: repository, ci: "true" }),
+    ).rejects.toMatchObject({ code: "EEXIST" });
+    expect(await readFile(target, "utf8")).toBe(original);
+  });
+  it("an empty isolated CI workspace receives only localhost synthetic configuration", async () => {
+    expect(
+      await createCiEnvironment({ directory: repository, ci: "true" }),
+    ).toMatchObject({ configured: true, synthetic_only: true });
+    const generated = parseEnv(
+      await readFile(join(repository, ".env.local"), "utf8"),
+    );
+    expect(new URL(generated.DATABASE_URL!).hostname).toBe("localhost");
+    expect(generated.OWNER_EMAIL).toBe("owner@example.test");
+    expect(generated.OWNER_ID).toBe("synthetic-ci-owner");
+  });
   it("relative, repository, case aliases and nonexistent parents cannot admit credential writes", async () => {
     const api = services();
     for (const path of [
