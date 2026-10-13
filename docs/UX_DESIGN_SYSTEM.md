@@ -1,6 +1,6 @@
 # Experience and design system
 
-Design status: specification and read-only reference review; interactive/visual evidence NOT RUN. The goal is a calm, compact, polished Persian-first workspace with real information and dependable interactions.
+Design status: implemented private workspace; authenticated synthetic browser evidence is recorded below. The goal is a calm, compact, polished Persian-first workspace with real information and dependable interactions. Automated checks do not establish complete accessibility conformance.
 
 ## Information architecture
 
@@ -10,15 +10,15 @@ Task views: List/Table, Board, Tree/WBS, Graph and Timeline. Ready and Blocked a
 
 ## Tokens
 
-| Token family | Decision |
-|---|---|
-| Color | Quiet warm neutral canvas, surface/raised-surface separation, ink/subtle text; one restrained indigo action accent; semantic success/warning/danger with text/icon labels |
-| Typography | Licensed/system Persian-capable sans fallback; readable body 14–16px, compact labels 12–13px, modest 22–30px page titles; strong numeric alignment and mixed-script isolation |
-| Spacing | 4px base scale; 8/12/16/24/32px gaps; dense lists with enough touch target height |
-| Shape | Consistent 10–14px cards/dialogs; subtle borders/shadows; no oversized hollow decorative cards |
-| Focus | Visible high-contrast focus ring, logical keyboard order, clear active selection independent of color |
-| Motion | Short purposeful transitions; respect reduced-motion; saved/pending/conflict states legible without animation |
-| Layout | Responsive grid, min-width-safe content, collapsible nav, bounded details pane and no mobile horizontal overflow |
+| Token family | Decision                                                                                                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Color        | Quiet warm neutral canvas, surface/raised-surface separation, ink/subtle text; one restrained indigo action accent; semantic success/warning/danger with text/icon labels     |
+| Typography   | Licensed/system Persian-capable sans fallback; readable body 14–16px, compact labels 12–13px, modest 22–30px page titles; strong numeric alignment and mixed-script isolation |
+| Spacing      | 4px base scale; 8/12/16/24/32px gaps; dense lists with enough touch target height                                                                                             |
+| Shape        | Consistent 10–14px cards/dialogs; subtle borders/shadows; no oversized hollow decorative cards                                                                                |
+| Focus        | Visible high-contrast focus ring, logical keyboard order, clear active selection independent of color                                                                         |
+| Motion       | Short purposeful transitions; respect reduced-motion; saved/pending/conflict states legible without animation                                                                 |
+| Layout       | Responsive grid, min-width-safe content, collapsible nav, bounded details pane and no mobile horizontal overflow                                                              |
 
 Implement reusable CSS variables for light/dark/system; persist theme/language/density/view/widget choices via settings. Theme initialization must not flash private content or expose unauthenticated data.
 
@@ -40,8 +40,10 @@ Set document language/direction from preferences, use logical CSS properties, is
 
 ## Reference planner review and reuse
 
-Read-only source review is underway. Inventory expected behaviors before reuse: 24-hour timeline, sticky ruler, overlap validation, Jena/Seewiesen work categories and XLSX values, German regional holidays, private iCal read-only source, backup/restore and cloud private persistence. Reuse behavior/algorithms after actual source/license/security inspection; do not copy its auth/store as a replacement for the required PostgreSQL/OAuth architecture. Keep the reference source/deployment unchanged.
+Read-only review completed for the reference planner README, security policy, MIT license, package manifest, HTML application and its core/holiday/export tests. Behaviors reviewed include the 24-hour timeline, ruler, interval overlap checks, Jena/Seewiesen work descriptions and XLSX values, German regional holidays, iCal reads and backup/persistence. Adapted pure calendar/time/holiday/export helpers retain their license notice and focused tests. The new application uses its own PostgreSQL owner authorization and OAuth; the reference source and deployment remain unchanged. Private source identifiers, credentials and live source content are excluded from this document.
 
 ## Visual acceptance evidence
 
-Real synthetic-only browser screenshots are required for Dashboard, Tasks, Projects, Calendar, Files, Settings, AI and error/empty states, light/dark and RTL/LTR, desktop/tablet/mobile. Inspect spacing/contrast/alignment/overflow and fix defects, then repeat only affected views. Save evidence references with test command and time. No screenshot or accessibility gate is PASS yet.
+Real synthetic-only browser screenshots are required for Dashboard, Tasks, Projects, Calendar, Files, Settings, AI and error/empty states, light/dark and RTL/LTR, desktop/tablet/mobile. Inspect spacing/contrast/alignment/overflow and fix defects, then repeat only affected views. Save evidence references with test command and time.
+
+The first stable production-bundle browser baseline observed six passing scenarios and one explicit production-redeployment skip on 2026-10-13. Evidence: `node node_modules/@playwright/test/cli.js test tests/e2e/workflow-ui.spec.ts --reporter=list` with private `E2E_CREDENTIALS_PATH`, `tests/e2e/workflow-ui.spec.ts`, private Playwright reports, and ignored `artifacts/screenshots/synthetic-mobile-dependency.png` / `synthetic-desktop-tasks.png`. The mobile screenshot was inspected at 375px with a persisted blocked dependency and no document overflow. The checklist dialog passed WCAG 2 A/AA axe tags with zero reported violations after an accessible-name and button-contrast repair. Keyboard checklist persistence, genuine OAuth MCP/UI parity and fresh-session task persistence passed. Full-page dark RTL/light LTR, graph boundary context, lost-response retry and recurrence preservation are separate later regressions; record their observed results before marking those gates complete. No live source screenshot is included in public Git.

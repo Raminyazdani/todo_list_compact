@@ -1,0 +1,89 @@
+{
+  "recorded_at": "2026-10-13T22:02:09Z",
+  "phase": "pre_release_verification",
+  "production_verified": false,
+  "checks": [
+    {
+      "command": "pnpm test:coverage",
+      "started_at": "2026-10-13T21:55:22Z",
+      "status": "PASS",
+      "test_files_passed": 27,
+      "tests_passed": 187,
+      "tests_skipped": 13,
+      "duration_seconds": 42.18,
+      "skipped_reason": "Explicit real PostgreSQL and live HTTP/expiry opt-in fixtures; separate actual runs required."
+    },
+    { "command": "pnpm typecheck", "status": "PASS" },
+    {
+      "command": "pnpm audit --prod --audit-level moderate",
+      "status": "PASS",
+      "known_vulnerabilities": 0
+    },
+    {
+      "command": "pnpm build",
+      "status": "PASS",
+      "limitation": "Fourth stable local production build passed; production deployment and later UI additions remain separate checks."
+    },
+    {
+      "command": "node scripts/ops/runtime-smoke.mjs PRIVATE_STAGING_CREDENTIALS",
+      "status": "PASS",
+      "origin": "http://localhost:3000",
+      "tools_listed": 113,
+      "oauth_pkce": true,
+      "canonical_write_readback": true,
+      "idempotent_retry": true
+    },
+    {
+      "command": "TEST_POSTGRES=1 node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/domain/postgres.test.ts",
+      "status": "PASS_AFTER_RETRY",
+      "tests_passed": 2,
+      "duration_seconds": 9.98,
+      "earlier_failure": "One 30-second timeout during observed transient DNS/latency; unchanged assertions passed on rerun."
+    },
+    {
+      "command": "pnpm test:e2e",
+      "status": "PARTIAL",
+      "tests_passed": 6,
+      "tests_skipped": 1,
+      "duration_minutes": 3.9,
+      "limitation": "Initial six passed; later graph boundary, persistent create/MCP, real lost-response retry and timezone/recurrence preservation passed. Visual assertion found and fixed a dashboard fetch loop; its rerun and actual production redeploy remain pending."
+    },
+    {
+      "command": "pnpm exec tsx scripts/ops/public-safety.ts --private-source PRIVATE_SNAPSHOT",
+      "status": "PASS",
+      "private_identifiers_checked": 120,
+      "failures": 0
+    },
+    {
+      "command": "pnpm exec tsx scripts/migration/cli.ts PRIVATE_SNAPSHOT --staging-dry-run",
+      "status": "PASS",
+      "source_written": false,
+      "production_written": false,
+      "counts": {
+        "Tasks": 45,
+        "Files": 3,
+        "Links": 3,
+        "Activity": 53,
+        "Settings": 36,
+        "Guide": 18
+      },
+      "replay": true,
+      "restore": true,
+      "fabricated_edges": 0,
+      "fabricated_checklist_items": 0
+    }
+  ],
+  "coverage": {
+    "all_statements_percent": 88.26,
+    "all_branches_percent": 82.87,
+    "domain_statements_percent": 91.68,
+    "domain_branches_percent": 86.15,
+    "domain_lines_percent": 92.41
+  },
+  "external_provider_tests": {
+    "ai": "MOCK_ONLY_ZERO_LIVE_INFERENCE",
+    "private_blob": "MOCK_ONLY_ACCOUNT_QUOTA_BLOCKED",
+    "google_app_grant": "NOT_CONNECTED",
+    "chatgpt_connection": "NOT_INSTALLED"
+  }
+}

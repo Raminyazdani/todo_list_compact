@@ -15,15 +15,15 @@ Any deviation requires an ADR with concrete evidence and implications. No depend
 
 ## Milestones and barriers
 
-| Wave | Deliverables | Required verification | Initial state |
-|---|---|---|---|
-| A — discovery | Git/tool/resource audit; full contract read; reference inventory; live private source/schema snapshot; privacy boundaries | Observed account/repository/provider capabilities and source freshness | ACTIVE |
-| B — contracts | Shared DTO/error/auth/operation/date rules; SQL model; graph/checklist domain; design tokens; migration/calendar contracts | Contract approval before dependent UI/MCP work | NOT RUN |
-| C — vertical slice | Authenticated task DB/REST/UI/MCP; A(B,C), B(D); two checklists; consistent ready/blocked state | Real PostgreSQL, auth negatives, retry/conflict/cycle tests, reload read-back | NOT RUN |
-| D — features | Task/project/dashboard views, graph/Gantt/tree, files/version/archive, calendar/time/XLSX, AI preview/approval, operations | Focused module tests and independent security/UX review | NOT RUN |
-| E — integration | Complete API/MCP contracts, migration dry-run/replay/reconcile, backup restore, 40 graph tests, full E2E/load/a11y/security | Actual counts/commands/results; no source mutation; zero P0/P1 | NOT RUN |
-| F — production | New Vercel project linked to exact repository/default branch; approved PG/private storage; owner auth; real MCP client; safe migration/cutover | Actual URL/SHA, production login/smoke, external auth discovery/write/readback, redeploy persistence | NOT RUN |
-| G — handoff | Evidence checklist, Persian guides, operator recovery/connection docs and checkpoint | Evidence independent of implementer; every unverified gate explicit | NOT RUN |
+| Wave               | Deliverables                                                                                                                                   | Required verification                                                                                | Initial state |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------- |
+| A — discovery      | Git/tool/resource audit; full contract read; reference inventory; live private source/schema snapshot; privacy boundaries                      | Observed account/repository/provider capabilities and source freshness                               | ACTIVE        |
+| B — contracts      | Shared DTO/error/auth/operation/date rules; SQL model; graph/checklist domain; design tokens; migration/calendar contracts                     | Contract approval before dependent UI/MCP work                                                       | NOT RUN       |
+| C — vertical slice | Authenticated task DB/REST/UI/MCP; A(B,C), B(D); two checklists; consistent ready/blocked state                                                | Real PostgreSQL, auth negatives, retry/conflict/cycle tests, reload read-back                        | NOT RUN       |
+| D — features       | Task/project/dashboard views, graph/Gantt/tree, files/version/archive, calendar/time/XLSX, AI preview/approval, operations                     | Focused module tests and independent security/UX review                                              | NOT RUN       |
+| E — integration    | Complete API/MCP contracts, migration dry-run/replay/reconcile, backup restore, 40 graph tests, full E2E/load/a11y/security                    | Actual counts/commands/results; no source mutation; zero P0/P1                                       | NOT RUN       |
+| F — production     | New Vercel project linked to exact repository/default branch; approved PG/private storage; owner auth; real MCP client; safe migration/cutover | Actual URL/SHA, production login/smoke, external auth discovery/write/readback, redeploy persistence | NOT RUN       |
+| G — handoff        | Evidence checklist, Persian guides, operator recovery/connection docs and checkpoint                                                           | Evidence independent of implementer; every unverified gate explicit                                  | NOT RUN       |
 
 ## Working protocol
 

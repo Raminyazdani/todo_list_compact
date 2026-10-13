@@ -1,0 +1,70 @@
+name: Verify Life OS
+on:
+  push:
+    branches: [master, feat/life-os]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: synthetic-ci-password
+          POSTGRES_DB: lifeos_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+        with:
+          version: 12.4.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Isolated test environment
+        run: node scripts/ops/ci-environment.mjs
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm security:scan
+      - run: pnpm audit --prod --audit-level high
+      - run: pnpm test:coverage
+      - name: Real PostgreSQL transaction guards
+        run: node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/domain/postgres.test.ts
+        env:
+          TEST_POSTGRES: "1"
+      - run: pnpm db:migrate
+      - run: pnpm exec tsx --env-file=.env.local scripts/ops/auth-migrate.ts
+      - run: pnpm exec tsx --env-file=.env.local scripts/ops/bootstrap-owner.ts /tmp/lifeos-ci-credentials.json
+      - run: pnpm build
+      - name: Authenticated browser and MCP checks
+        run: |
+          pnpm start > /tmp/lifeos-server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/health > /dev/null; then break; fi
+            sleep 2
+          done
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+          node scripts/ops/runtime-smoke.mjs /tmp/lifeos-ci-credentials.json
+        env:
+          E2E_CREDENTIALS_PATH: /tmp/lifeos-ci-credentials.json
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chromium
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: synthetic-test-report
+          path: |
+            playwright-report/
+            artifacts/domain-performance.json
+          retention-days: 7

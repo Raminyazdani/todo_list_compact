@@ -9,10 +9,10 @@ The product must be **materially more powerful and easier to use** than a spread
 - A **task**: durable action/outcome with its own status, dates, notes, references, activity, priorities and optional estimates.
 - A **prerequisite/dependency**: an explicit directed relation `A requires B`, meaning B's qualifying completion is a gate for starting A. The internal edge is `B -> A` (prerequisite -> dependent); display both directions to prevent user confusion.
 - Multiple prerequisites **at the same time**: default `ALL` (AND); e.g., A needs BOTH B and C done.
-- An alternative group: `ANY` (OR) for workflows where *one of several* prerequisites suffices, but only when user explicitly chooses OR. A task may require multiple groups combined with top-level ALL, e.g., `(B AND C) AND (D OR E)`. Provide visual, plain-language builder; don't expose raw formulas as the primary UI.
-- **Hard blocker** vs **soft/informational link**: hard link gates readiness; soft link generates warnings and visibility but never blocks by itself. An ordinary *related task* is not a prerequisite.
+- An alternative group: `ANY` (OR) for workflows where _one of several_ prerequisites suffices, but only when user explicitly chooses OR. A task may require multiple groups combined with top-level ALL, e.g., `(B AND C) AND (D OR E)`. Provide visual, plain-language builder; don't expose raw formulas as the primary UI.
+- **Hard blocker** vs **soft/informational link**: hard link gates readiness; soft link generates warnings and visibility but never blocks by itself. An ordinary _related task_ is not a prerequisite.
 - **Subtask**: a child task with its own identity, permission, notes, checklists, dates, files, estimates, dependencies, assignees/labels, activity and links. Parent-child is hierarchy, not automatically a dependency edge.
-- **Checklist item**: lightweight, ordered, checkable unit *inside* a task; may have short details; checklists may be multiple per task. It is NOT a task automatically and does NOT spawn its own deadline, reminder, calendar event or dependency unless explicitly promoted.
+- **Checklist item**: lightweight, ordered, checkable unit _inside_ a task; may have short details; checklists may be multiple per task. It is NOT a task automatically and does NOT spawn its own deadline, reminder, calendar event or dependency unless explicitly promoted.
 - **Milestone**: dated project checkpoint, zero-duration by default, optionally gated by tasks, shown in timeline; distinct from task completion.
 - **Workflow status**: existing `Inbox | Next | In progress | Waiting | Done | Cancelled`, preserved for migration.
 - **Computed readiness**: `ready | blocked | scheduled | closed` (plus reason codes) evaluated from hard dependencies, start constraint and completion status. This is **orthogonal** to the workflow status, never silently replaces `Inbox`/`Waiting` with `Blocked`.
@@ -33,7 +33,7 @@ C: Get supervisor's approval ─┘
 
 - A depends on B AND C. B depends on D. Initially A and B are blocked if D and C are unfinished. Completing D makes B ready, NOT A; completing B only makes A ready if C is also done. Checking every checklist item under C changes C's checklist progress but does not assume an approval was actually granted; C remains an incomplete task until specifically completed.
 - Adding prerequisite E to A makes A gated on B, C and E, without resetting any statuses. OR group behavior uses `A requires (B OR C)` and must accept B alone.
-- The task detail must explain in Persian: «این کار به‌دلیل تکمیل نشدن ۲ پیش‌نیاز هنوز آمادهٔ شروع نیست» and name exact prerequisites with links; also offer one-click navigate and show what *this* task unblocks downstream.
+- The task detail must explain in Persian: «این کار به‌دلیل تکمیل نشدن ۲ پیش‌نیاز هنوز آمادهٔ شروع نیست» and name exact prerequisites with links; also offer one-click navigate and show what _this_ task unblocks downstream.
 - User can reopen a prerequisite after dependents have begun; show a visible "at risk / prerequisites changed" alert and audit event, do NOT rewind completed/in-progress dependents without an explicit authorized decision.
 
 ## 3. Required behavior and invariants
@@ -46,7 +46,7 @@ C: Get supervisor's approval ─┘
 6. **Reopening.** Reopen a previously Done prerequisite -> recalculate downstream readiness transitively, update affected views, log impact; do not erase unrelated workflow status, checked checklist items or timestamps. Downstream already-completed tasks are not automatically undone.
 7. **Status operations.** If user/AI attempts to start or finish a hard-blocked task, offer preview with exact blockers. Normal start is rejected until resolved; explicit owner override with reason may proceed and MUST be audited. AI must never perform override silently. Repeated completion is idempotent.
 8. **Parallel branches.** Display tasks runnable simultaneously and those queued behind several branches. Distinguish **ready tasks** from **blocked/at-risk** tasks across dashboard, project, board, timeline, command palette and MCP.
-9. **Dates aren't silently changed.** Start date, scheduled block, deadline, target completion, reminders and estimated duration are distinct. Dependency change can compute *suggested* schedule and downstream impact with preview; do not cascade user deadlines or create calendar events without approval. Detect impossible plans (prerequisite due after dependent's deadline) as risks, not silent rewriting.
+9. **Dates aren't silently changed.** Start date, scheduled block, deadline, target completion, reminders and estimated duration are distinct. Dependency change can compute _suggested_ schedule and downstream impact with preview; do not cascade user deadlines or create calendar events without approval. Detect impossible plans (prerequisite due after dependent's deadline) as risks, not silent rewriting.
 10. **Cross-project relations.** Permit A in thesis and B in admin/other project when owner-authorized; show context, breadcrumbs, backlink and cross-project blocker counts; no artificial same-project restriction. Efficient indexed traversal and pagination protect large graphs.
 11. **Hierarchy.** Nested subtasks with user-configurable reasonable depth. Reject hierarchy cycles. Parent task and child task each have independent state. Display total/done/blocked children; don't auto-complete parent because all children are done unless a clearly configured and audited rule is enabled. A parent and its descendants may have prerequisites but reject deadlock-inducing combined rules; test hierarchy/dependency interactions.
 12. **Checklist atomicity.** Checking/unchecking an item is independently persistent, idempotent under retries, revision guarded, keyboard accessible and audited. Multiple named checklists; add/edit/reorder/duplicate/remove with non-destructive recovery (soft archive) and dragless alternative. Show progress `(checked / total)` and optional weighted progress if weights explicitly configured. Empty checklist has no misleading 100% completion.
@@ -79,11 +79,21 @@ Derived query example (not a schema of a persisted editable status):
   "workflow_status": "Next",
   "readiness": "blocked",
   "blocked_by": [
-    {"task_id": "task-B-synthetic", "required_status": "Done", "actual_status": "In progress", "group_operator": "ALL"},
-    {"task_id": "task-C-synthetic", "required_status": "Done", "actual_status": "Waiting", "group_operator": "ALL"}
+    {
+      "task_id": "task-B-synthetic",
+      "required_status": "Done",
+      "actual_status": "In progress",
+      "group_operator": "ALL"
+    },
+    {
+      "task_id": "task-C-synthetic",
+      "required_status": "Done",
+      "actual_status": "Waiting",
+      "group_operator": "ALL"
+    }
   ],
   "unblocks_downstream": [],
-  "checklist_progress": {"checked": 1, "total": 3},
+  "checklist_progress": { "checked": 1, "total": 3 },
   "revision": 4
 }
 ```
@@ -91,6 +101,7 @@ Derived query example (not a schema of a persisted editable status):
 ## 5. Required interface: task detail is a true command center
 
 ### 5.1 Task details
+
 - Clearly separated panels/tabs: Overview, Checklists, Subtasks, Dependencies/Blocked By, Unblocks, Schedule, Files & Links, Notes/Comments, History.
 - Inline add/edit of checklist rows; nested list groups; progress and optional next unchecked item.
 - Dependency picker: full-text search to select existing tasks, create another task inline, select AND vs OR, hard vs soft, optional explanatory note, cycle preview and reverse impact. Each selected prerequisite is a real clickable task.
@@ -99,6 +110,7 @@ Derived query example (not a schema of a persisted editable status):
 - Linked documents, source email/Drive references, project/area, reminders, estimated and tracked time, work sessions, custom fields where sensible.
 
 ### 5.2 Distinct views with persisted preferences
+
 - **List/Table:** dense configurable columns including parent, checklist progress, blocking count, unblocks count, readiness, priority, due date, next action and progress.
 - **Kanban:** group by status/project/priority or readiness; blocked cards show clear reason, prevent accidental drag-to-in-progress without preview/override.
 - **Dependency Graph:** interactive zoom/pan, color-by-readiness, directed arrows, grouping by project or parent, click-to-inspect, upstream/downstream/both modes, mini-map for large graphs, auto layout with performance budget. Include linear accessible list/table alternative, no graph-only capability.
@@ -111,6 +123,7 @@ Derived query example (not a schema of a persisted editable status):
 - Saved filters + shareable private deep links; never expose private task titles in unauthenticated Open Graph metadata.
 
 ### 5.3 Delight and speed
+
 - Universal Quick Add understands Persian/English sentences WITHOUT inventing due dates or committed dependencies; e.g. "تسک پایان‌نامه بساز که به اتمام ادبیات و تأیید Sven وابسته باشه" becomes explicit editable preview.
 - Undo/redo for safe eligible edits; inline changes with server commit indicators (pending/saved/conflict), bulk multi-select and keyboard-first controls.
 - Mobile bottom navigation, easy collapsing sections, persistent last view, useful offline state, subtle motion, meaningful skeleton/empty/error states. All buttons must work.
@@ -129,6 +142,7 @@ Expose REST endpoints and discoverable MCP tools using EXACT SAME domain service
 **Result shape:** action returns affected task IDs, before/after references, readiness changes, upstream and downstream impact, audit operation ID and updated revisions. UI reflects commits via read-after-write. MCP can search by project/title/IDs but ambiguous references MUST be resolved before mutation.
 
 **Natural language examples (Persian):**
+
 - «تسک گزارش نهایی رو بساز و وابسته کن به تکمیل آزمایش و تأیید سوپروایزر» -> preview two ALL edges, then commit only with consent.
 - «برای این کار سه تا چک‌لیست بساز: منابع، تحلیل، بررسی نهایی» -> create three real checklists associated with correct task.
 - «کدوم کارها رو الان می‌تونم انجام بدم که چیزی جلوشون نباشه؟» -> query derived readiness, not just `status=Next`.
@@ -139,7 +153,7 @@ Expose REST endpoints and discoverable MCP tools using EXACT SAME domain service
 
 ## 7. Migration and current Google Sheet
 
-The old `Ramin Task Ledger` is an INCOMPLETE *subset* of the desired V2 product, not a design ceiling. It is a verified DATA SOURCE, not an interface template or a full-featured schema. Its six tabs are Tasks/Files/Links/Activity/Settings/Guide; it has no native `task_dependencies`, checklist-item or hierarchy tables. Existing source rows keep their IDs, status, text, dates, links and history. Migration must create zero invented dependencies/checklist records unless explicit authoritative external evidence exists and the user authorizes adding them. Provide optional `AI Suggested Structure` review queue after import; suggestions are not committed changes. The new Postgres schema becomes authoritative only after verified cutover. Never overwrite source or add new columns to make V2 features work.
+The old `Ramin Task Ledger` is an INCOMPLETE _subset_ of the desired V2 product, not a design ceiling. It is a verified DATA SOURCE, not an interface template or a full-featured schema. Its six tabs are Tasks/Files/Links/Activity/Settings/Guide; it has no native `task_dependencies`, checklist-item or hierarchy tables. Existing source rows keep their IDs, status, text, dates, links and history. Migration must create zero invented dependencies/checklist records unless explicit authoritative external evidence exists and the user authorizes adding them. Provide optional `AI Suggested Structure` review queue after import; suggestions are not committed changes. The new Postgres schema becomes authoritative only after verified cutover. Never overwrite source or add new columns to make V2 features work.
 
 ## 8. Engineering test plan and release gates
 

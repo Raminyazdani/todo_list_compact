@@ -1,0 +1,94 @@
+{
+  "updated_at": "2026-10-13T21:22:37.238Z",
+  "branch": "feat/life-os",
+  "commit": "4b231aec8648ebb8f3278252c09fc02ad68082f7",
+  "phase": "final_preflight",
+  "deployed_url": null,
+  "completed": [
+    "empty_repository_verified_and_cloned",
+    "private_handoff_checksum_verified",
+    "live_source_snapshot_readonly",
+    "new_vercel_project_created",
+    "free_isolated_postgres_production_and_staging",
+    "shared_domain_graph_contract",
+    "actual_oauth_pkce_mcp_create_and_web_api_readback",
+    "actual_postgres_concurrent_cycle_guards",
+    "source_staging_import_replay_restore_reconciliation",
+    "actual_jwt_expiry_and_read_scope_denial"
+  ],
+  "active": [
+    "final_browser_risk_checks",
+    "independent_release_review",
+    "github_ci_and_production_release"
+  ],
+  "tests": [
+    {
+      "evidence": "artifacts/test-results.json",
+      "unit_integration_passed": 156,
+      "opt_in_skipped": 12,
+      "domain_statements_percent": 91.16,
+      "domain_branches_percent": 85.35,
+      "browser_passed": 6,
+      "browser_redeploy_skipped": 1,
+      "actual_postgres_passed": 2,
+      "actual_mcp_tools": 113
+    }
+  ],
+  "task_graph_status": {
+    "domain": "implemented_and_verified_locally",
+    "migration": "actual_source_rehearsal_verified",
+    "ui": "final_retry_and_calendar_preservation_checks",
+    "release": "pending"
+  },
+  "migration": {
+    "production_imported": false,
+    "source_written": false,
+    "last_verified_counts": {
+      "Tasks": 45,
+      "Files": 3,
+      "Links": 3,
+      "Activity": 53,
+      "Settings": 36,
+      "Guide": 18
+    },
+    "private_report": "outside_public_repository"
+  },
+  "open_severity": {
+    "production_gates": "NOT_RUN",
+    "known_p0_code_defects": "final_browser_regressions_pending",
+    "external_provider_gates": "EXTERNALLY_BLOCKED"
+  },
+  "blockers": [
+    {
+      "area": "private_object_storage",
+      "evidence": "Blob creation rejected by account usage threshold; all existing private stores suspended",
+      "state": "EXTERNALLY_BLOCKED"
+    },
+    {
+      "area": "live_ai_provider",
+      "evidence": "AI Gateway authenticated credits probe returned balance 0",
+      "state": "EXTERNALLY_BLOCKED"
+    },
+    {
+      "area": "chatgpt_installation",
+      "evidence": "Actual account UI shows Pro and Add custom MCP server; connection not yet submitted",
+      "state": "NOT_RUN"
+    }
+  ],
+  "available_agents": [
+    "root",
+    "requirements",
+    "source_audit",
+    "domain_engine",
+    "release_review"
+  ],
+  "next_actions": [
+    "final_freeze_build_browser_and_http_authority_checks",
+    "push_feature_pr_and_verified_ci",
+    "deploy_exact_repo_to_new_vercel_project",
+    "fresh_source_checkpoint_import_and_reconcile",
+    "production_mcp_redeploy_and_hosted_restore_drill",
+    "concrete_owner_provider_and_chatgpt_grant_steps"
+  ],
+  "release_complete": false
+}
