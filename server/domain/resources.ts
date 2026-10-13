@@ -5,6 +5,8 @@ import {
 } from "../../shared/contracts";
 import type { SqlClient } from "../db/database";
 import {
+  audit,
+  cleanRows,
   choice,
   date,
   entity,
@@ -26,6 +28,7 @@ import {
   verifyPrivateFileMetadata,
 } from "../integrations/storage";
 import { runRecurringTasks } from "./recurrence";
+import { commitCalendarOccurrence } from "./calendar";
 import * as RRulePackage from "rrule";
 const RRule = (RRulePackage.RRule ??
   Reflect.get(RRulePackage, "default")?.RRule) as typeof RRulePackage.RRule;
@@ -130,6 +133,25 @@ export async function resourceCommand(
     return {
       entityId: projectId,
       before: null,
+      after: await entity(tx, "projects", "project_id", projectId, owner),
+      affected: [],
+    };
+  }
+  if (command === "project_archive" || command === "project_restore") {
+    const projectId = text(input, "project_id"),
+      before = await entity(tx, "projects", "project_id", projectId, owner);
+    guard(before, revision);
+    await tx.query(
+      "UPDATE projects SET archived_at=$3,revision=revision+1,updated_at=now() WHERE project_id=$1 AND owner_id=$2",
+      [
+        projectId,
+        owner,
+        command === "project_archive" ? new Date().toISOString() : null,
+      ],
+    );
+    return {
+      entityId: projectId,
+      before,
       after: await entity(tx, "projects", "project_id", projectId, owner),
       affected: [],
     };
@@ -405,8 +427,17 @@ export async function resourceCommand(
       affected: [],
     };
   }
+  if (command === "calendar_occurrence_reschedule_commit")
+    return commitCalendarOccurrence(tx, input, principal, operationId);
   if (command.startsWith("calendar_") || command.startsWith("time_entry_"))
-    return scheduledCommand(tx, command, input, principal, revision);
+    return scheduledCommand(
+      tx,
+      command,
+      input,
+      principal,
+      revision,
+      operationId,
+    );
   if (command === "preferences_update") {
     const rows = await tx.query<Input>(
       "SELECT * FROM preferences WHERE owner_id=$1",
@@ -593,6 +624,7 @@ async function scheduledCommand(
   input: Input,
   principal: Principal,
   revision: number | undefined,
+  operationId: string,
 ): Promise<Change> {
   const isTime = command.startsWith("time_"),
     table = isTime ? "time_entries" : "calendar_events",
@@ -616,14 +648,53 @@ async function scheduledCommand(
     command === "calendar_delete_local_event" ||
     command === "time_entry_archive"
   ) {
+    const archivedAt = new Date().toISOString(),
+      overrides =
+        !isTime && !before?.series_event_id
+          ? cleanRows(
+              (
+                await tx.query<Input>(
+                  "SELECT * FROM calendar_events WHERE owner_id=$1 AND series_event_id=$2 AND archived_at IS NULL",
+                  [owner, entityId],
+                )
+              ).rows,
+            )
+          : [];
     await tx.query(
-      `UPDATE ${table} SET archived_at=now(),revision=revision+1 WHERE ${column}=$1 AND owner_id=$2`,
-      [entityId, owner],
+      `UPDATE ${table} SET archived_at=$3,revision=revision+1 WHERE ${column}=$1 AND owner_id=$2`,
+      [entityId, owner, archivedAt],
     );
+    if (overrides.length) {
+      const archived = cleanRows(
+        (
+          await tx.query<Input>(
+            "UPDATE calendar_events SET archived_at=$3,revision=revision+1 WHERE owner_id=$1 AND series_event_id=$2 AND archived_at IS NULL RETURNING *",
+            [owner, entityId, archivedAt],
+          )
+        ).rows,
+      );
+      await audit(
+        tx,
+        principal,
+        operationId,
+        "calendar.series_overrides_archived",
+        entityId,
+        { overrides },
+        { overrides: archived },
+        "Deleting the local series also cancels its moved occurrences.",
+      );
+    }
+    const seriesRevision =
+      !isTime && before?.series_event_id
+        ? await recordOverrideChange(tx, principal, before, operationId)
+        : null;
     return {
       entityId,
       before,
-      after: await entity(tx, table, column, entityId, owner),
+      after: {
+        ...(await entity(tx, table, column, entityId, owner)),
+        ...(seriesRevision ? { series_revision: seriesRevision } : {}),
+      },
       affected: [],
     };
   }
@@ -682,6 +753,41 @@ async function scheduledCommand(
           ? []
           : source.recurrence_exceptions,
       );
+    if (before?.series_event_id && recurrence)
+      throw new DomainError(
+        "INVALID_INPUT",
+        "A moved occurrence remains a single local event; create a separate series for repetition.",
+      );
+    if (before?.recurrence_rule) {
+      const overrides = await tx.query<{ recurrence_id: string }>(
+        "SELECT recurrence_id FROM calendar_events WHERE owner_id=$1 AND series_event_id=$2",
+        [owner, before.event_id],
+      );
+      if (overrides.rows.length) {
+        if (
+          start !== before.starts_at ||
+          end !== before.ends_at ||
+          zone !== before.timezone ||
+          (source.all_day === true) !== before.all_day ||
+          recurrence !== before.recurrence_rule
+        )
+          throw new DomainError(
+            "INVALID_INPUT",
+            "This series has moved or cancelled occurrences. Review a replacement series before changing its recurrence or time structure.",
+          );
+        if (
+          overrides.rows.some(
+            (override) =>
+              !exceptions.includes(override.recurrence_id) &&
+              !exceptions.includes(override.recurrence_id.slice(0, 10)),
+          )
+        )
+          throw new DomainError(
+            "INVALID_INPUT",
+            "Moved occurrence exclusions must remain preserved to prevent duplicate appointments.",
+          );
+      }
+    }
     if (
       before?.recurrence_rule &&
       input.apply_to_series !== true &&
@@ -763,10 +869,54 @@ async function scheduledCommand(
         ],
       );
   }
+  const seriesRevision =
+    !isTime && before?.series_event_id
+      ? await recordOverrideChange(tx, principal, before, operationId)
+      : null;
   return {
     entityId,
     before,
-    after: await entity(tx, table, column, entityId, owner),
+    after: {
+      ...(await entity(tx, table, column, entityId, owner)),
+      ...(seriesRevision ? { series_revision: seriesRevision } : {}),
+    },
     affected: taskId ? [taskId] : [],
   };
+}
+async function recordOverrideChange(
+  tx: SqlClient,
+  principal: Principal,
+  override: Input,
+  operationId: string,
+) {
+  const masterId = String(override.series_event_id),
+    before = await entity(
+      tx,
+      "calendar_events",
+      "event_id",
+      masterId,
+      principal.ownerId,
+    );
+  await tx.query(
+    "UPDATE calendar_events SET revision=revision+1 WHERE event_id=$1 AND owner_id=$2",
+    [masterId, principal.ownerId],
+  );
+  const after = await entity(
+    tx,
+    "calendar_events",
+    "event_id",
+    masterId,
+    principal.ownerId,
+  );
+  await audit(
+    tx,
+    principal,
+    operationId,
+    "calendar.override_changed",
+    masterId,
+    before,
+    after,
+    `Moved occurrence ${override.event_id} changed; refresh series previews.`,
+  );
+  return Number(after.revision);
 }

@@ -86,7 +86,10 @@ export async function analyticsTrends(
         input.status ||
         input.search ||
         input.query ||
-        input.readiness,
+        input.readiness ||
+        input.due_from ||
+        input.due_to ||
+        input.overdue === true,
       );
     for (const interval of intervals) {
       if (filtered && (!interval.task_id || !selected.has(interval.task_id)))

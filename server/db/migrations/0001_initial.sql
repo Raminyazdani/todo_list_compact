@@ -35,6 +35,21 @@ CREATE TABLE IF NOT EXISTS task_tags(link_id text PRIMARY KEY,owner_id text NOT 
 CREATE TABLE IF NOT EXISTS knowledge_items(knowledge_id text PRIMARY KEY, owner_id text NOT NULL REFERENCES owners, project_id text, title text NOT NULL, body text NOT NULL DEFAULT '', url text, revision integer NOT NULL DEFAULT 1, legacy_metadata jsonb NOT NULL DEFAULT '{}', FOREIGN KEY(project_id,owner_id) REFERENCES projects(project_id,owner_id));
 CREATE TABLE IF NOT EXISTS calendar_events(event_id text PRIMARY KEY, owner_id text NOT NULL REFERENCES owners, title text NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, timezone text NOT NULL DEFAULT 'Europe/Berlin', all_day boolean NOT NULL DEFAULT false, provider text NOT NULL DEFAULT 'local', external_uid text, task_id text, notes text NOT NULL DEFAULT '', recurrence_rule text, recurrence_exceptions jsonb NOT NULL DEFAULT '[]', archived_at timestamptz, revision integer NOT NULL DEFAULT 1, created_at timestamptz NOT NULL DEFAULT now(), CHECK(ends_at>starts_at), FOREIGN KEY(task_id,owner_id) REFERENCES tasks(task_id,owner_id), UNIQUE(owner_id,provider,external_uid));
 CREATE INDEX IF NOT EXISTS calendar_owner_range_idx ON calendar_events(owner_id,starts_at,ends_at);
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS series_event_id text;
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS original_occurrence_starts_at timestamptz;
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS recurrence_id text;
+CREATE UNIQUE INDEX IF NOT EXISTS calendar_owner_identity_idx ON calendar_events(event_id,owner_id);
+CREATE UNIQUE INDEX IF NOT EXISTS calendar_override_occurrence_idx ON calendar_events(owner_id,series_event_id,original_occurrence_starts_at) WHERE series_event_id IS NOT NULL;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='calendar_override_owner_fk' AND conrelid='calendar_events'::regclass) THEN
+    ALTER TABLE calendar_events ADD CONSTRAINT calendar_override_owner_fk FOREIGN KEY(series_event_id,owner_id) REFERENCES calendar_events(event_id,owner_id) DEFERRABLE INITIALLY DEFERRED;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='calendar_override_metadata_check' AND conrelid='calendar_events'::regclass) THEN
+    ALTER TABLE calendar_events ADD CONSTRAINT calendar_override_metadata_check CHECK(
+      (series_event_id IS NULL AND original_occurrence_starts_at IS NULL AND recurrence_id IS NULL) OR
+      (series_event_id IS NOT NULL AND original_occurrence_starts_at IS NOT NULL AND recurrence_id IS NOT NULL AND length(recurrence_id)>0 AND series_event_id<>event_id AND provider='local' AND recurrence_rule IS NULL));
+  END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS time_entries(entry_id text PRIMARY KEY, owner_id text NOT NULL REFERENCES owners, employer text NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, description text NOT NULL DEFAULT '', task_id text, archived_at timestamptz, revision integer NOT NULL DEFAULT 1, created_at timestamptz NOT NULL DEFAULT now(), CHECK(ends_at>starts_at), FOREIGN KEY(task_id,owner_id) REFERENCES tasks(task_id,owner_id));
 CREATE INDEX IF NOT EXISTS time_owner_range_idx ON time_entries(owner_id,starts_at,ends_at);
 CREATE TABLE IF NOT EXISTS preferences(owner_id text PRIMARY KEY REFERENCES owners, settings jsonb NOT NULL DEFAULT '{}', revision integer NOT NULL DEFAULT 1);
@@ -63,6 +78,12 @@ DROP TRIGGER IF EXISTS project_identity_immutable ON projects;
 CREATE TRIGGER project_identity_immutable BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION protect_entity_identity('project_id');
 DROP TRIGGER IF EXISTS file_identity_immutable ON files;
 CREATE TRIGGER file_identity_immutable BEFORE UPDATE ON files FOR EACH ROW EXECUTE FUNCTION protect_entity_identity('file_id');
+CREATE OR REPLACE FUNCTION protect_calendar_provenance() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+  IF NEW.event_id IS DISTINCT FROM OLD.event_id OR NEW.owner_id IS DISTINCT FROM OLD.owner_id OR NEW.series_event_id IS DISTINCT FROM OLD.series_event_id OR NEW.original_occurrence_starts_at IS DISTINCT FROM OLD.original_occurrence_starts_at OR NEW.recurrence_id IS DISTINCT FROM OLD.recurrence_id THEN RAISE EXCEPTION 'Calendar identity and occurrence provenance are immutable'; END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS calendar_provenance_immutable ON calendar_events;
+CREATE TRIGGER calendar_provenance_immutable BEFORE UPDATE ON calendar_events FOR EACH ROW EXECUTE FUNCTION protect_calendar_provenance();
 CREATE OR REPLACE FUNCTION validate_dependency_dag() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE dependent text; found_path text[]; BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended(NEW.owner_id,0));
   IF NEW.archived_at IS NOT NULL THEN RETURN NEW; END IF;

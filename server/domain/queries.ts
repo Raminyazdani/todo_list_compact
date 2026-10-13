@@ -11,6 +11,7 @@ import type { SqlClient } from "../db/database";
 import {
   cleanRows,
   choice,
+  date,
   downstreamIds,
   entity,
   instant,
@@ -37,6 +38,8 @@ import {
 } from "../integrations/calendar-runtime";
 import { resolveAiConfiguration } from "../integrations/ai-guard";
 import { analyticsTrends } from "./analytics";
+import { previewCalendarOccurrence } from "./calendar";
+import { instantToLocalDate } from "../../shared/datetime";
 
 async function calendarStatus(principal: Principal) {
   let sources: Awaited<ReturnType<typeof externalCalendarStatus>> = [];
@@ -303,6 +306,8 @@ export async function domainQuery(
   principal: Principal,
 ): Promise<unknown> {
   const owner = principal.ownerId;
+  if (operation === "calendar_occurrence_reschedule_preview")
+    return previewCalendarOccurrence(tx, input, principal);
   if (
     operation.endsWith("_preview") &&
     [
@@ -803,7 +808,7 @@ export async function domainQuery(
       const projects = cleanRows(
         (
           await tx.query<Input>(
-            "SELECT * FROM projects WHERE owner_id=$1 AND archived_at IS NULL ORDER BY title,project_id",
+            `SELECT * FROM projects WHERE owner_id=$1 ${input.archived_only === true ? "AND archived_at IS NOT NULL" : input.include_archived === true ? "" : "AND archived_at IS NULL"} ORDER BY title,project_id`,
             [owner],
           )
         ).rows,
@@ -982,8 +987,10 @@ export async function domainQuery(
       read_only: true,
     };
   }
-  let tasks = data.tasks.filter(
-    (t) => input.include_archived === true || !t.archived_at,
+  let tasks = data.tasks.filter((t) =>
+    input.archived_only === true
+      ? Boolean(t.archived_at)
+      : input.include_archived === true || !t.archived_at,
   );
   if (input.project_id)
     tasks = tasks.filter((t) => t.project_id === input.project_id);
@@ -1000,10 +1007,38 @@ export async function domainQuery(
   }
   if (input.readiness)
     tasks = tasks.filter((t) => t.readiness === input.readiness);
+  const explicitContext =
+    (operation === "task_graph_get" ||
+      operation === "dependency_topological_plan") &&
+    (input.task_id !== undefined || input.task_ids !== undefined);
+  if (
+    !explicitContext &&
+    (input.due_from !== undefined || input.due_to !== undefined)
+  ) {
+    const from = date(input, "due_from"),
+      to = date(input, "due_to");
+    if (from && to && to <= from)
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Deadline range must have an exclusive end after its start.",
+      );
+    const matches = (day: string | null) =>
+      Boolean(day && (!from || day >= from) && (!to || day < to));
+    tasks = tasks.filter(
+      (task) =>
+        matches(task.due_date) ||
+        matches(
+          task.due_at ? instantToLocalDate(task.due_at, "Europe/Berlin") : null,
+        ),
+    );
+  }
   if (operation === "task_find_ready") tasks = tasks.filter((t) => t.ready_now);
   if (operation === "task_find_blocked")
     tasks = tasks.filter((t) => t.readiness === "blocked");
-  if (operation === "task_list_overdue") {
+  if (
+    !explicitContext &&
+    (operation === "task_list_overdue" || input.overdue === true)
+  ) {
     const today = new Intl.DateTimeFormat("sv-SE", {
       timeZone: "Europe/Berlin",
     }).format(new Date());

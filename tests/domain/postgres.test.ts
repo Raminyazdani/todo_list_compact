@@ -31,6 +31,72 @@ describe.skipIf(process.env.TEST_POSTGRES !== "1")(
     afterAll(async () => {
       await db.close?.();
     });
+    it("postgres_concurrent_single_occurrence_moves_persist_one_override_and_one_exclusion", async () => {
+      const master = await service.execute(
+        "calendar_create_local_event",
+        {
+          title: "Synthetic staging recurring calendar race",
+          starts_at: "2027-03-21T09:00:00Z",
+          ends_at: "2027-03-21T10:00:00Z",
+          timezone: "Europe/Berlin",
+          recurrence_rule: "FREQ=WEEKLY;COUNT=3",
+        },
+        principal,
+        { idempotencyKey: randomUUID() },
+      );
+      const makePreview = (starts_at: string, ends_at: string) =>
+        service.query(
+          "calendar_occurrence_reschedule_preview",
+          {
+            event_id: master.entity_id,
+            occurrence_starts_at: "2027-03-28T08:00:00Z",
+            starts_at,
+            ends_at,
+          },
+          principal,
+        ) as Promise<PreviewDTO>;
+      const [a, b] = await Promise.all([
+        makePreview("2027-03-28T10:00:00Z", "2027-03-28T11:00:00Z"),
+        makePreview("2027-03-29T10:00:00Z", "2027-03-29T11:00:00Z"),
+      ]);
+      const results = await Promise.allSettled(
+        [a, b].map((preview) =>
+          service.execute(
+            "calendar_occurrence_reschedule_commit",
+            { preview_id: preview.preview_id },
+            principal,
+            { idempotencyKey: randomUUID() },
+          ),
+        ),
+      );
+      expect(
+        results.filter((result) => result.status === "fulfilled"),
+      ).toHaveLength(1);
+      expect(
+        (
+          results.find(
+            (result) => result.status === "rejected",
+          ) as PromiseRejectedResult
+        ).reason,
+      ).toMatchObject({ code: "REVISION_CONFLICT" });
+      const originals = (
+        await db.query<{ revision: number; recurrence_exceptions: string[] }>(
+          "SELECT revision,recurrence_exceptions FROM calendar_events WHERE event_id=$1 AND owner_id=$2",
+          [master.entity_id, principal.ownerId],
+        )
+      ).rows;
+      expect(originals).toEqual([
+        { revision: 2, recurrence_exceptions: ["2027-03-28T10:00:00"] },
+      ]);
+      expect(
+        (
+          await db.query(
+            "SELECT event_id FROM calendar_events WHERE series_event_id=$1 AND owner_id=$2",
+            [master.entity_id, principal.ownerId],
+          )
+        ).rows,
+      ).toHaveLength(1);
+    }, 30000);
     it("postgres_simultaneous_edge_writes_cannot_create_cycle", async () => {
       const a = await service.execute(
           "task_create",

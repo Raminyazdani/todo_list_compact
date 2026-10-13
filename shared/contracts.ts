@@ -146,6 +146,9 @@ export interface EventDTO {
   occurrence_key?: string;
   series_starts_at?: string;
   series_ends_at?: string;
+  series_event_id?: string | null;
+  original_occurrence_starts_at?: string | null;
+  recurrence_id?: string | null;
   title: string;
   starts_at: string;
   ends_at: string;
@@ -278,6 +281,8 @@ export const COMMAND_NAMES = [
   "task_batch_commit",
   "project_create",
   "project_update",
+  "project_archive",
+  "project_restore",
   "project_milestone_create",
   "task_dependency_add_commit",
   "task_dependency_remove_commit",
@@ -309,6 +314,7 @@ export const COMMAND_NAMES = [
   "calendar_create_local_event",
   "calendar_update_local_event",
   "calendar_delete_local_event",
+  "calendar_occurrence_reschedule_commit",
   "time_entry_create",
   "time_entry_update",
   "time_entry_archive",
@@ -370,6 +376,7 @@ export const QUERY_NAMES = [
   "calendar_list",
   "calendar_events_query",
   "calendar_availability",
+  "calendar_occurrence_reschedule_preview",
   "time_entry_list",
   "time_summary",
   "get_activity",
