@@ -13,6 +13,8 @@ backups/
 *.log
 *.tsbuildinfo
 **/*PRIVATE*
+!scripts/ops/private-paths.mjs
+!scripts/ops/private-paths.d.mts
 **/*private*.json
 **/REFERENCE_*.json
 **/live-source/

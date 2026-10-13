@@ -60,6 +60,14 @@ jobs:
         env:
           E2E_CREDENTIALS_PATH: /tmp/lifeos-ci-credentials.json
           PLAYWRIGHT_CHROMIUM_CHANNEL: chromium
+      - name: Real HTTP authorization, revocation and token expiry
+        run: |
+          node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth.test.ts tests/security/http-auth-human-authority.test.ts tests/security/http-auth-revocation.test.ts
+          node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-expiry.test.ts
+        env:
+          TEST_CREDENTIALS_PATH: /tmp/lifeos-ci-credentials.json
+          HTTP_TEST_ORIGIN: http://localhost:3000
+          RUN_TOKEN_EXPIRY_TEST: "1"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
