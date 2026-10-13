@@ -57,6 +57,32 @@ export function openApiDocument() {
           ],
           responses: { "200": response, ...errors },
         },
+        post: {
+          operationId: "queryJson",
+          description:
+            "Authenticated JSON queries and previews. Browser sessions require the same origin. Transport is bounded to 2 MiB; ordinary domain queries remain bounded to 100k characters.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["operation", "input"],
+                  additionalProperties: false,
+                  properties: {
+                    operation: { type: "string", enum: QUERY_NAMES },
+                    input: { type: "object" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": response,
+            "413": { description: "Bounded payload exceeded" },
+            ...errors,
+          },
+        },
       },
       "/api/v1/commands": {
         post: {

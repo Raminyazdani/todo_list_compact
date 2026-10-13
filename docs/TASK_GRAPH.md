@@ -1,6 +1,6 @@
 # Implementation dependency graph
 
-Status: NOT RUN unless noted. This graph describes engineering dependencies; product task dependencies are separately persisted domain data.
+This graph describes engineering dependencies; product task dependencies are separate persisted domain data. Foundation implementations are present and observed layer checks are recorded in the dependency test matrix. Release, migration cutover and externally configured providers remain independently gated.
 
 ```mermaid
 flowchart TD
@@ -31,17 +31,19 @@ flowchart TD
   LIVE --> H[Evidence checklist and Persian handoff]
 ```
 
-| Node       | Current state | Exit evidence                                                              |
-| ---------- | ------------- | -------------------------------------------------------------------------- |
-| A          | ACTIVE        | Actual audit, source/repo capabilities, full requirements                  |
-| B          | NOT RUN       | Shared contract approved and discoverable                                  |
-| R          | ACTIVE        | Reference inventory and reuse/license/security assessment                  |
-| M          | NOT RUN       | Complete private source snapshot plus freshness/aggregate report           |
-| D/U/P/I    | NOT RUN       | Implementations and focused tests against approved contracts               |
-| V          | NOT RUN       | Browser/REST/MCP same DB; A/B/C/D + checklists + auth/retry/conflict/cycle |
-| F/C/AI/MIG | NOT RUN       | Module and source preservation tests                                       |
-| Q          | NOT RUN       | Actual result matrix, vulnerability review and staging restore             |
-| DEP/LIVE   | NOT RUN       | Observed production resources/URL/SHA/auth/client/readback/redeploy        |
-| H          | NOT RUN       | AC-01..28 grounded in verified evidence                                    |
+| Node     | Current state                                  | Exit evidence                                                                                                                        |
+| -------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| A        | Discovery completed                            | Full sanitized contract, repository/account audit and private source inventory                                                       |
+| B        | Approved                                       | Shared DTOs, command/query enums, canonical auth/revision/idempotency boundary                                                       |
+| R        | Review completed                               | MIT reference review; adapted pure calendar/time/export helpers and tests                                                            |
+| M        | Private snapshot/rehearsal recorded            | Source audit owns private snapshot, replay/restore and reconciliation; production cutover remains separate                           |
+| D/P      | Implemented; independent layer checks recorded | PostgreSQL domain, REST/OpenAPI and OAuth MCP checks in the test matrix and operator checkpoint                                      |
+| V        | Authenticated baseline proof recorded          | Browser/REST/genuine OAuth MCP agree on graph/checklist state; fresh extended regression remains required                            |
+| MIG      | Rehearsal checks recorded                      | Exact source replay/reconciliation/restore in isolated storage; production import/cutover remains orchestrator-gated                 |
+| U/F/C/AI | Implemented; current full UI proof pending     | Authenticated baseline browser evidence exists; extended UI requires fresh build, new workflow tests and all-view visual inspection  |
+| I        | Adapter implementation present                 | Each provider's actual authorization/storage/model runtime must be proved independently                                              |
+| Q        | In progress                                    | Meaningful tests, race/auth/restore/load and automated/manual visual evidence; unchecked or externally blocked gates remain explicit |
+| DEP/LIVE | Orchestrator verification                      | Exact deployed SHA, authenticated production checks, cutover and actual redeployment persistence                                     |
+| H        | In progress                                    | Evidence-based Persian user/operator handoff and current checkpoint                                                                  |
 
-An authorization issue in one provider does not block independent nodes. Source mutation, external communications, paid resources and unsupported client privileges cannot be bypassed.
+An authorization issue in one provider does not block independent nodes. Original sources remain read-only; external communications, paid resources and unsupported client privileges cannot be bypassed.

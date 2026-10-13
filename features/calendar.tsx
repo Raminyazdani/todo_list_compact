@@ -9,6 +9,7 @@ import {
   instantToLocalTime,
   zonedLocalToInstant,
   splitIntervalByLocalDate,
+  findOverlaps,
 } from "@/shared/datetime";
 import type {
   CommandName,
@@ -17,9 +18,12 @@ import type {
   PageDTO,
   TimeEntryDTO,
   TaskDTO,
+  PreviewDTO,
 } from "@/shared/contracts";
-import { useQuery } from "./api";
+import { query, useQuery } from "./api";
 import { useLocale } from "./locale";
+import { TimeTransfer } from "./time-transfer";
+import { moveLocalEventToDate } from "./calendar-dates";
 import {
   AddButton,
   Button,
@@ -56,6 +60,7 @@ export function CalendarView({
   const [showExternal, setShowExternal] = useState(true);
   const [editing, setEditing] = useState<EventDTO | null>(null);
   const [create, setCreate] = useState(false);
+  const [eventCursor, setEventCursor] = useState<string | null>(null);
   const preferences = useQuery<{
     settings: Record<string, unknown>;
     revision: number;
@@ -69,14 +74,44 @@ export function CalendarView({
       ? (preferences.data!.settings.holiday_region as HolidayRegion)
       : "BOTH");
   const monthStart = `${date.slice(0, 7)}-01`;
-  const start = add(monthStart, -7);
-  const end = add(monthStart, 42);
-  const events = useQuery<PageDTO<EventDTO>>("calendar_events_query", {
-    from: zonedLocalToInstant(`${start}T00:00`, ZONE),
-    to: zonedLocalToInstant(`${end}T00:00`, ZONE),
-    limit: 200,
-  });
-  const tasks = useQuery<PageDTO<TaskDTO>>("task_search", { limit: 200 });
+  const mondayOffset =
+    (new Date(`${monthStart}T12:00:00Z`).getUTCDay() + 6) % 7;
+  const weekStart = add(
+    date,
+    -((new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7),
+  );
+  const start =
+    view === "day"
+      ? date
+      : view === "week"
+        ? weekStart
+        : add(monthStart, -mondayOffset);
+  const end = add(start, view === "day" ? 1 : view === "week" ? 7 : 42);
+  const events = useQuery<PageDTO<EventDTO> & { source_warnings?: string[] }>(
+    "calendar_events_query",
+    {
+      from: zonedLocalToInstant(`${start}T00:00`, ZONE),
+      to: zonedLocalToInstant(`${end}T00:00`, ZONE),
+      limit: 200,
+      cursor: eventCursor,
+    },
+  );
+  const tasks = useQuery<PageDTO<TaskDTO>>(
+    "task_search",
+    { limit: 200, due_from: start, due_to: end },
+    showTasks,
+  );
+  const deadline = (task: TaskDTO) =>
+    task.due_date ??
+    (task.due_at ? instantToLocalDate(task.due_at, ZONE) : null);
+  function occursOn(event: EventDTO, day: string) {
+    return (
+      Date.parse(event.starts_at) <
+        Date.parse(zonedLocalToInstant(`${add(day, 1)}T00:00`, ZONE)) &&
+      Date.parse(event.ends_at) >
+        Date.parse(zonedLocalToInstant(`${day}T00:00`, ZONE))
+    );
+  }
   async function moveEvent(event: React.DragEvent<HTMLElement>, date: string) {
     event.preventDefault();
     const id = event.dataTransfer.getData("text/lifeos-event");
@@ -84,15 +119,7 @@ export function CalendarView({
     if (!record || record.provider !== "local" || record.recurrence_rule)
       return;
     try {
-      const starts_at = zonedLocalToInstant(
-        `${date}T${instantToLocalTime(record.starts_at, record.timezone).slice(0, 5)}`,
-        record.timezone,
-      );
-      const ends_at = new Date(
-        Date.parse(starts_at) +
-          Date.parse(record.ends_at) -
-          Date.parse(record.starts_at),
-      ).toISOString();
+      const { starts_at, ends_at } = moveLocalEventToDate(record, date);
       await action(
         "calendar_update_local_event",
         { event_id: id, starts_at, ends_at },
@@ -108,11 +135,13 @@ export function CalendarView({
   const visible = (events.data?.items ?? []).filter(
     (event) => showExternal || event.provider === "local",
   );
+  const overlaps = findOverlaps(visible.filter((event) => !event.all_day));
   const monday = (new Date(`${monthStart}T12:00:00Z`).getUTCDay() + 6) % 7;
   const cells = Array.from({ length: 42 }, (_, index) =>
     add(monthStart, index - monday),
   );
   function move(direction: number) {
+    setEventCursor(null);
     if (view === "month") {
       const value = new Date(`${monthStart}T12:00:00Z`);
       value.setUTCMonth(value.getUTCMonth() + direction);
@@ -126,7 +155,7 @@ export function CalendarView({
   const days =
     view === "day"
       ? [date]
-      : Array.from({ length: 7 }, (_, index) => add(date, index));
+      : Array.from({ length: 7 }, (_, index) => add(weekStart, index));
   return (
     <>
       <div className="page-heading">
@@ -152,10 +181,26 @@ export function CalendarView({
             <ChevronRight size={17} />
           </Button>
           <h2>{monthLabel}</h2>
+          <input
+            type="date"
+            aria-label={t("تاریخ تقویم", "Calendar date")}
+            value={date}
+            onChange={(e) => {
+              if (e.target.value) {
+                setDate(e.target.value);
+                setEventCursor(null);
+              }
+            }}
+          />
           <Button onClick={() => move(1)} aria-label={t("بعدی", "Next")}>
             <ChevronLeft size={17} />
           </Button>
-          <Button onClick={() => setDate(today())}>
+          <Button
+            onClick={() => {
+              setDate(today());
+              setEventCursor(null);
+            }}
+          >
             {t("امروز", "Today")}
           </Button>
         </div>
@@ -169,7 +214,10 @@ export function CalendarView({
             <button
               key={value}
               className={view === value ? "active" : ""}
-              onClick={() => setView(value)}
+              onClick={() => {
+                setView(value);
+                setEventCursor(null);
+              }}
             >
               {label}
             </button>
@@ -231,6 +279,86 @@ export function CalendarView({
         </span>
       </div>
       <QueryState {...events} retry={events.refresh} />
+      {!!events.data?.source_warnings?.length && (
+        <p role="status" className="warning">
+          {t(
+            "بخشی از منابع خارجی قابل خواندن نیست؛ رویدادهای محلی حفظ شده‌اند. اتصال‌ها و وضعیت منبع را در تنظیمات بررسی کن.",
+            "Some external sources could not be read; local events remain available. Check connections and source status in Settings.",
+          )}
+        </p>
+      )}
+      {overlaps.length > 0 && (
+        <details className="calendar-overlaps">
+          <summary>
+            {overlaps.length}{" "}
+            {t(
+              "هم‌پوشانی بین رخدادهای ساعتی این صفحه",
+              "overlaps between timed occurrences on this page",
+            )}
+          </summary>
+          <p className="small muted">
+            {t(
+              "هم‌پوشانی از همین صفحه محاسبه می‌شود؛ رخدادهای تمام‌روز در آن نیستند. در نمای فهرست می‌توانی هر رویداد را جدا باز کنی.",
+              "Overlaps use this page only and exclude all-day events. Agenda lets you open each event separately.",
+            )}
+          </p>
+          {overlaps.slice(0, 20).map((overlap, index) => (
+            <div className="dependency-row" key={index}>
+              <Button onClick={() => setEditing(overlap.first)}>
+                {overlap.first.title}
+              </Button>
+              <span>
+                {Math.round(overlap.overlap_minutes * 10) / 10}{" "}
+                {t("دقیقه", "minutes")}
+              </span>
+              <Button onClick={() => setEditing(overlap.second)}>
+                {overlap.second.title}
+              </Button>
+            </div>
+          ))}
+          {overlaps.length > 20 && (
+            <p className="small muted">
+              {t(
+                "۲۰ جفت نخست نمایش داده می‌شود؛ برای بررسی سایر رویدادها نمای فهرست را باز کن.",
+                "The first 20 pairs are displayed. Use Agenda to inspect other events.",
+              )}
+            </p>
+          )}
+        </details>
+      )}
+      <div className="form-actions">
+        <span className="small muted">
+          {start} — {end} · {events.data?.items.length ?? 0} /{" "}
+          {events.data?.total ?? "—"}{" "}
+          {t("رخداد در این صفحه", "occurrences on this page")}
+        </span>
+        {eventCursor && (
+          <Button onClick={() => setEventCursor(null)}>
+            {t("صفحهٔ اول", "First page")}
+          </Button>
+        )}
+        {events.data?.next_cursor && (
+          <Button onClick={() => setEventCursor(events.data!.next_cursor)}>
+            {t("رخدادهای بعدی", "Next occurrences")}
+          </Button>
+        )}
+      </div>
+      {events.data?.next_cursor && (
+        <p className="warning">
+          {t(
+            "این صفحه ۲۰۰ رخداد دارد؛ برای ادامه صفحهٔ بعد را باز کن. همهٔ رخدادها در همین نما جا نشده‌اند.",
+            "This page contains 200 occurrences. Open the next page to continue; this view does not contain every occurrence.",
+          )}
+        </p>
+      )}
+      {showTasks && tasks.data?.next_cursor && (
+        <p className="warning">
+          {t(
+            "۲۰۰ مهلت نخست این بازه نمایش داده می‌شود؛ برای بقیه از جست‌وجوی کارها استفاده کن.",
+            "The first 200 deadlines in this range are shown. Use task search for the remaining deadlines.",
+          )}
+        </p>
+      )}
       {view === "month" ? (
         <div className="month-calendar">
           <div className="week-labels">
@@ -247,6 +375,7 @@ export function CalendarView({
             {cells.map((day) => (
               <div
                 key={day}
+                data-calendar-date={day}
                 className={`month-cell ${day.slice(0, 7) !== date.slice(0, 7) ? "outside" : ""} ${day === today() ? "today" : ""} ${dayFlags(day, region).red ? "offday" : ""}`}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => void moveEvent(event, day)}
@@ -270,10 +399,7 @@ export function CalendarView({
                   </span>
                 ))}
                 {visible
-                  .filter(
-                    (event) =>
-                      instantToLocalDate(event.starts_at, ZONE) === day,
-                  )
+                  .filter((event) => occursOn(event, day))
                   .map((event) => (
                     <button
                       key={event.occurrence_key ?? event.event_id}
@@ -298,7 +424,7 @@ export function CalendarView({
                   ))}
                 {showTasks &&
                   tasks.data?.items
-                    .filter((task) => task.due_date === day)
+                    .filter((task) => deadline(task) === day)
                     .map((task) => (
                       <button
                         key={task.task_id}
@@ -349,76 +475,133 @@ export function CalendarView({
           )}
         </div>
       ) : (
-        <div
-          className="week-calendar"
-          style={{
-            gridTemplateColumns: `54px repeat(${days.length},minmax(90px,1fr))`,
-          }}
-          dir="ltr"
-        >
-          <div className="hour-ruler">
-            <div className="week-day-head" />
-            {Array.from({ length: 24 }, (_, hour) => (
-              <div key={hour}>{String(hour).padStart(2, "0")}:00</div>
+        <>
+          <div
+            className="calendar-all-day"
+            dir="ltr"
+            style={{
+              gridTemplateColumns: `54px repeat(${days.length}, minmax(90px,1fr))`,
+            }}
+          >
+            <span>{t("تمام روز", "All day")}</span>
+            {days.map((day) => (
+              <div key={day}>
+                {visible
+                  .filter((event) => event.all_day && occursOn(event, day))
+                  .map((event) => (
+                    <button
+                      key={event.occurrence_key ?? event.event_id}
+                      className="calendar-event"
+                      onClick={() => setEditing(event)}
+                    >
+                      {event.title}
+                    </button>
+                  ))}
+                {showTasks &&
+                  tasks.data?.items
+                    .filter((task) => deadline(task) === day)
+                    .map((task) => (
+                      <button
+                        key={task.task_id}
+                        className="calendar-event task-deadline"
+                        onClick={() => onOpen(task.task_id)}
+                      >
+                        {t("مهلت:", "Due:")} {task.title}
+                      </button>
+                    ))}
+              </div>
             ))}
           </div>
-          {days.map((day) => (
-            <div className="week-day" key={day}>
-              <button
-                className="week-day-head"
-                onClick={() => {
-                  setDate(day);
-                  setCreate(true);
-                }}
-              >
-                {new Intl.DateTimeFormat(
-                  language === "fa" ? "fa-IR" : "en-GB",
-                  { weekday: "short", day: "numeric" },
-                ).format(new Date(`${day}T12:00:00Z`))}
-              </button>
-              <div className="day-hours">
-                {Array.from({ length: 24 }, (_, hour) => (
-                  <div className="hour-slot" key={hour} />
-                ))}
-                {visible
-                  .filter(
-                    (event) =>
-                      instantToLocalDate(event.starts_at, ZONE) === day,
-                  )
-                  .map((event) => {
-                    const clock = instantToLocalTime(
-                      event.starts_at,
-                      ZONE,
-                    ).split(":");
-                    const minute = Number(clock[0]) * 60 + Number(clock[1]);
-                    const duration =
-                      (new Date(event.ends_at).getTime() -
-                        new Date(event.starts_at).getTime()) /
-                      60000;
-                    return (
-                      <button
-                        key={event.occurrence_key ?? event.event_id}
-                        className="time-block"
-                        style={{
-                          top: `${(minute / 60) * 52}px`,
-                          height: `${Math.max(26, (duration / 60) * 52)}px`,
-                        }}
-                        onClick={() => setEditing(event)}
-                      >
-                        {event.title}
-                        <small>
-                          {instantToLocalTime(event.starts_at, ZONE).slice(
-                            0,
-                            5,
-                          )}
-                        </small>
-                      </button>
-                    );
-                  })}
-              </div>
+          <div
+            className="week-calendar"
+            style={{
+              gridTemplateColumns: `54px repeat(${days.length},minmax(90px,1fr))`,
+            }}
+            dir="ltr"
+          >
+            <div className="hour-ruler">
+              <div className="week-day-head" />
+              {Array.from({ length: 24 }, (_, hour) => (
+                <div key={hour}>{String(hour).padStart(2, "0")}:00</div>
+              ))}
             </div>
-          ))}
-        </div>
+            {days.map((day) => (
+              <div className="week-day" key={day}>
+                <button
+                  className="week-day-head"
+                  onClick={() => {
+                    setDate(day);
+                    setCreate(true);
+                  }}
+                >
+                  {new Intl.DateTimeFormat(
+                    language === "fa" ? "fa-IR" : "en-GB",
+                    { weekday: "short", day: "numeric" },
+                  ).format(new Date(`${day}T12:00:00Z`))}
+                </button>
+                <div className="day-hours">
+                  {Array.from({ length: 24 }, (_, hour) => (
+                    <div className="hour-slot" key={hour} />
+                  ))}
+                  {visible
+                    .filter((event) => !event.all_day && occursOn(event, day))
+                    .map((event) => {
+                      const dayStart = zonedLocalToInstant(
+                        `${day}T00:00`,
+                        ZONE,
+                      );
+                      const dayEnd = zonedLocalToInstant(
+                        `${add(day, 1)}T00:00`,
+                        ZONE,
+                      );
+                      const clippedStart = new Date(
+                        Math.max(
+                          Date.parse(event.starts_at),
+                          Date.parse(dayStart),
+                        ),
+                      ).toISOString();
+                      const clippedEnd = new Date(
+                        Math.min(Date.parse(event.ends_at), Date.parse(dayEnd)),
+                      ).toISOString();
+                      const clock = instantToLocalTime(
+                        clippedStart,
+                        ZONE,
+                      ).split(":");
+                      const minute = Number(clock[0]) * 60 + Number(clock[1]);
+                      const endClock = instantToLocalTime(
+                        clippedEnd,
+                        ZONE,
+                      ).split(":");
+                      const endMinute =
+                        clippedEnd === dayEnd
+                          ? 1440
+                          : Number(endClock[0]) * 60 + Number(endClock[1]);
+                      const duration = Math.max(0, endMinute - minute);
+                      return (
+                        <button
+                          key={event.occurrence_key ?? event.event_id}
+                          className="time-block"
+                          style={{
+                            top: `${(minute / 60) * 52}px`,
+                            height: `${Math.max(26, (duration / 60) * 52)}px`,
+                          }}
+                          onClick={() => setEditing(event)}
+                        >
+                          {event.title}
+                          <small>
+                            {instantToLocalTime(event.starts_at, ZONE).slice(
+                              0,
+                              5,
+                            )}
+                          </small>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
       <EventEditor
         key={`${editing?.event_id ?? "new"}:${editing?.starts_at ?? date}`}
@@ -451,6 +634,8 @@ function EventEditor({
   const { t } = useLocale();
   const [error, setError] = useState("");
   const [zone, setZone] = useState(event?.timezone ?? ZONE);
+  const [occurrenceOpen, setOccurrenceOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const originalStart = event?.series_starts_at ?? event?.starts_at;
   const originalEnd = event?.series_ends_at ?? event?.ends_at;
   const startValue = originalStart
@@ -474,36 +659,59 @@ function EventEditor({
     try {
       const disambiguation = String(data.get("disambiguation")) as
         "reject" | "earlier" | "later";
+      const allDay = data.get("all_day") === "on";
+      const enteredStart = String(data.get("starts"));
+      const enteredEnd = String(data.get("ends"));
+      const allDayStart = `${enteredStart.slice(0, 10)}T00:00`;
+      const allDayEndDate =
+        enteredEnd.slice(0, 10) <= enteredStart.slice(0, 10)
+          ? add(enteredStart.slice(0, 10), 1)
+          : enteredEnd.slice(0, 10);
+      const normalizeAllDay =
+        allDay &&
+        (!event?.all_day ||
+          enteredStart !== startValue ||
+          enteredEnd !== endValue ||
+          zone !== event.timezone);
+      const actualStart = normalizeAllDay ? allDayStart : enteredStart;
+      const actualEnd = normalizeAllDay ? `${allDayEndDate}T00:00` : enteredEnd;
       const result = await action(
         event ? "calendar_update_local_event" : "calendar_create_local_event",
         {
           ...(event ? { event_id: event.event_id } : {}),
           title: data.get("title"),
           ...(event &&
-          String(data.get("starts")) === startValue &&
+          !normalizeAllDay &&
+          enteredStart === startValue &&
           zone === event.timezone
             ? {}
             : {
                 starts_at: zonedLocalToInstant(
-                  String(data.get("starts")),
+                  actualStart,
                   zone,
                   disambiguation,
                 ),
               }),
           ...(event &&
-          String(data.get("ends")) === endValue &&
+          !normalizeAllDay &&
+          enteredEnd === endValue &&
           zone === event.timezone
             ? {}
             : {
-                ends_at: zonedLocalToInstant(
-                  String(data.get("ends")),
-                  zone,
-                  disambiguation,
-                ),
+                ends_at: zonedLocalToInstant(actualEnd, zone, disambiguation),
               }),
           timezone: zone,
-          all_day: data.get("all_day") === "on",
+          all_day: allDay,
           notes: data.get("notes"),
+          apply_to_series: data.get("confirm_series") === "on",
+          ...(event?.recurrence_rule
+            ? {
+                recurrence_exceptions: String(data.get("exceptions") ?? "")
+                  .split(/\r?\n/)
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+              }
+            : {}),
           recurrence_rule:
             data.get("recurrence") === "keep"
               ? (event?.recurrence_rule ?? null)
@@ -536,6 +744,21 @@ function EventEditor({
       }}
     >
       <form className="form-grid" onSubmit={submit}>
+        {event?.recurrence_rule && !external && (
+          <div className="connection-notice">
+            <div>
+              <p>
+                {t(
+                  "این پنجره کل سری را ویرایش می‌کند. برای جابه‌جایی یا تغییر طول فقط نوبت انتخاب‌شده، از گزینه زیر استفاده کن.",
+                  "This form edits the entire series. Use the option below to move or resize only the selected occurrence.",
+                )}
+              </p>
+              <Button type="button" onClick={() => setOccurrenceOpen(true)}>
+                {t("تغییر فقط این نوبت", "Change only this occurrence")}
+              </Button>
+            </div>
+          </div>
+        )}
         <Field label={t("عنوان", "Title")}>
           <input
             required
@@ -588,7 +811,10 @@ function EventEditor({
             defaultChecked={event?.all_day}
             disabled={!!external}
           />
-          {t("تمام روز", "All day")}
+          {t(
+            "تمام روز؛ پایان در نیمه‌شب و خارج از بازه است",
+            "All day; end is midnight and exclusive",
+          )}
         </label>
         <Field label={t("تکرار", "Repeat")}>
           <select
@@ -616,6 +842,28 @@ function EventEditor({
               "I confirm this edit applies to the entire recurring series. Times refer to the series start.",
             )}
           </label>
+        )}
+        {event?.recurrence_rule && (
+          <Field
+            label={t(
+              "نوبت‌های مستثنا؛ هر تاریخ در یک خط",
+              "Excluded occurrences; one date per line",
+            )}
+          >
+            <textarea
+              name="exceptions"
+              rows={3}
+              defaultValue={(event.recurrence_exceptions ?? []).join("\n")}
+              placeholder="2026-10-20"
+              readOnly={!!external}
+            />
+            <small>
+              {t(
+                "YYYY-MM-DD برای کل روز یا YYYY-MM-DDTHH:mm:ss برای زمان محلی. استثنای معمولی با حذف خط و تأیید سری بازمی‌گردد. برای نوبت جابه‌جاشده، رویداد مرتبط را ویرایش کن؛ حذف استثنای آن مجاز نیست.",
+                "Use YYYY-MM-DD for a day, or YYYY-MM-DDTHH:mm:ss for a local time. Removing an ordinary exception restores it after series confirmation. For a moved occurrence, edit its linked event; its exclusion cannot be removed.",
+              )}
+            </small>
+          </Field>
         )}
         <Field
           label={t(
@@ -656,6 +904,306 @@ function EventEditor({
           </Button>
         )}
       </form>
+      {event?.series_event_id && (
+        <p className="muted small">
+          {t(
+            "این رخداد، نوبت جابه‌جاشدهٔ یک سری است؛ ویرایش آن فقط همین نوبت را تغییر می‌دهد.",
+            "This is a moved series occurrence; editing it changes only this occurrence.",
+          )}
+        </p>
+      )}
+      {event && !external && (
+        <Button onClick={() => setDeleteOpen(true)}>
+          {event.recurrence_rule
+            ? t("حذف کل سری", "Delete entire series")
+            : t("حذف این رویداد", "Delete this event")}
+        </Button>
+      )}
+      <Modal
+        title={
+          event?.recurrence_rule
+            ? t("حذف کل سری", "Delete entire series")
+            : t("حذف این رویداد", "Delete this event")
+        }
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      >
+        <p>
+          {event?.recurrence_rule
+            ? t(
+                "کل سری و نوبت‌های محلی جابه‌جاشدهٔ آن از تقویم حذف می‌شوند. حذف نیاز به تأیید صریح دارد.",
+                "This removes the entire series and its linked local moved occurrences from the calendar. Explicit confirmation is required.",
+              )
+            : t(
+                "این رخداد از تقویم محلی حذف می‌شود.",
+                "This occurrence is removed from the local calendar.",
+              )}
+        </p>
+        <Button
+          variant="primary"
+          onClick={async () => {
+            if (
+              event &&
+              (await action(
+                "calendar_delete_local_event",
+                { event_id: event.event_id },
+                event.revision,
+              ))
+            ) {
+              setDeleteOpen(false);
+              close();
+            }
+          }}
+        >
+          {t("تأیید حذف رویداد", "Confirm event deletion")}
+        </Button>
+      </Modal>
+      {event && (
+        <OccurrenceEditor
+          event={event}
+          open={occurrenceOpen}
+          setOpen={setOccurrenceOpen}
+          action={action}
+          onSaved={close}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function OccurrenceEditor({
+  event,
+  open,
+  setOpen,
+  action,
+  onSaved,
+}: {
+  event: EventDTO;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  action: Action;
+  onSaved: () => void;
+}) {
+  const { t } = useLocale();
+  const [preview, setPreview] = useState<PreviewDTO | null>(null);
+  const [error, setError] = useState("");
+  type Times = {
+    starts_at: string;
+    ends_at: string;
+    timezone: string;
+    all_day: boolean;
+  };
+  const changes = preview?.changes as
+    { original: Times; override: Times } | undefined;
+  return (
+    <Modal
+      title={t(
+        "جابه‌جایی یا تغییر طول فقط این نوبت",
+        "Move or resize only this occurrence",
+      )}
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value);
+        if (!value) {
+          setPreview(null);
+          setError("");
+        }
+      }}
+    >
+      {changes ? (
+        <>
+          <p>
+            {t(
+              "شروع سری و قاعدهٔ تکرار حفظ می‌شوند. نوبت اصلی مستثنا و یک رویداد مرتبط جایگزین آن می‌شود.",
+              "The series start and recurrence rule are preserved. The original occurrence is excluded and replaced by a linked local event.",
+            )}
+          </p>
+          <dl className="metadata-list">
+            <dt>{t("زمان فعلی", "Original time")}</dt>
+            <dd dir="ltr">
+              {formatInTimeZone(
+                changes.original.starts_at,
+                changes.original.timezone,
+                "yyyy-MM-dd HH:mm:ss",
+              )}{" "}
+              →{" "}
+              {formatInTimeZone(
+                changes.original.ends_at,
+                changes.original.timezone,
+                "yyyy-MM-dd HH:mm:ss",
+              )}
+            </dd>
+            <dt>{t("زمان پیشنهادی", "Proposed time")}</dt>
+            <dd dir="ltr">
+              {formatInTimeZone(
+                changes.override.starts_at,
+                changes.override.timezone,
+                "yyyy-MM-dd HH:mm:ss",
+              )}{" "}
+              →{" "}
+              {formatInTimeZone(
+                changes.override.ends_at,
+                changes.override.timezone,
+                "yyyy-MM-dd HH:mm:ss",
+              )}{" "}
+              · {changes.override.timezone}
+            </dd>
+          </dl>
+          <div className="form-actions">
+            <Button onClick={() => setPreview(null)}>
+              {t("ویرایش پیشنهاد", "Edit proposal")}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                if (
+                  preview &&
+                  (await action("calendar_occurrence_reschedule_commit", {
+                    preview_id: preview.preview_id,
+                  }))
+                ) {
+                  setOpen(false);
+                  setPreview(null);
+                  onSaved();
+                }
+              }}
+            >
+              {t("تأیید تغییر فقط این نوبت", "Confirm this occurrence only")}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <form
+          className="form-grid"
+          onSubmit={async (submit) => {
+            submit.preventDefault();
+            setError("");
+            const values = new FormData(submit.currentTarget);
+            try {
+              const timezone = String(values.get("timezone"));
+              const choice = String(values.get("disambiguation")) as
+                "reject" | "earlier" | "later";
+              const all_day = values.get("all_day") === "on";
+              let starts = String(values.get("starts")),
+                ends = String(values.get("ends"));
+              if (all_day) {
+                const startDate = starts.slice(0, 10);
+                const endDate = ends.slice(0, 10);
+                starts = `${startDate}T00:00`;
+                ends = `${endDate > startDate ? endDate : add(startDate, 1)}T00:00`;
+              }
+              const starts_at =
+                starts ===
+                  formatInTimeZone(
+                    event.starts_at,
+                    event.timezone,
+                    "yyyy-MM-dd'T'HH:mm",
+                  ) &&
+                timezone === event.timezone &&
+                !all_day
+                  ? event.starts_at
+                  : zonedLocalToInstant(starts, timezone, choice);
+              const ends_at =
+                ends ===
+                  formatInTimeZone(
+                    event.ends_at,
+                    event.timezone,
+                    "yyyy-MM-dd'T'HH:mm",
+                  ) &&
+                timezone === event.timezone &&
+                !all_day
+                  ? event.ends_at
+                  : zonedLocalToInstant(ends, timezone, choice);
+              setPreview(
+                await query<PreviewDTO>(
+                  "calendar_occurrence_reschedule_preview",
+                  {
+                    event_id: event.event_id,
+                    occurrence_starts_at: event.starts_at,
+                    starts_at,
+                    ends_at,
+                    timezone,
+                    all_day,
+                  },
+                ),
+              );
+            } catch (cause) {
+              setError(cause instanceof Error ? cause.message : String(cause));
+            }
+          }}
+        >
+          <p className="small muted">
+            {t(
+              "زمان پایان را برای تغییر طول و زمان شروع را برای جابه‌جایی تغییر بده؛ تا تأیید پیش‌نمایش ذخیره‌ای انجام نمی‌شود.",
+              "Change the end time to resize, or the start time to move. Nothing is saved until you confirm the preview.",
+            )}
+          </p>
+          <Field label={t("شروع این نوبت", "Occurrence start")}>
+            <input
+              type="datetime-local"
+              name="starts"
+              required
+              step={60}
+              defaultValue={formatInTimeZone(
+                event.starts_at,
+                event.timezone,
+                "yyyy-MM-dd'T'HH:mm",
+              )}
+            />
+          </Field>
+          <Field label={t("پایان این نوبت", "Occurrence end")}>
+            <input
+              type="datetime-local"
+              name="ends"
+              required
+              step={60}
+              defaultValue={formatInTimeZone(
+                event.ends_at,
+                event.timezone,
+                "yyyy-MM-dd'T'HH:mm",
+              )}
+            />
+          </Field>
+          <Field label={t("منطقهٔ زمانی نوبت", "Occurrence time zone")}>
+            <input name="timezone" required defaultValue={event.timezone} />
+          </Field>
+          <label className="check-label">
+            <input
+              name="all_day"
+              type="checkbox"
+              defaultChecked={event.all_day}
+            />
+            {t(
+              "تمام روز؛ پایان به‌صورت غیرشامل روز بعد است",
+              "All day; the end is exclusive, at least the next day",
+            )}
+          </label>
+          <Field
+            label={t(
+              "اگر ساعت محلی دوبار رخ داد",
+              "If this local time occurs twice",
+            )}
+          >
+            <select name="disambiguation">
+              <option value="reject">
+                {t("نیاز به انتخاب", "Require a choice")}
+              </option>
+              <option value="earlier">
+                {t("بار اول", "First occurrence")}
+              </option>
+              <option value="later">{t("بار دوم", "Second occurrence")}</option>
+            </select>
+          </Field>
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          <Button type="submit">
+            {t("پیش‌نمایش تغییر نوبت", "Preview occurrence change")}
+          </Button>
+        </form>
+      )}
     </Modal>
   );
 }
@@ -664,23 +1212,56 @@ export function WorkLog({ action }: { action: Action }) {
   const { t } = useLocale();
   const [month, setMonth] = useState(today().slice(0, 7));
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<TimeEntryDTO | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState(today);
   const [error, setError] = useState("");
   const from = zonedLocalToInstant(`${month}-01T00:00`, ZONE);
   const next = new Date(`${month}-01T12:00:00Z`);
   next.setUTCMonth(next.getUTCMonth() + 1);
+  const to = zonedLocalToInstant(
+    `${next.toISOString().slice(0, 10)}T00:00`,
+    ZONE,
+  );
   const entries = useQuery<PageDTO<TimeEntryDTO>>("time_entry_list", {
     from,
-    to: zonedLocalToInstant(`${next.toISOString().slice(0, 10)}T00:00`, ZONE),
+    to,
+    limit: 100,
+    ...(cursor ? { cursor } : {}),
+  });
+  const summary = useQuery<{
+    minutes: number;
+    employers: Record<string, number>;
+    entries: number;
+  }>("time_summary", { from, to });
+  const daily = useQuery<PageDTO<TimeEntryDTO>>("time_entry_list", {
+    from: zonedLocalToInstant(`${selectedDay}T00:00`, ZONE),
+    to: zonedLocalToInstant(`${add(selectedDay, 1)}T00:00`, ZONE),
     limit: 200,
   });
+  const selectedWeek = add(
+    selectedDay,
+    -((new Date(`${selectedDay}T12:00:00Z`).getUTCDay() + 6) % 7),
+  );
+  const weekSummary = useQuery<{
+    minutes: number;
+    employers: Record<string, number>;
+    entries: number;
+  }>("time_summary", {
+    from: zonedLocalToInstant(`${selectedWeek}T00:00`),
+    to: zonedLocalToInstant(`${add(selectedWeek, 7)}T00:00`),
+  });
   const rows = entries.data?.items ?? [];
-  const totals = (employer: string) =>
-    rows
-      .filter((row) => row.employer === employer)
-      .reduce((sum, row) => sum + row.minutes, 0);
-  const hours = (minutes: number) =>
-    `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+  const hours = (minutes: number) => {
+    const seconds = Math.round(minutes * 60);
+    return `${Math.floor(seconds / 3600)}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}${seconds % 60 ? `:${String(seconds % 60).padStart(2, "0")}` : ""}`;
+  };
+  const startValue = editing
+    ? formatInTimeZone(editing.starts_at, ZONE, "yyyy-MM-dd'T'HH:mm")
+    : "";
+  const endValue = editing
+    ? formatInTimeZone(editing.ends_at, ZONE, "yyyy-MM-dd'T'HH:mm")
+    : "";
   return (
     <>
       <div className="page-heading">
@@ -696,7 +1277,13 @@ export function WorkLog({ action }: { action: Action }) {
             )}
           </p>
         </div>
-        <AddButton onClick={() => setOpen(true)}>
+        <AddButton
+          onClick={() => {
+            setEditing(null);
+            setError("");
+            setOpen(true);
+          }}
+        >
           {t("بازهٔ تازه", "New time entry")}
         </AddButton>
       </div>
@@ -706,8 +1293,10 @@ export function WorkLog({ action }: { action: Action }) {
           aria-label={t("ماه", "Month")}
           value={month}
           onChange={(e) => {
+            if (!e.target.value) return;
             setMonth(e.target.value);
             setSelectedDay(`${e.target.value}-01`);
+            setCursor(null);
           }}
         />
         {["Jena", "Seewiesen"].map((employer) => (
@@ -724,22 +1313,39 @@ export function WorkLog({ action }: { action: Action }) {
       <div className="metric-grid">
         <div className="metric-card">
           <span>Jena</span>
-          <strong>{hours(totals("Jena"))}</strong>
+          <strong>
+            {summary.data ? hours(summary.data.employers.Jena ?? 0) : "—"}
+          </strong>
           <small>{t("ساعت این ماه", "hours this month")}</small>
         </div>
         <div className="metric-card">
           <span>Seewiesen</span>
-          <strong>{hours(totals("Seewiesen"))}</strong>
+          <strong>
+            {summary.data ? hours(summary.data.employers.Seewiesen ?? 0) : "—"}
+          </strong>
           <small>{t("ساعت این ماه", "hours this month")}</small>
         </div>
         <div className="metric-card">
+          <span>{t("مجموع ساعت ماه", "Total monthly hours")}</span>
+          <strong>{summary.data ? hours(summary.data.minutes) : "—"}</strong>
+          <small>{t("همهٔ محل‌های کار", "All workplaces")}</small>
+        </div>
+        <div className="metric-card">
           <span>{t("مجموع بازه‌ها", "Time entries")}</span>
-          <strong>{rows.length}</strong>
+          <strong>{summary.data?.entries ?? "—"}</strong>
           <small>Europe/Berlin</small>
         </div>
       </div>
+      <TimeTransfer from={from} to={to} month={month} action={action} />
+      <QueryState {...summary} retry={summary.refresh} />
+      <p className="small muted">
+        {t(
+          "مجموع‌ها از همهٔ بازه‌های ماه و فقط سهم زمانی داخل همین ماه محاسبه می‌شوند؛ جدول صفحه‌بندی دارد.",
+          "Totals include every entry in the month and only time within its boundaries. The table is paginated.",
+        )}
+      </p>
       <QueryState {...entries} retry={entries.refresh} />
-      {!entries.loading && !rows.length ? (
+      {!entries.loading && !entries.error && !rows.length ? (
         <Empty
           title={t(
             "اولین بازهٔ کارت را ثبت کن",
@@ -760,6 +1366,7 @@ export function WorkLog({ action }: { action: Action }) {
                 <th>{t("بازه", "Time")}</th>
                 <th>{t("مدت", "Duration")}</th>
                 <th>{t("شرح فعالیت", "Description")}</th>
+                <th>{t("ویرایش", "Edit")}</th>
               </tr>
             </thead>
             <tbody>
@@ -779,19 +1386,83 @@ export function WorkLog({ action }: { action: Action }) {
                   </td>
                   <td>{hours(row.minutes)}</td>
                   <td className="description-cell">{row.description}</td>
+                  <td>
+                    <Button
+                      onClick={() => {
+                        setEditing(row);
+                        setError("");
+                        setOpen(true);
+                      }}
+                    >
+                      {t("ویرایش بازه", "Edit entry")}
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      <div className="form-actions pagination">
+        <span className="small muted">
+          {rows.length}/{entries.data?.total ?? "—"}{" "}
+          {t("بازه نمایش داده شده", "entries displayed")}
+        </span>
+        {cursor && (
+          <Button onClick={() => setCursor(null)}>
+            {t("صفحهٔ اول", "First page")}
+          </Button>
+        )}
+        {entries.data?.next_cursor && (
+          <Button onClick={() => setCursor(entries.data?.next_cursor ?? null)}>
+            {t("صفحهٔ بعد", "Next page")}
+          </Button>
+        )}
+      </div>
+      <section className="panel work-week-summary">
+        <h2>{t("جمع هفتهٔ انتخاب‌شده", "Selected week totals")}</h2>
+        <p className="muted small">
+          {selectedWeek} — {add(selectedWeek, 6)} · Europe/Berlin
+        </p>
+        <QueryState {...weekSummary} retry={weekSummary.refresh} />
+        {weekSummary.data && (
+          <div className="review-values">
+            <div>
+              <strong>{hours(weekSummary.data.minutes)}</strong>
+              <span>{t("کل ساعت", "total hours")}</span>
+            </div>
+            {[
+              ...new Set([
+                "Jena",
+                "Seewiesen",
+                ...Object.keys(weekSummary.data.employers),
+              ]),
+            ].map((employer) => (
+              <div key={employer}>
+                <strong>
+                  {hours(weekSummary.data!.employers[employer] ?? 0)}
+                </strong>
+                <span>{employer}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="muted small">
+          {t(
+            "این هفته از تاریخِ نمای ۲۴ ساعته انتخاب می‌شود؛ همهٔ بازه‌ها و فقط سهم داخل هفته حساب می‌شوند.",
+            "The 24-hour timeline's selected date determines this week. All entries contribute only their time inside these boundaries.",
+          )}
+        </p>
+      </section>
       <section className="panel work-timeline">
         <div className="section-heading">
           <h2>{t("نمای ۲۴ ساعتهٔ کار", "24-hour work timeline")}</h2>
           <input
             type="date"
             value={selectedDay}
-            onChange={(event) => setSelectedDay(event.target.value)}
+            onChange={(event) => {
+              if (event.target.value) setSelectedDay(event.target.value);
+            }}
             aria-label={t("روز نمایش ساعت‌ها", "Timeline day")}
           />
         </div>
@@ -812,7 +1483,7 @@ export function WorkLog({ action }: { action: Action }) {
               {Array.from({ length: 24 }, (_, hour) => (
                 <div className="hour-slot" key={hour} />
               ))}
-              {rows
+              {(daily.data?.items ?? [])
                 .flatMap((row) =>
                   splitIntervalByLocalDate(row, ZONE).map((segment) => ({
                     ...row,
@@ -826,9 +1497,20 @@ export function WorkLog({ action }: { action: Action }) {
                   );
                   const minute = Number(clock[0]) * 60 + Number(clock[1]);
                   return (
-                    <div
+                    <button
                       key={row.entry_id}
                       className={`time-block ${row.employer === "Seewiesen" ? "seewiesen" : ""}`}
+                      onClick={() => {
+                        const original = daily.data?.items.find(
+                          (entry) => entry.entry_id === row.entry_id,
+                        );
+                        if (original) {
+                          setEditing(original);
+                          setError("");
+                          setOpen(true);
+                        }
+                      }}
+                      aria-label={`${t("ویرایش بازه", "Edit entry")} ${row.employer} ${row.description}`}
                       style={{
                         top: `${(minute / 60) * 52}px`,
                         height: `${Math.max(26, (row.minutes / 60) * 52)}px`,
@@ -840,41 +1522,66 @@ export function WorkLog({ action }: { action: Action }) {
                         {hours(row.minutes)}
                       </small>
                       <span>{row.description}</span>
-                    </div>
+                    </button>
                   );
                 })}
             </div>
           </div>
         </div>
+        <QueryState {...daily} retry={daily.refresh} />
+        {daily.data?.next_cursor && (
+          <p className="warning">
+            {t(
+              "این نمای روز حداکثر ۲۰۰ بازه را نشان می‌دهد؛ برای بررسی بقیه از جدول و صفحه‌بندی استفاده کن.",
+              "This day view displays up to 200 entries. Use the table pages for the remainder.",
+            )}
+          </p>
+        )}
       </section>
       <Modal
-        title={t("ثبت بازهٔ کار", "Record work time")}
+        title={
+          editing
+            ? t("ویرایش بازهٔ کار", "Edit work time")
+            : t("ثبت بازهٔ کار", "Record work time")
+        }
         open={open}
         onOpenChange={setOpen}
       >
         <form
           className="form-grid"
+          key={editing?.entry_id ?? "new"}
           onSubmit={async (e) => {
             e.preventDefault();
             setError("");
             const form = new FormData(e.currentTarget);
             try {
-              const result = await action("time_entry_create", {
-                employer: form.get("employer"),
-                starts_at: zonedLocalToInstant(
-                  String(form.get("starts")),
-                  ZONE,
-                  String(form.get("disambiguation")) as
-                    "reject" | "earlier" | "later",
-                ),
-                ends_at: zonedLocalToInstant(
-                  String(form.get("ends")),
-                  ZONE,
-                  String(form.get("disambiguation")) as
-                    "reject" | "earlier" | "later",
-                ),
-                description: form.get("description"),
-              });
+              const result = await action(
+                editing ? "time_entry_update" : "time_entry_create",
+                {
+                  ...(editing ? { entry_id: editing.entry_id } : {}),
+                  employer: form.get("employer"),
+                  starts_at:
+                    editing && String(form.get("starts")) === startValue
+                      ? editing.starts_at
+                      : zonedLocalToInstant(
+                          String(form.get("starts")),
+                          ZONE,
+                          String(form.get("disambiguation")) as
+                            "reject" | "earlier" | "later",
+                        ),
+                  ends_at:
+                    editing && String(form.get("ends")) === endValue
+                      ? editing.ends_at
+                      : zonedLocalToInstant(
+                          String(form.get("ends")),
+                          ZONE,
+                          String(form.get("disambiguation")) as
+                            "reject" | "earlier" | "later",
+                        ),
+                  description: form.get("description"),
+                },
+                editing?.revision,
+              );
               if (result) setOpen(false);
             } catch (cause) {
               setError(cause instanceof Error ? cause.message : String(cause));
@@ -882,21 +1589,41 @@ export function WorkLog({ action }: { action: Action }) {
           }}
         >
           <Field label={t("محل کار", "Workplace")}>
-            <select name="employer">
+            <select name="employer" defaultValue={editing?.employer ?? "Jena"}>
               <option>Jena</option>
               <option>Seewiesen</option>
+              {editing && !["Jena", "Seewiesen"].includes(editing.employer) && (
+                <option>{editing.employer}</option>
+              )}
             </select>
           </Field>
           <div className="form-columns">
             <Field label={t("شروع", "Start")}>
-              <input name="starts" required type="datetime-local" step={900} />
+              <input
+                name="starts"
+                required
+                type="datetime-local"
+                step={editing ? 60 : 900}
+                defaultValue={startValue}
+              />
             </Field>
             <Field label={t("پایان", "End")}>
-              <input name="ends" required type="datetime-local" step={900} />
+              <input
+                name="ends"
+                required
+                type="datetime-local"
+                step={editing ? 60 : 900}
+                defaultValue={endValue}
+              />
             </Field>
           </div>
           <Field label={t("شرح فعالیت", "Activity description")}>
-            <textarea name="description" maxLength={2000} rows={4} />
+            <textarea
+              name="description"
+              maxLength={2000}
+              rows={4}
+              defaultValue={editing?.description ?? ""}
+            />
           </Field>
           <Field
             label={t("در ساعت پاییزی تکراری", "For ambiguous autumn times")}
@@ -919,6 +1646,22 @@ export function WorkLog({ action }: { action: Action }) {
           <Button variant="primary" type="submit">
             {t("ثبت ساعت", "Save time")}
           </Button>
+          {editing && (
+            <Button
+              type="button"
+              variant="danger"
+              onClick={async () => {
+                const result = await action(
+                  "time_entry_archive",
+                  { entry_id: editing.entry_id },
+                  editing.revision,
+                );
+                if (result) setOpen(false);
+              }}
+            >
+              {t("بایگانی این بازه", "Archive this entry")}
+            </Button>
+          )}
         </form>
       </Modal>
     </>

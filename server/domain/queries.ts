@@ -39,6 +39,7 @@ import {
 import { resolveAiConfiguration } from "../integrations/ai-guard";
 import { analyticsTrends } from "./analytics";
 import { previewCalendarOccurrence } from "./calendar";
+import { previewTimeImport } from "./time-import";
 import { instantToLocalDate } from "../../shared/datetime";
 
 async function calendarStatus(principal: Principal) {
@@ -306,6 +307,8 @@ export async function domainQuery(
   principal: Principal,
 ): Promise<unknown> {
   const owner = principal.ownerId;
+  if (operation === "time_entry_import_preview")
+    return previewTimeImport(tx, input, principal);
   if (operation === "calendar_occurrence_reschedule_preview")
     return previewCalendarOccurrence(tx, input, principal);
   if (

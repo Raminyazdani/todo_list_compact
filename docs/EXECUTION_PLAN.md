@@ -1,17 +1,17 @@
 # Execution plan
 
-Initial status: discovery and contract definition. Current repository default branch is `master`; it has no commit at this checkpoint. Production URL, durable cloud resources and authentication configuration are not yet verified.
+Current status: canonical implementation and integration verification. The repository has committed foundation work on `feat/life-os`; the default branch remains `master`. Production auth/MCP verification is tracked by the orchestrator. The full UI regression pass, source cutover and provider-specific gates remain separate evidence requirements. The milestone table retains its historical initial states; use the dependency test matrix and release checkpoint for observed outcomes.
 
 ## Architecture decisions to verify
 
-- Full-stack strict TypeScript with Next App Router, React, accessible Tailwind-based design tokens and pnpm lockfile.
+- Full-stack strict TypeScript with Next App Router, React, accessible CSS design tokens and pnpm lockfile.
 - Durable PostgreSQL, versioned SQL migrations, normalized identities/relations and serializable/advisory-lock graph mutations. Private object storage holds new uploaded bytes; imported Drive files remain external references.
 - One authenticated domain command/query boundary shared by browser, REST, MCP and AI. Bound inputs with schemas; enforce actor/scopes/owner, revision, idempotency and append-only audit centrally.
 - Owner authentication via mature identity/session mechanism; secure cookies and server authorization on every private path. OAuth-protected remote Streamable HTTP MCP uses supported SDK/metadata/client discovery.
 - Provider adapters for calendar/storage/AI; outbox/job state is durable. Missing provider authorization disables that connection truthfully while local features remain functional.
 - Persian RTL by default, English LTR supported; timezone Europe/Berlin with date-specific Asia/Tehran conversions. No invented deadlines or private demonstration fixtures.
 
-Any deviation requires an ADR with concrete evidence and implications. No dependency choice or infrastructure claim is final merely because it appears above.
+Implementation uses the installed strict TypeScript/Next/React stack, Better Auth owner sessions/OAuth, PostgreSQL transactions and CSS theme variables. Provider configuration and successful runtime operations require their own evidence; a configured flag alone does not verify a provider.
 
 ## Milestones and barriers
 

@@ -1,6 +1,6 @@
 # Ramin Life OS — Product and acceptance contract
 
-Status: implementation in progress; no release gate is verified. The owner authorized implementation from the private V2 handoff and requested Persian conversation. This public specification contains reusable requirements and synthetic examples only.
+Status: canonical implementation present; independent evidence and final release gates are tracked in the test matrix and operator checkpoint. A layer PASS is not an overall release claim. The owner authorized implementation from the private V2 handoff and requested Persian conversation. This public specification contains reusable requirements and synthetic examples only.
 
 ## Product outcome
 

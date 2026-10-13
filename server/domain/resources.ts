@@ -29,6 +29,7 @@ import {
 } from "../integrations/storage";
 import { runRecurringTasks } from "./recurrence";
 import { commitCalendarOccurrence } from "./calendar";
+import { commitTimeImport } from "./time-import";
 import * as RRulePackage from "rrule";
 const RRule = (RRulePackage.RRule ??
   Reflect.get(RRulePackage, "default")?.RRule) as typeof RRulePackage.RRule;
@@ -427,6 +428,8 @@ export async function resourceCommand(
       affected: [],
     };
   }
+  if (command === "time_entry_import_commit")
+    return commitTimeImport(tx, input, principal, operationId);
   if (command === "calendar_occurrence_reschedule_commit")
     return commitCalendarOccurrence(tx, input, principal, operationId);
   if (command.startsWith("calendar_") || command.startsWith("time_entry_"))
@@ -510,6 +513,60 @@ export async function resourceCommand(
       affected: [taskId],
     };
   }
+  if (
+    command === "reminder_pause" ||
+    command === "reminder_resume" ||
+    command === "reminder_cancel"
+  ) {
+    if (Object.keys(input).some((key) => key !== "reminder_id"))
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Reminder controls accept only reminder_id; scheduled timestamps remain unchanged.",
+      );
+    const reminderId = text(input, "reminder_id"),
+      before = await entity(tx, "reminders", "reminder_id", reminderId, owner);
+    guard(before, revision);
+    const allowed =
+      command === "reminder_pause"
+        ? ["Pending"]
+        : command === "reminder_resume"
+          ? ["Paused"]
+          : ["Pending", "Paused"];
+    if (!allowed.includes(String(before.state)))
+      throw new DomainError(
+        "INVALID_INPUT",
+        "This reminder cannot make the requested transition; delivered and cancelled reminders remain terminal.",
+        { state: before.state, allowed_states: allowed },
+        409,
+      );
+    const state =
+        command === "reminder_pause"
+          ? "Paused"
+          : command === "reminder_resume"
+            ? "Pending"
+            : "Cancelled",
+      after = cleanRows(
+        (
+          await tx.query<Input>(
+            "UPDATE reminders SET state=$3,revision=revision+1 WHERE reminder_id=$1 AND owner_id=$2 RETURNING *,remind_at<=now() AS past_due",
+            [reminderId, owner, state],
+          )
+        ).rows,
+      )[0],
+      pastDueResume = command === "reminder_resume" && after.past_due === true;
+    return {
+      entityId: reminderId,
+      before,
+      after: {
+        ...after,
+        warnings: pastDueResume ? ["REMINDER_PAST_DUE_RESUMED"] : [],
+      },
+      affected: [String(before.task_id)],
+      reason: pastDueResume
+        ? "Owner resumed a past-due reminder at its original timestamp; the next daily run may deliver it."
+        : undefined,
+    };
+  }
   if (command === "notification_mark_read") {
     const notificationId = text(input, "notification_id"),
       before = await entity(
@@ -561,9 +618,23 @@ export async function resourceCommand(
         reminder.task_archived_at ||
         ["Done", "Cancelled"].includes(String(reminder.task_status))
       ) {
-        await tx.query(
-          "UPDATE reminders SET state='Cancelled',revision=revision+1 WHERE reminder_id=$1 AND owner_id=$2",
-          [reminder.reminder_id, owner],
+        const cancelledReminder = cleanRows(
+          (
+            await tx.query<Input>(
+              "UPDATE reminders SET state='Cancelled',revision=revision+1 WHERE reminder_id=$1 AND owner_id=$2 RETURNING *",
+              [reminder.reminder_id, owner],
+            )
+          ).rows,
+        )[0];
+        await audit(
+          tx,
+          principal,
+          operationId,
+          "reminder.cancelled_for_closed_task",
+          String(reminder.reminder_id),
+          reminder,
+          cancelledReminder,
+          "The linked task is closed or archived; no notification was delivered.",
         );
         cancelled++;
         continue;
@@ -578,9 +649,23 @@ export async function resourceCommand(
           `یادآوری برای کار ${reminder.task_id}`,
         ],
       );
-      await tx.query(
-        "UPDATE reminders SET state='Succeeded',revision=revision+1 WHERE reminder_id=$1 AND owner_id=$2",
-        [reminder.reminder_id, owner],
+      const succeeded = cleanRows(
+        (
+          await tx.query<Input>(
+            "UPDATE reminders SET state='Succeeded',revision=revision+1 WHERE reminder_id=$1 AND owner_id=$2 RETURNING *",
+            [reminder.reminder_id, owner],
+          )
+        ).rows,
+      )[0];
+      await audit(
+        tx,
+        principal,
+        operationId,
+        "reminder.delivered",
+        String(reminder.reminder_id),
+        reminder,
+        succeeded,
+        `Delivered durable in-app notification ${notificationId}`,
       );
       delivered++;
       notifications.push(notificationId);

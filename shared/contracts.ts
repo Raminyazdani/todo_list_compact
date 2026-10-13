@@ -171,6 +171,29 @@ export interface TimeEntryDTO {
   revision: number;
   minutes: number;
 }
+export interface ReminderDTO {
+  reminder_id: string;
+  task_id: string;
+  remind_at: string;
+  channel: "in_app";
+  state: "Pending" | "Paused" | "Cancelled" | "Succeeded";
+  revision: number;
+  past_due?: boolean;
+  warnings?: string[];
+}
+export interface TimeImportEntryDTO {
+  entry_id: string;
+  employer: string;
+  starts_at: string;
+  ends_at: string;
+  description?: string;
+  task_id?: string | null;
+}
+export interface TimeImportDataDTO {
+  format: "ramin-life-os-time/1";
+  timezone: string;
+  entries: TimeImportEntryDTO[];
+}
 export interface ActivityDTO {
   event_id: string;
   entity_id: string;
@@ -318,10 +341,14 @@ export const COMMAND_NAMES = [
   "time_entry_create",
   "time_entry_update",
   "time_entry_archive",
+  "time_entry_import_commit",
   "preferences_update",
   "saved_view_create",
   "saved_view_update",
   "reminder_create",
+  "reminder_pause",
+  "reminder_resume",
+  "reminder_cancel",
   "task_recurrence_create",
   "task_recurrence_pause",
   "task_recurrence_resume",
@@ -379,6 +406,7 @@ export const QUERY_NAMES = [
   "calendar_occurrence_reschedule_preview",
   "time_entry_list",
   "time_summary",
+  "time_entry_import_preview",
   "get_activity",
   "search_all",
   "analytics_summary",

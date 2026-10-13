@@ -1,99 +1,254 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve, relative, isAbsolute, sep } from "node:path";
-import { getDatabase } from "../../server/db/database";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+import { getDatabase, type Database } from "../../server/db/database";
 import { createDomainService } from "../../server/domain/service";
-import { importPrepared, prepareMigration, reconcileMigration } from "./core";
+import {
+  importPrepared,
+  prepareMigration,
+  reconcileMigration,
+  recordHash,
+} from "./core";
 import { rehearseMigration } from "./staging";
+import {
+  admitPrivatePath,
+  withPrivateFile,
+  writeExclusivePrivateJson,
+  replacePinnedContents,
+} from "../ops/private-paths.mjs";
 
-async function main() {
-  const [sourcePath, checkpointPath, reportPath, flag] = process.argv.slice(2);
-  if (!sourcePath || !checkpointPath || !reportPath || flag !== "--commit")
+const REPORT_FORMAT = "ramin-life-os-migration-cutover/1";
+interface Checkpoint {
+  verified_at: string;
+  source_modified_time: string;
+  source_hash: string;
+}
+interface Dependencies {
+  repositoryRoot?: string;
+  environment?: Record<string, string | undefined>;
+  now?: () => number;
+  rehearse?: typeof rehearseMigration;
+  database?: () => Database;
+}
+function destinationHash(url: string) {
+  const parsed = new URL(url);
+  if (
+    !["postgres:", "postgresql:"].includes(parsed.protocol) ||
+    !parsed.hostname ||
+    !parsed.pathname.slice(1)
+  )
     throw new Error(
-      "Expected private source, fresh private live-read checkpoint, private report, and --commit.",
+      "Migration destination must be a configured PostgreSQL database.",
     );
-  const reportRelative = relative(resolve(process.cwd()), resolve(reportPath));
-  if (!(
-    isAbsolute(reportRelative) ||
-    reportRelative === ".." ||
-    reportRelative.startsWith(".." + sep)
-  ))
-    throw new Error("Reconciliation report must stay outside public Git.");
-  const source = JSON.parse(await readFile(sourcePath, "utf8"));
-  const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8")) as {
-    verified_at: string;
-    source_modified_time: string;
-    source_hash: string;
-  };
-  const prepared = prepareMigration(source);
-  const age = Date.now() - Date.parse(checkpoint.verified_at);
+  return recordHash({
+    host: parsed.hostname.toLowerCase().replace(/-pooler(?=\.)/, ""),
+    port: parsed.port || "5432",
+    database: decodeURIComponent(parsed.pathname.slice(1)),
+  });
+}
+export function assertFreshSourceCheckpoint(
+  checkpoint: Checkpoint,
+  sourceModifiedTime: unknown,
+  sourceHash: string,
+  now = Date.now(),
+) {
+  if (
+    !checkpoint ||
+    typeof checkpoint.verified_at !== "string" ||
+    typeof sourceModifiedTime !== "string" ||
+    !Number.isFinite(Date.parse(sourceModifiedTime)) ||
+    typeof checkpoint.source_hash !== "string" ||
+    !/^[a-f0-9]{64}$/.test(checkpoint.source_hash)
+  )
+    throw new Error("Source checkpoint metadata is invalid.");
+  const age = now - Date.parse(checkpoint.verified_at);
   if (
     !Number.isFinite(age) ||
     age < -30000 ||
     age > 10 * 60000 ||
-    checkpoint.source_modified_time !== source.source?.modified_time ||
-    checkpoint.source_hash !== prepared.sourceHash
+    checkpoint.source_modified_time !== sourceModifiedTime ||
+    checkpoint.source_hash !== sourceHash
   )
     throw new Error(
       "Source checkpoint stale or changed. Read live metadata/complete rows and rehearse again.",
     );
-  if (!process.env.OWNER_ID || !process.env.DATABASE_URL)
+}
+
+/** Only the coordinator's CLI selects real production. Tests inject a disposable engine, never a runtime fallback. */
+export async function commitMigration(
+  args: string[],
+  dependencies: Dependencies = {},
+) {
+  const [sourcePath, checkpointPath, reportPath, flag, ...extra] = args;
+  if (
+    !sourcePath ||
+    !checkpointPath ||
+    !reportPath ||
+    flag !== "--commit" ||
+    extra.length
+  )
+    throw new Error(
+      "Expected private source, fresh private live-read checkpoint, private report, and --commit.",
+    );
+  const repositoryRoot =
+    dependencies.repositoryRoot ??
+    fileURLToPath(new URL("../../", import.meta.url));
+  const admission = { repositoryRoot };
+  const sourceFile = await admitPrivatePath(sourcePath, {
+    ...admission,
+    mustExist: true,
+  });
+  const checkpointFile = await admitPrivatePath(checkpointPath, {
+    ...admission,
+    mustExist: true,
+  });
+  const reportFile = await admitPrivatePath(reportPath, admission);
+  const source = JSON.parse(await readFile(sourceFile, "utf8"));
+  const checkpoint = JSON.parse(
+    await readFile(checkpointFile, "utf8"),
+  ) as Checkpoint;
+  const prepared = prepareMigration(source);
+  const now = dependencies.now ?? Date.now;
+  const assertFresh = () =>
+    assertFreshSourceCheckpoint(
+      checkpoint,
+      source.source?.modified_time,
+      prepared.sourceHash,
+      now(),
+    );
+  assertFresh();
+  if (!prepared.ready)
+    throw new Error("Source validation/quarantine blocks migration.");
+  const environment = dependencies.environment ?? process.env;
+  const ownerId = environment.OWNER_ID,
+    databaseUrl = environment.DATABASE_URL;
+  if (!ownerId?.trim() || !databaseUrl)
     throw new Error("Production database and owner are not configured.");
-  const rehearsal = await rehearseMigration(source);
+  const intent = {
+    format: REPORT_FORMAT,
+    source_hash: prepared.sourceHash,
+    batch_id: prepared.batchId,
+    owner_id: ownerId,
+    destination_hash: destinationHash(databaseUrl),
+  };
+  const rehearsal = await (dependencies.rehearse ?? rehearseMigration)(source);
   if (!rehearsal.pass)
     throw new Error("Staging migration, replay or restore failed.");
-  const database = getDatabase();
+  assertFresh();
+  // Durable pending evidence exists before a provider call can accept the import.
   try {
-    const principal = {
-      ownerId: process.env.OWNER_ID,
-      actorId: "authorized-migration-operator",
-      channel: "import" as const,
-      scopes: ["admin:manage"],
-    };
-    const mutation = await importPrepared(
-      createDomainService(database),
-      prepared,
-      principal,
+    await writeExclusivePrivateJson(
+      reportFile,
+      {
+        ...intent,
+        status: "pending",
+        reserved_at: new Date(now()).toISOString(),
+        checkpoint,
+        counts: prepared.counts,
+        rehearsal,
+      },
+      admission,
     );
-    const reconciliation = await reconcileMigration(
-      database,
-      principal.ownerId,
-      prepared,
-    );
-    await writeFile(
-      reportPath,
-      JSON.stringify(
-        {
-          occurred_at: new Date().toISOString(),
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "EEXIST"))
+      throw error;
+  }
+  return withPrivateFile(
+    reportFile,
+    async (file) => {
+      const existing = JSON.parse(await file.readFile("utf8"));
+      if (
+        !existing ||
+        !Object.entries(intent).every(
+          ([key, value]) => existing[key] === value,
+        ) ||
+        ![
+          "pending",
+          "accepted",
+          "verified",
+          "reconciliation_required",
+        ].includes(existing.status)
+      )
+        throw new Error(
+          "Existing private report belongs to another migration intent; preserve it and choose a new report path.",
+        );
+      assertFresh();
+      const database = (dependencies.database ?? getDatabase)();
+      try {
+        const principal = {
+          ownerId,
+          actorId: "authorized-migration-operator",
+          channel: "import" as const,
+          scopes: ["admin:manage"],
+        };
+        assertFresh();
+        // Same canonical batch key reconciles uncertain and accepted outcomes before retrying.
+        const mutation = await importPrepared(
+          createDomainService(database),
+          prepared,
+          principal,
+        );
+        const accepted = {
+          ...intent,
+          status: "accepted",
+          occurred_at: new Date(now()).toISOString(),
           checkpoint,
           counts: prepared.counts,
           rehearsal,
           mutation,
-          reconciliation,
-          cutover_status: reconciliation.pass
-            ? "verified import; legacy source remains read-only"
-            : "reconciliation requires review",
-        },
-        null,
-        2,
-      ),
-      { mode: 0o600 },
-    );
-    console.log(
-      JSON.stringify({
-        reconciled: reconciliation.pass,
-        counts: prepared.counts,
-        replayed: mutation.replayed === true,
-        source_written: false,
-      }),
-    );
-    if (!reconciliation.pass) process.exitCode = 1;
-  } finally {
-    await database.close?.();
-  }
-}
-main().catch(() => {
-  console.error(
-    "Production migration stopped. Inspect source freshness, staging validation and private report; no source changes were requested.",
+        };
+        await replacePinnedContents(
+          file,
+          JSON.stringify(accepted, null, 2) + "\n",
+        );
+        const reconciliation = await reconcileMigration(
+          database,
+          ownerId,
+          prepared,
+        );
+        await replacePinnedContents(
+          file,
+          JSON.stringify(
+            {
+              ...accepted,
+              status: reconciliation.pass
+                ? "verified"
+                : "reconciliation_required",
+              reconciliation,
+              cutover_status: reconciliation.pass
+                ? "verified import; legacy source remains read-only"
+                : "reconciliation requires review",
+            },
+            null,
+            2,
+          ) + "\n",
+        );
+        return {
+          reconciled: reconciliation.pass,
+          counts: prepared.counts,
+          replayed: mutation.replayed === true,
+          source_written: false,
+        };
+      } finally {
+        await database.close?.();
+      }
+    },
+    admission,
   );
-  process.exitCode = 1;
-});
+}
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+  commitMigration(process.argv.slice(2))
+    .then((result) => {
+      console.log(JSON.stringify(result));
+      if (!result.reconciled) process.exitCode = 1;
+    })
+    .catch(() => {
+      console.error(
+        "Production migration stopped. Inspect source freshness, staging validation and the preserved private pending/accepted report; retry the same source and canonical batch key. No source changes were requested.",
+      );
+      process.exitCode = 1;
+    });
+}

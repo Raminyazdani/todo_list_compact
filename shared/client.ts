@@ -13,10 +13,17 @@ export class LifeOsClient {
     operation: QueryName,
     input: Record<string, unknown> = {},
   ): Promise<T> {
-    return this.request(
-      `/api/v1/query?operation=${operation}&input=${encodeURIComponent(JSON.stringify(input))}`,
-      { method: "GET" },
-    );
+    const serialized = JSON.stringify(input);
+    const path = `/api/v1/query?operation=${operation}&input=${encodeURIComponent(serialized)}`;
+    if (
+      new URL(path, this.origin).href.length > 12000 ||
+      operation === "time_entry_import_preview"
+    )
+      return this.request("/api/v1/query", {
+        method: "POST",
+        body: JSON.stringify({ operation, input }),
+      });
+    return this.request(path, { method: "GET" });
   }
   async execute(
     command: CommandName,
@@ -27,7 +34,7 @@ export class LifeOsClient {
       method: "POST",
       headers: {
         "Idempotency-Key": options.idempotencyKey,
-        ...(options.expectedRevision
+        ...(options.expectedRevision !== undefined
           ? { "If-Match": String(options.expectedRevision) }
           : {}),
       },

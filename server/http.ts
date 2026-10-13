@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { DomainError } from "@/shared/contracts";
 import { getAuthPool } from "@/server/auth/db";
+import { appOrigin } from "@/server/auth/config";
 
 export const recordInput = z.record(z.string(), z.unknown());
 export async function readJson(
@@ -63,7 +64,7 @@ export function failure(error: unknown, mcp = false) {
   const headers: Record<string, string> = { "Cache-Control": "no-store" };
   if (mcp && status === 401)
     headers["WWW-Authenticate"] =
-      `Bearer resource_metadata="${process.env.BETTER_AUTH_URL}/.well-known/oauth-protected-resource/api/mcp"`;
+      `Bearer resource_metadata="${appOrigin()}/.well-known/oauth-protected-resource/api/mcp"`;
   return Response.json(
     {
       error: {

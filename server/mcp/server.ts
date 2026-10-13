@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 import {
   DomainError,
   type CommandName,
@@ -23,11 +24,24 @@ export function createMcpServer(principal: Principal) {
       {
         description: toolDescription(tool.name, tool.readOnly),
         inputSchema: tool.schema,
+        outputSchema: z.object({
+          data: z.unknown().optional(),
+          error: z
+            .object({
+              code: z.string(),
+              message: z.string(),
+              details: z.record(z.string(), z.unknown()),
+            })
+            .optional(),
+        }),
         annotations: {
           readOnlyHint: tool.readOnly,
-          destructiveHint: false,
+          destructiveHint: tool.destructive,
           idempotentHint: true,
-          openWorldHint: false,
+          openWorldHint: tool.openWorld,
+        },
+        _meta: {
+          securitySchemes: [{ type: "oauth2", scopes: tool.scopes }],
         },
       },
       async (args: Record<string, unknown>) => {
@@ -67,7 +81,11 @@ export function createMcpServer(principal: Principal) {
                   message: error.message,
                   details: error.details,
                 }
-              : { code: "INTERNAL_ERROR", message: "Operation failed" };
+              : {
+                  code: "INTERNAL_ERROR",
+                  message: "Operation failed",
+                  details: {},
+                };
           return {
             isError: true,
             content: [{ type: "text" as const, text: JSON.stringify(details) }],

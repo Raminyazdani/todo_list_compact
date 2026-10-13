@@ -347,7 +347,11 @@ export function createDomainService(database: Database): DomainService {
       if (!QUERY_NAMES.includes(operation))
         throw new DomainError("UNSUPPORTED_OPERATION", "Unknown query.");
       object(input);
-      if (json(input).length > 100000)
+      if (
+        operation === "time_entry_import_preview"
+          ? Buffer.byteLength(json(input), "utf8") > 2_000_000
+          : json(input).length > 100000
+      )
         throw new DomainError("INVALID_INPUT", "Query payload too large.");
       if (!principal.ownerId || !principal.actorId)
         throw new DomainError(

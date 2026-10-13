@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowUpRight,
   ArrowUp,
   ArrowDown,
   BrainCircuit,
-  CheckCheck,
   Download,
   FileText,
-  Folder,
   GitBranch,
   History,
   Link2,
@@ -31,11 +29,18 @@ import type {
   TaskDTO,
 } from "@/shared/contracts";
 import { authClient } from "@/server/auth/client";
+import {
+  addCalendarDays,
+  instantToLocalDate,
+  zonedLocalToInstant,
+} from "@/shared/datetime";
 import { query, useQuery, clearQueryCache, clearMutationIntents } from "./api";
 import { useLocale } from "./locale";
 import { TaskRow } from "./tasks";
+import { ProjectWorkspace } from "./projects";
+import { Trends } from "./trends";
+import { Connections } from "./connections";
 import {
-  AddButton,
   Button,
   Empty,
   Field,
@@ -45,6 +50,19 @@ import {
   SectionHeading,
 } from "@/components/ui";
 
+export interface TrendDTO {
+  timezone: string;
+  from_date: string;
+  to_date: string;
+  days: { date: string; created: number; completed: number; minutes: number }[];
+  weeks: {
+    week_start: string;
+    created: number;
+    completed: number;
+    minutes: number;
+  }[];
+  time_scope_granted: boolean;
+}
 type Action = (
   name: CommandName,
   input: Record<string, unknown>,
@@ -63,6 +81,7 @@ export interface Analytics {
   time: { minutes: number };
   files: { total: number };
   recent_activity: ActivityDTO[];
+  trends?: TrendDTO;
 }
 
 export function Dashboard({
@@ -83,6 +102,13 @@ export function Dashboard({
     { id: "calendar", title: t("نمای روز", "Day preview") },
     { id: "blocked", title: t("رادار پیش‌نیازها", "Blocked radar") },
     { id: "activity", title: t("تاریخچه", "Activity") },
+    { id: "projects", title: t("ریسک پروژه‌ها", "Project risks") },
+    { id: "waiting", title: t("منتظر پاسخ", "Waiting for responses") },
+    { id: "upcoming", title: t("مهلت‌های هفته", "Upcoming deadlines") },
+    { id: "workload", title: t("زمان کار این هفته", "Work time this week") },
+    { id: "review", title: t("مرور هفتگی", "Weekly review") },
+    { id: "files", title: t("منابع تازه", "Recent files") },
+    { id: "sources", title: t("وضعیت منابع", "Source status") },
   ];
   const saved = Array.isArray(preferences.data?.settings.dashboard_widgets)
     ? (preferences.data.settings.dashboard_widgets as {
@@ -107,6 +133,18 @@ export function Dashboard({
     return {
       order: widget(id).order,
       gridColumn: widget(id).width === "wide" ? "1 / -1" : undefined,
+    };
+  }
+  function widgetProps(id: string) {
+    return {
+      hidden: !widget(id).visible,
+      style: widgetStyle(id),
+      draggable: true,
+      onDragStart: (event: React.DragEvent<HTMLElement>) =>
+        event.dataTransfer.setData("text/lifeos-widget", id),
+      onDragOver: (event: React.DragEvent<HTMLElement>) =>
+        event.preventDefault(),
+      onDrop: (event: React.DragEvent<HTMLElement>) => dropWidget(event, id),
     };
   }
   async function saveWidgets(next: typeof widgets) {
@@ -157,9 +195,72 @@ export function Dashboard({
     );
     return () => window.clearInterval(timer);
   }, []);
+  const calendarDay = instantToLocalDate(calendarFrom, "Europe/Berlin");
+  const weekStart = addCalendarDays(
+    calendarDay,
+    -((new Date(`${calendarDay}T12:00:00Z`).getUTCDay() + 6) % 7),
+  );
+  const waiting = useQuery<PageDTO<TaskDTO>>(
+    "task_search",
+    { status: "Waiting", limit: 4 },
+    widget("waiting").visible,
+  );
+  const upcoming = useQuery<PageDTO<TaskDTO>>(
+    "task_search",
+    {
+      due_from: calendarDay,
+      due_to: addCalendarDays(calendarDay, 8),
+      limit: 4,
+    },
+    widget("upcoming").visible,
+  );
+  const recentFiles = useQuery<PageDTO<FileDTO>>(
+    "file_search",
+    { limit: 4 },
+    widget("files").visible,
+  );
+  const projectRisks = useQuery<PageDTO<ProjectDTO>>(
+    "project_list",
+    { limit: 100 },
+    widget("projects").visible,
+  );
+  const weeklyTime = useQuery<{
+    minutes: number;
+    employers: Record<string, number>;
+    entries: number;
+  }>(
+    "time_summary",
+    {
+      from: zonedLocalToInstant(`${weekStart}T00:00`),
+      to: zonedLocalToInstant(`${addCalendarDays(weekStart, 7)}T00:00`),
+    },
+    widget("workload").visible,
+  );
+  const sourceStatus = useQuery<{
+    migration_batches: { status: string; created_at: string }[];
+    jobs: { state: string }[];
+    external_sync: Record<string, unknown>;
+  }>("sync_status", {}, widget("sources").visible);
+  const risks =
+    projectRisks.data?.items.filter(
+      (project) =>
+        (project.blocked ?? 0) > 0 ||
+        Boolean(
+          project.due_date &&
+          project.due_date < calendarDay &&
+          (project.done ?? 0) < (project.total ?? 0),
+        ),
+    ) ?? [];
+  const reviewWeek = data.data?.trends?.weeks.find(
+    (week) => week.week_start === weekStart,
+  );
   const events = useQuery<PageDTO<Record<string, unknown>>>(
     "calendar_events_query",
-    { from: calendarFrom, limit: 3 },
+    {
+      from: zonedLocalToInstant(`${calendarDay}T00:00`),
+      to: zonedLocalToInstant(`${addCalendarDays(calendarDay, 1)}T00:00`),
+      limit: 5,
+    },
   );
   const [capture, setCapture] = useState("");
   const now = new Date();
@@ -293,7 +394,9 @@ export function Dashboard({
                   onAction={action}
                 />
               ))
-            : !ready.loading && (
+            : !ready.loading &&
+              !ready.error &&
+              ready.data && (
                 <Empty
                   title={t(
                     "قدم بعدی‌ات اینجا ظاهر می‌شود",
@@ -386,6 +489,7 @@ export function Dashboard({
             title={t("رادار پیش‌نیازها", "Blocked radar")}
             subtitle={t("چه چیزی باید جلو برود؟", "What needs to move first?")}
           />
+          <QueryState {...blocked} retry={blocked.refresh} />
           {blocked.data?.items.length ? (
             blocked.data.items.map((task) => (
               <button
@@ -403,11 +507,11 @@ export function Dashboard({
                 <span>{task.blocked_by.length}</span>
               </button>
             ))
-          ) : (
+          ) : !blocked.loading && !blocked.error && blocked.data ? (
             <Empty
               title={t("پیش‌نیاز ناتمامی پیدا نشد", "No blocked tasks found")}
             />
-          )}
+          ) : null}
         </section>
         <section
           className="panel"
@@ -430,6 +534,270 @@ export function Dashboard({
             }
           />
           <Activity events={data.data?.recent_activity.slice(0, 5) ?? []} />
+        </section>
+
+        <section className="panel" {...widgetProps("projects")}>
+          <SectionHeading
+            title={widget("projects").title}
+            action={
+              <Link className="text-link" href="/projects">
+                {t("همهٔ پروژه‌ها", "All projects")}
+              </Link>
+            }
+          />
+          <QueryState {...projectRisks} retry={projectRisks.refresh} />
+          {risks.slice(0, 4).map((project) => (
+            <Link
+              className="blocked-card"
+              key={project.project_id}
+              href={`/projects?project=${encodeURIComponent(project.project_id)}`}
+            >
+              <GitBranch size={17} />
+              <div>
+                <strong>{project.title}</strong>
+                <small>
+                  {project.blocked ?? 0} {t("کار مسدود", "blocked tasks")} ·{" "}
+                  {project.done ?? 0}/{project.total ?? 0}
+                  {project.due_date && ` · ${project.due_date}`}
+                </small>
+              </div>
+            </Link>
+          ))}
+          {projectRisks.data && !risks.length && (
+            <Empty
+              title={t(
+                "در این محدوده ریسکی پیدا نشد",
+                "No risks found in this scope",
+              )}
+            />
+          )}
+          <p className="muted small">
+            {t(
+              `بررسی ${projectRisks.data?.items.length ?? 0} از ${projectRisks.data?.total ?? "—"} پروژهٔ فعال؛ ${risks.length} پروژه با پیش‌نیاز ناتمام یا مهلت گذشته.`,
+              `Reviewed ${projectRisks.data?.items.length ?? 0} of ${projectRisks.data?.total ?? "—"} active projects; ${risks.length} with blockers or overdue deadlines.`,
+            )}
+          </p>
+        </section>
+        <section className="panel" {...widgetProps("waiting")}>
+          <SectionHeading
+            title={widget("waiting").title}
+            action={
+              <Link className="text-link" href="/tasks?filter=Waiting">
+                {t("همهٔ منتظرها", "All waiting")}
+              </Link>
+            }
+          />
+          <QueryState {...waiting} retry={waiting.refresh} />
+          {waiting.data?.items.map((task) => (
+            <div key={task.task_id}>
+              <TaskRow task={task} onOpen={onOpen} onAction={action} />
+              <p className="muted small">
+                {task.waiting_for ||
+                  t("منتظر چه چیزی: ثبت نشده", "Waiting for: unspecified")}
+              </p>
+            </div>
+          ))}
+          {waiting.data && !waiting.data.items.length && (
+            <Empty
+              title={t("کاری در وضعیت منتظر نیست", "No tasks are waiting")}
+            />
+          )}
+          <p className="muted small">
+            {waiting.data?.items.length ?? 0}/{waiting.data?.total ?? "—"}{" "}
+            {t("نمایش داده شده", "displayed")}
+          </p>
+        </section>
+        <section className="panel" {...widgetProps("upcoming")}>
+          <SectionHeading
+            title={widget("upcoming").title}
+            action={
+              <Link className="text-link" href="/tasks">
+                {t("کارها و مهلت‌ها", "Tasks & deadlines")}
+              </Link>
+            }
+          />
+          <p className="muted small">
+            {calendarDay} — {addCalendarDays(calendarDay, 7)}
+          </p>
+          <QueryState {...upcoming} retry={upcoming.refresh} />
+          {upcoming.data?.items.map((task) => (
+            <TaskRow
+              key={task.task_id}
+              task={task}
+              onOpen={onOpen}
+              onAction={action}
+            />
+          ))}
+          {upcoming.data && !upcoming.data.items.length && (
+            <Empty
+              title={t(
+                "مهلتی در این بازه ثبت نشده",
+                "No deadlines in this range",
+              )}
+            />
+          )}
+          <p className="muted small">
+            {upcoming.data?.items.length ?? 0}/{upcoming.data?.total ?? "—"}{" "}
+            {t("نمایش داده شده", "displayed")}
+          </p>
+        </section>
+        <section className="panel" {...widgetProps("workload")}>
+          <SectionHeading
+            title={widget("workload").title}
+            action={
+              <Link className="text-link" href="/time">
+                {t("ثبت ساعت", "Work log")}
+              </Link>
+            }
+          />
+          <p className="muted small">
+            {weekStart} — {addCalendarDays(weekStart, 6)} · Europe/Berlin
+          </p>
+          <QueryState {...weeklyTime} retry={weeklyTime.refresh} />
+          {weeklyTime.data && (
+            <>
+              <strong className="widget-number">
+                {Math.round(weeklyTime.data.minutes / 6) / 10}{" "}
+                {t("ساعت ثبت‌شده", "recorded hours")}
+              </strong>
+              <p>
+                {weeklyTime.data.entries} {t("بازهٔ واقعی", "actual entries")}
+              </p>
+              {Object.entries(weeklyTime.data.employers).map(
+                ([employer, minutes]) => (
+                  <div className="dependency-row" key={employer}>
+                    <strong>{employer}</strong>
+                    <span>
+                      {Math.round(minutes / 6) / 10} {t("ساعت", "hours")}
+                    </span>
+                  </div>
+                ),
+              )}
+            </>
+          )}
+          <p className="muted small">
+            {t(
+              "این زمان انجام‌شده است. ظرفیت آینده و زمان برنامه‌ریزی‌شده از آن حدس زده نمی‌شود.",
+              "These are worked hours. Future availability and planned time are not inferred from them.",
+            )}
+          </p>
+        </section>
+        <section className="panel" {...widgetProps("review")}>
+          <SectionHeading
+            title={widget("review").title}
+            action={
+              <Link className="text-link" href="/reports">
+                {t("روندها و مرور کامل", "Trends & full review")}
+              </Link>
+            }
+          />
+          <p className="muted small">
+            {weekStart} — {addCalendarDays(weekStart, 6)}
+          </p>
+          {reviewWeek ? (
+            <>
+              <div className="review-values">
+                <div>
+                  <strong>{reviewWeek.created}</strong>
+                  <span>{t("کار ساخته‌شده", "tasks created")}</span>
+                </div>
+                <div>
+                  <strong>{reviewWeek.completed}</strong>
+                  <span>{t("کار تکمیل‌شده", "tasks completed")}</span>
+                </div>
+              </div>
+              <p className="muted small">
+                {t(
+                  "شمارش کامل سرور در هفتهٔ جاری؛ روند ۱۲ هفته‌ای در گزارش‌هاست.",
+                  "Complete server counts for this week; the 12-week trend is in Reports.",
+                )}
+              </p>
+            </>
+          ) : (
+            <QueryState {...data} retry={data.refresh} />
+          )}
+        </section>
+        <section className="panel" {...widgetProps("files")}>
+          <SectionHeading
+            title={widget("files").title}
+            action={
+              <Link className="text-link" href="/files">
+                {t("همهٔ منابع", "All files")}
+              </Link>
+            }
+          />
+          <QueryState {...recentFiles} retry={recentFiles.refresh} />
+          {recentFiles.data?.items.map((file) => (
+            <Link
+              className="blocked-card"
+              href={`/files?file=${encodeURIComponent(file.file_id)}`}
+              key={file.file_id}
+            >
+              <FileText size={17} />
+              <div>
+                <strong>{file.title}</strong>
+                <small>
+                  {file.provider} · {file.state}
+                </small>
+              </div>
+            </Link>
+          ))}
+          {recentFiles.data && !recentFiles.data.items.length && (
+            <Empty title={t("منبعی ثبت نشده", "No files recorded")} />
+          )}
+          <p className="muted small">
+            {t(
+              "آخرین منابع ثبت‌شده؛ تغییرات در تاریخچه ثبت می‌شوند.",
+              "Most recently registered files; changes are recorded in history.",
+            )}
+          </p>
+        </section>
+        <section className="panel" {...widgetProps("sources")}>
+          <SectionHeading
+            title={widget("sources").title}
+            action={
+              <Link className="text-link" href="/settings">
+                {t("اتصال‌ها و سلامت", "Connections & health")}
+              </Link>
+            }
+          />
+          <QueryState {...sourceStatus} retry={sourceStatus.refresh} />
+          {sourceStatus.data && (
+            <>
+              <p>
+                {t("دسته‌های مهاجرت ثبت‌شده", "Recorded migration batches")}:{" "}
+                {sourceStatus.data.migration_batches.length}
+              </p>
+              <p>
+                {t(
+                  "کارهای زمان‌بند در ۱۰۰ رکورد اخیر",
+                  "Scheduler jobs in the latest 100 records",
+                )}
+                : {sourceStatus.data.jobs.length}
+              </p>
+              <p>
+                {t("ناموفق در همین محدوده", "Failed in this scope")}:{" "}
+                {
+                  sourceStatus.data.jobs.filter((job) => job.state === "Failed")
+                    .length
+                }
+              </p>
+              <p className="muted small">
+                {sourceStatus.data.migration_batches[0]
+                  ? `${sourceStatus.data.migration_batches[0].status} · ${sourceStatus.data.migration_batches[0].created_at}`
+                  : t(
+                      "هنوز مهاجرتی در این حساب ثبت نشده.",
+                      "No migration recorded for this owner yet.",
+                    )}
+              </p>
+              <p className="muted small">
+                {t(
+                  "وضعیت اتصال خارجی را در تنظیمات بررسی کن؛ ثبت یک دسته به‌تنهایی اثبات همگام‌سازی نیست.",
+                  "Check external connection status in Settings; a recorded batch alone does not prove synchronization.",
+                )}
+              </p>
+            </>
+          )}
         </section>
       </div>
       <Modal
@@ -541,191 +909,14 @@ export function Projects({
   action: Action;
   onOpen: (id: string) => void;
 }) {
-  const { t } = useLocale();
-  const projects = useQuery<PageDTO<ProjectDTO>>("project_list", {
-    limit: 100,
-  });
-  const tasks = useQuery<PageDTO<TaskDTO>>("task_search", { limit: 200 });
-  const [create, setCreate] = useState(false);
-  const [selected, setSelected] = useState<ProjectDTO | null>(null);
-  const milestones = useQuery<PageDTO<Record<string, unknown>>>(
-    "project_milestone_list",
-    { project_id: selected?.project_id ?? "" },
-    !!selected,
-  );
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">
-            {t("تصویر بزرگ‌تر", "THE BIGGER PICTURE")}
-          </div>
-          <h1>{t("پروژه‌ها", "Projects")}</h1>
-          <p>
-            {t(
-              "قدم‌های کوچک را به نتیجه‌های معنی‌دار وصل کن.",
-              "Connect small actions to meaningful outcomes.",
-            )}
-          </p>
-        </div>
-        <AddButton onClick={() => setCreate(true)}>
-          {t("پروژهٔ تازه", "New project")}
-        </AddButton>
-      </div>
-      <QueryState {...projects} retry={projects.refresh} />
-      <div className="project-grid">
-        {projects.data?.items.map((project) => {
-          const related =
-            tasks.data?.items.filter(
-              (task) => task.project_id === project.project_id,
-            ) ?? [];
-          const done =
-            project.done ??
-            related.filter((task) => task.status === "Done").length;
-          const total = project.total ?? related.length;
-          return (
-            <button
-              key={project.project_id}
-              className="project-card"
-              onClick={() => setSelected(project)}
-            >
-              <div className="project-icon">
-                <Folder size={20} />
-              </div>
-              <span className="chip">
-                {project.area || t("بدون حوزه", "Unassigned")}
-              </span>
-              <h2>{project.title}</h2>
-              <p>
-                {project.notes ||
-                  t("جزئیات پروژه را باز کن", "Open the project workspace")}
-              </p>
-              <Progress value={done} max={total} />
-              <footer>
-                <span>
-                  {done}/{total} {t("کار", "tasks")}
-                </span>
-                <span>
-                  {project.blocked ??
-                    related.filter((task) => task.readiness === "blocked")
-                      .length}{" "}
-                  {t("مسدود", "blocked")}
-                </span>
-              </footer>
-            </button>
-          );
-        })}
-      </div>
-      {!projects.loading && !projects.data?.items.length && (
-        <Empty
-          title={t(
-            "برای یک نتیجهٔ تازه جا باز کن",
-            "Make room for a new outcome",
-          )}
-          action={
-            <AddButton onClick={() => setCreate(true)}>
-              {t("ساخت پروژه", "Create project")}
-            </AddButton>
-          }
-        />
-      )}
+      <ProjectWorkspace
+        action={action}
+        onOpen={onOpen}
+        knowledge={(id) => <ProjectKnowledge projectId={id} action={action} />}
+      />
       <Templates action={action} />
-      <Modal
-        title={t("پروژهٔ تازه", "New project")}
-        open={create}
-        onOpenChange={setCreate}
-      >
-        <form
-          className="form-grid"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            const result = await action("project_create", {
-              title: form.get("title"),
-              notes: form.get("notes"),
-              area: form.get("area"),
-              due_date: form.get("due_date") || null,
-            });
-            if (result) setCreate(false);
-          }}
-        >
-          <Field label={t("عنوان", "Title")}>
-            <input name="title" required />
-          </Field>
-          <Field label={t("حوزه", "Area")}>
-            <input name="area" />
-          </Field>
-          <Field label={t("مهلت", "Due date")}>
-            <input type="date" name="due_date" />
-          </Field>
-          <Field label={t("توضیح", "Notes")}>
-            <textarea name="notes" />
-          </Field>
-          <Button variant="primary" type="submit">
-            {t("ساخت پروژه", "Create project")}
-          </Button>
-        </form>
-      </Modal>
-      <Modal
-        title={selected?.title ?? ""}
-        open={!!selected}
-        onOpenChange={(value) => {
-          if (!value) setSelected(null);
-        }}
-        wide
-      >
-        {selected && (
-          <>
-            <p className="muted">{selected.notes}</p>
-            <SectionHeading title={t("کارهای پروژه", "Project tasks")} />
-            {tasks.data?.items
-              .filter((task) => task.project_id === selected.project_id)
-              .map((task) => (
-                <TaskRow
-                  key={task.task_id}
-                  task={task}
-                  onOpen={onOpen}
-                  onAction={action}
-                />
-              ))}
-            <SectionHeading title={t("نقاط عطف", "Milestones")} />
-            {milestones.data?.items.map((item) => (
-              <div key={String(item.milestone_id)} className="dependency-row">
-                <CheckCheck size={15} />
-                {String(item.title)}
-                <time>{String(item.due_date ?? "")}</time>
-              </div>
-            ))}
-            <form
-              className="inline-form"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                const form = event.currentTarget;
-                const data = new FormData(form);
-                const result = await action(
-                  "project_milestone_create",
-                  {
-                    project_id: selected.project_id,
-                    title: data.get("title"),
-                    due_date: data.get("due_date") || null,
-                  },
-                  selected.revision,
-                );
-                if (result) form.reset();
-              }}
-            >
-              <input
-                required
-                name="title"
-                placeholder={t("نقطهٔ عطف تازه…", "New milestone…")}
-              />
-              <input name="due_date" type="date" />
-              <Button type="submit">{t("افزودن", "Add")}</Button>
-            </form>
-            <ProjectKnowledge projectId={selected.project_id} action={action} />
-          </>
-        )}
-      </Modal>
     </>
   );
 }
@@ -991,47 +1182,157 @@ function ProjectKnowledge({
   );
 }
 
-export function Files({ action }: { action: Action }) {
+export function Files({
+  action,
+  onOpen,
+}: {
+  action: Action;
+  onOpen: (id: string) => void;
+}) {
   const { t } = useLocale();
   const [search, setSearch] = useState("");
   const [state, setState] = useState("");
   const [external, setExternal] = useState(false);
-  const [selected, setSelected] = useState<FileDTO | null>(null);
+  const [picked, setSelected] = useState<FileDTO | null>(null);
+  const params = useSearchParams();
+  const [initialFileId, setInitialFileId] = useState<string | null>(() =>
+    params.get("file"),
+  );
+  const activeFileId = picked?.file_id ?? initialFileId;
+  const [versionCursor, setVersionCursor] = useState<string | null>(null);
+  const metadata = useQuery<FileDTO>(
+    "file_get_metadata",
+    { file_id: activeFileId ?? "" },
+    !!activeFileId,
+  );
+  const selected = metadata.data ?? picked;
+  const [taskSearch, setTaskSearch] = useState("");
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [archive, setArchive] = useState<{
+    file_id: string;
+    eligible: boolean;
+    linked_task_count: number;
+    blocked_by: string[];
+    reason: string | null;
+    revision: number;
+  } | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{
+    file: File;
+    fingerprint: string;
+    key: string;
+    file_id?: string;
+    revision?: number;
+  } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const files = useQuery<PageDTO<FileDTO>>("file_search", {
     search,
     state: state || undefined,
     limit: 100,
+    ...(cursor ? { cursor } : {}),
   });
-  const tasks = useQuery<PageDTO<TaskDTO>>("task_search", { limit: 100 });
+  const tasks = useQuery<PageDTO<TaskDTO>>(
+    "task_search",
+    { limit: 100, search: taskSearch || undefined },
+    !!activeFileId,
+  );
   const capabilities = useQuery<Record<string, unknown>>("system_capabilities");
-  const versions = useQuery<PageDTO<Record<string, unknown>>>(
+  const versions = useQuery<PageDTO<FileDTO>>(
     "file_list_versions",
-    { file_id: selected?.file_id ?? "" },
+    { file_id: selected?.file_id ?? "", limit: 100, cursor: versionCursor },
     !!selected,
   );
-  async function upload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function executeUpload(intent: NonNullable<typeof pendingUpload>) {
     setUploading(true);
     setUploadError("");
     const form = new FormData();
-    form.set("file", file);
+    form.set("file", intent.file);
+    if (intent.file_id) form.set("file_id", intent.file_id);
     try {
       const response = await fetch("/api/v1/files/upload", {
         method: "POST",
         body: form,
+        headers: {
+          "Idempotency-Key": intent.key,
+          ...(intent.revision !== undefined
+            ? { "If-Match": String(intent.revision) }
+            : {}),
+        },
+        credentials: "same-origin",
       });
       const result = await response.json();
-      if (!response.ok)
+      if (!response.ok) {
+        if (
+          response.status >= 400 &&
+          response.status < 500 &&
+          response.status !== 408
+        )
+          setPendingUpload(null);
         throw new Error(result.error?.message ?? "Upload failed");
+      }
+      setPendingUpload(null);
+      clearQueryCache();
+      window.dispatchEvent(new Event("lifeos:changed"));
+      if (result.data?.data?.file_id === result.data?.entity_id)
+        setSelected(result.data.data as FileDTO);
+      else
+        setSelected(
+          await query<FileDTO>("file_get_metadata", {
+            file_id: result.data.entity_id,
+          }),
+        );
       files.refresh();
+      versions.refresh();
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : String(error));
     } finally {
       setUploading(false);
-      event.target.value = "";
+    }
+  }
+  async function upload(
+    event: React.ChangeEvent<HTMLInputElement>,
+    target?: FileDTO,
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (
+      file.size > Number(capabilities.data?.max_upload_bytes ?? 4 * 1024 * 1024)
+    ) {
+      setUploadError(
+        t(
+          "اندازه فایل از سقف بارگذاری خصوصی بیشتر است.",
+          "This file exceeds the private upload size limit.",
+        ),
+      );
+      return;
+    }
+    setUploading(true);
+    try {
+      const hash = Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest("SHA-256", await file.arrayBuffer()),
+        ),
+      )
+        .map((value) => value.toString(16).padStart(2, "0"))
+        .join("");
+      const fingerprint = `${target?.file_id ?? "new"}:${target?.revision ?? "new"}:${file.name}:${file.type}:${hash}`;
+      const intent =
+        pendingUpload?.fingerprint === fingerprint
+          ? pendingUpload
+          : {
+              file,
+              fingerprint,
+              key: crypto.randomUUID(),
+              ...(target
+                ? { file_id: target.file_id, revision: target.revision }
+                : {}),
+            };
+      setPendingUpload(intent);
+      await executeUpload(intent);
+    } catch (cause) {
+      setUploadError(cause instanceof Error ? cause.message : String(cause));
+      setUploading(false);
     }
   }
   const storageConfigured =
@@ -1095,10 +1396,21 @@ export function Files({ action }: { action: Action }) {
           {uploadError}
         </p>
       )}
+      {pendingUpload && !uploading && (
+        <Button onClick={() => void executeUpload(pendingUpload)}>
+          {t(
+            "تلاش دوباره برای همان بارگذاری تأییدنشده",
+            "Retry the same unconfirmed upload",
+          )}
+        </Button>
+      )}
       <div className="filter-bar">
         <input
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setCursor(null);
+          }}
           placeholder={t("جست‌وجوی فایل‌ها…", "Search files…")}
         />
         <div className="tabs">
@@ -1110,7 +1422,10 @@ export function Files({ action }: { action: Action }) {
           ].map(([value, label]) => (
             <button
               key={value}
-              onClick={() => setState(value)}
+              onClick={() => {
+                setState(value);
+                setCursor(null);
+              }}
               className={state === value ? "active" : ""}
             >
               {label}
@@ -1118,13 +1433,32 @@ export function Files({ action }: { action: Action }) {
           ))}
         </div>
       </div>
+      <div className="form-actions pagination">
+        <span className="small muted">
+          {files.data?.total ?? "—"}{" "}
+          {t("فایل در این محدوده", "files in this scope")}
+        </span>
+        {cursor && (
+          <Button onClick={() => setCursor(null)}>
+            {t("صفحهٔ اول", "First page")}
+          </Button>
+        )}
+        {files.data?.next_cursor && (
+          <Button onClick={() => setCursor(files.data?.next_cursor ?? null)}>
+            {t("صفحهٔ بعد", "Next page")}
+          </Button>
+        )}
+      </div>
       <QueryState {...files} retry={files.refresh} />
       <div className="file-grid">
         {files.data?.items.map((file) => (
           <button
             className="file-card"
             key={file.file_id}
-            onClick={() => setSelected(file)}
+            onClick={() => {
+              setVersionCursor(null);
+              setSelected(file);
+            }}
           >
             <div className="file-art">
               <FileText size={42} />
@@ -1194,12 +1528,17 @@ export function Files({ action }: { action: Action }) {
         </form>
       </Modal>
       <Modal
-        title={selected?.title ?? ""}
-        open={!!selected}
+        title={selected?.title ?? t("جزئیات فایل", "File details")}
+        open={!!activeFileId}
         onOpenChange={(value) => {
-          if (!value) setSelected(null);
+          if (!value) {
+            setSelected(null);
+            setInitialFileId(null);
+            setVersionCursor(null);
+          }
         }}
       >
+        <QueryState {...metadata} retry={metadata.refresh} />
         {selected && (
           <>
             <div className="file-art large">
@@ -1240,20 +1579,19 @@ export function Files({ action }: { action: Action }) {
               <Button
                 onClick={async () => {
                   if (selected.state === "Old") {
-                    await action(
+                    const result = await action(
                       "file_restore",
                       { file_id: selected.file_id },
                       selected.revision,
                     );
+                    if (result) metadata.refresh();
                   } else {
                     try {
-                      const preview = await query<Record<string, unknown>>(
+                      const preview = await query<NonNullable<typeof archive>>(
                         "file_archive_preview",
                         { file_id: selected.file_id },
                       );
-                      window.dispatchEvent(
-                        new CustomEvent("lifeos:preview", { detail: preview }),
-                      );
+                      setArchive(preview);
                     } catch (error) {
                       window.dispatchEvent(
                         new CustomEvent("lifeos:error", {
@@ -1270,6 +1608,16 @@ export function Files({ action }: { action: Action }) {
               </Button>
             </div>
             <SectionHeading title={t("پیوند به یک کار", "Link to a task")} />
+            <Field label={t("جست‌وجوی کار مرتبط", "Search for a linked task")}>
+              <input
+                value={taskSearch}
+                onChange={(event) => setTaskSearch(event.target.value)}
+                placeholder={t(
+                  "جست‌وجو بین همهٔ پروژه‌ها…",
+                  "Search across all projects…",
+                )}
+              />
+            </Field>
             <form
               className="form-grid"
               onSubmit={async (event) => {
@@ -1286,7 +1634,14 @@ export function Files({ action }: { action: Action }) {
                 );
               }}
             >
-              <select name="task_id" required>
+              <select
+                name="task_id"
+                required
+                aria-label={t(
+                  "انتخاب کار برای فایل",
+                  "Choose a task for this file",
+                )}
+              >
                 <option value="">{t("انتخاب کار…", "Choose a task…")}</option>
                 {tasks.data?.items.map((task) => (
                   <option key={task.task_id} value={task.task_id}>
@@ -1294,7 +1649,10 @@ export function Files({ action }: { action: Action }) {
                   </option>
                 ))}
               </select>
-              <select name="purpose">
+              <select
+                name="purpose"
+                aria-label={t("نقش فایل در کار", "File purpose")}
+              >
                 {["Input", "Reference", "Output", "Other"].map((value) => (
                   <option key={value}>{value}</option>
                 ))}
@@ -1302,21 +1660,181 @@ export function Files({ action }: { action: Action }) {
               <Button type="submit">{t("پیوند", "Link")}</Button>
             </form>
             <SectionHeading title={t("نسخه‌ها", "Versions")} />
+            <label
+              className={`button ${!storageConfigured || selected.provider !== "private_blob" || uploading ? "disabled" : ""}`}
+            >
+              <Upload size={15} />
+              {t(
+                "بارگذاری نسخهٔ تازه با حفظ اصل",
+                "Upload a new version and preserve the original",
+              )}
+              <input
+                type="file"
+                hidden
+                disabled={
+                  !storageConfigured ||
+                  selected.provider !== "private_blob" ||
+                  uploading
+                }
+                onChange={(event) => void upload(event, selected)}
+              />
+            </label>
+            {selected.provider === "google_drive" && (
+              <p className="small muted">
+                {t(
+                  "مرجع Google Drive و نسخه‌های اصلی آن فقط خواندنی‌اند.",
+                  "The Google Drive reference and its original versions are read-only.",
+                )}
+              </p>
+            )}
+            <QueryState {...versions} retry={versions.refresh} />
+            <div className="form-actions">
+              <span className="small muted">
+                {versions.data?.items.length ?? 0}/{versions.data?.total ?? "—"}{" "}
+                {t("نسخه در این صفحه", "versions on this page")}
+              </span>
+              {versionCursor && (
+                <Button onClick={() => setVersionCursor(null)}>
+                  {t("صفحهٔ اول نسخه‌ها", "First version page")}
+                </Button>
+              )}
+              {versions.data?.next_cursor && (
+                <Button
+                  onClick={() => setVersionCursor(versions.data!.next_cursor)}
+                >
+                  {t("نسخه‌های بعدی", "Next versions")}
+                </Button>
+              )}
+            </div>
             {versions.data?.items.map((version, index) => (
-              <div
-                className="dependency-row"
-                key={String(version.version_id ?? index)}
-              >
+              <div className="dependency-row" key={version.file_id ?? index}>
                 <History size={14} />
                 <span>
                   {String(
                     version.original_filename ?? selected.original_filename,
                   )}
                 </span>
-                <time>{String(version.created_at ?? "")}</time>
+                <span className="small mono" title={version.sha256 ?? ""}>
+                  {version.sha256?.slice(0, 12) ??
+                    t("هش ناموجود", "Hash unavailable")}
+                </span>
+                {version.provider === "private_blob" ? (
+                  <a
+                    className="button"
+                    href={`/api/v1/files/${encodeURIComponent(version.file_id)}/download`}
+                  >
+                    {t("دریافت همین نسخه", "Download this exact version")}
+                  </a>
+                ) : (
+                  version.external_url && (
+                    <a
+                      className="button"
+                      href={version.external_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t("منبع اصلی", "Original source")}
+                    </a>
+                  )
+                )}
               </div>
             ))}
           </>
+        )}
+      </Modal>
+      <Modal
+        title={t(
+          "بررسی و تأیید بایگانی فایل",
+          "Review and confirm file archive",
+        )}
+        open={!!archive}
+        onOpenChange={(value) => {
+          if (!value) setArchive(null);
+        }}
+      >
+        {archive && (
+          <form
+            className="form-grid"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const result = await action(
+                "file_archive",
+                { file_id: archive.file_id, explicit_user_intent: true },
+                archive.revision,
+              );
+              if (result) {
+                setArchive(null);
+                metadata.refresh();
+              }
+            }}
+          >
+            <p>
+              {archive.eligible
+                ? t(
+                    "تمام کارهای مرتبط بسته‌اند؛ بایگانی این فایل خصوصی مجاز است. محتوا و نسخه‌های آن حفظ می‌شوند.",
+                    "All linked tasks are closed. This private file can be archived; its bytes and versions are preserved.",
+                  )
+                : t(
+                    "این فایل فعلاً قابل بایگانی نیست.",
+                    "This file cannot be archived at present.",
+                  )}
+            </p>
+            <p className="small muted">
+              {archive.linked_task_count} {t("کار مرتبط", "linked tasks")}
+            </p>
+            {archive.reason && (
+              <p className="warning">
+                {(
+                  {
+                    EXTERNALLY_MANAGED: t(
+                      "منبع بیرونی فقط خواندنی است",
+                      "The external source is read-only",
+                    ),
+                    PROTECTED_SOURCE: t(
+                      "این منبع محافظت شده است",
+                      "This source is protected",
+                    ),
+                    NO_ACTIVE_LINKS: t(
+                      "فایل به کار فعالی پیوند ندارد",
+                      "The file has no active task links",
+                    ),
+                    OPEN_OR_MISSING_TASKS: t(
+                      "کار باز یا رابطهٔ نیازمند بررسی وجود دارد",
+                      "An open task or unresolved relationship remains",
+                    ),
+                  } as Record<string, string>
+                )[archive.reason] ?? archive.reason}
+              </p>
+            )}
+            {archive.blocked_by.map((id) => (
+              <Button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setArchive(null);
+                  setSelected(null);
+                  onOpen(id);
+                }}
+              >
+                {tasks.data?.items.find((task) => task.task_id === id)?.title ??
+                  t("بازکردن کار مانع", "Open the blocking task")}
+              </Button>
+            ))}
+            {archive.eligible && (
+              <>
+                <label className="check-label">
+                  <input type="checkbox" required />
+                  {t(
+                    "با تصمیم خودم بایگانی این فایل را تأیید می‌کنم",
+                    "I explicitly approve archiving this file",
+                  )}
+                </label>
+                <Button variant="danger" type="submit">
+                  {t("تأیید و بایگانی فایل", "Confirm and archive file")}
+                </Button>
+              </>
+            )}
+          </form>
         )}
       </Modal>
     </>
@@ -1572,6 +2090,7 @@ export function Reports() {
           <strong>{data.data?.projects.length ?? "—"}</strong>
         </div>
       </div>
+      {data.data?.trends && <Trends trends={data.data.trends} />}
       <section className="panel">
         <SectionHeading title={t("تاریخچهٔ تغییرها", "Activity history")} />
         <QueryState {...activity} retry={activity.refresh} />
@@ -1603,7 +2122,15 @@ export function Settings({
   const sync = useQuery<Record<string, unknown>>("sync_status");
   const health = useQuery<Record<string, unknown>>("system_health");
   const capabilities = useQuery<Record<string, unknown>>("system_capabilities");
-  const reminders = useQuery<PageDTO<Record<string, unknown>>>("reminder_list");
+  const [reminderCursor, setReminderCursor] = useState<string | null>(null);
+  const reminders = useQuery<PageDTO<Record<string, unknown>>>(
+    "reminder_list",
+    { limit: 100, cursor: reminderCursor },
+  );
+  const [reminderChange, setReminderChange] = useState<{
+    item: Record<string, unknown>;
+    command: "reminder_resume" | "reminder_cancel";
+  } | null>(null);
   const [message, setMessage] = useState("");
   const session = authClient.useSession();
   async function saveSettings(settings: Record<string, unknown>) {
@@ -1674,7 +2201,7 @@ export function Settings({
           <div className="connection-card">
             <LockKeyhole size={22} />
             <div>
-              <strong>
+              <strong data-private>
                 {session.data?.user.email ??
                   t("نشست صاحب حساب", "Owner session")}
               </strong>
@@ -1795,6 +2322,7 @@ export function Settings({
           )}
         </section>
       </div>
+      <Connections />
       <section className="panel">
         <SectionHeading
           title={t("وضعیت سیستم و منابع", "System & source status")}
@@ -1858,24 +2386,135 @@ export function Settings({
             "Run reminders and daily jobs now",
           )}
         </Button>
+        <QueryState {...reminders} retry={reminders.refresh} />
         {reminders.data?.items.map((item, index) => (
           <div
-            className="dependency-row"
+            className="grant-row"
             key={String(item.reminder_id ?? index)}
+            data-reminder-id={String(item.reminder_id)}
           >
-            {String(item.title ?? item.task_id ?? "")}
-            <time>{String(item.due_at ?? item.scheduled_at ?? "")}</time>
-            <span>{String(item.status ?? "")}</span>
+            <div>
+              <strong>
+                {String(item.title ?? t("یادآور کار", "Task reminder"))}
+              </strong>
+              <time className="small muted">
+                {new Date(String(item.remind_at)).toLocaleString(
+                  language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
+                  { timeZone: "Europe/Berlin" },
+                )}{" "}
+                · Europe/Berlin
+              </time>
+            </div>
+            <span className="chip">
+              {item.state === "Pending"
+                ? t("در انتظار", "Pending")
+                : item.state === "Paused"
+                  ? t("متوقف", "Paused")
+                  : item.state === "Succeeded"
+                    ? t("تحویل در برنامه", "Delivered in app")
+                    : item.state === "Cancelled"
+                      ? t("لغوشده", "Cancelled")
+                      : String(item.state ?? "")}
+            </span>
+            {item.state === "Pending" && (
+              <Button
+                onClick={() =>
+                  void action(
+                    "reminder_pause",
+                    { reminder_id: item.reminder_id },
+                    Number(item.revision),
+                  )
+                }
+              >
+                {t("توقف یادآور", "Pause reminder")}
+              </Button>
+            )}
+            {item.state === "Paused" && (
+              <Button
+                onClick={() =>
+                  setReminderChange({ item, command: "reminder_resume" })
+                }
+              >
+                {t("ازسرگیری یادآور", "Resume reminder")}
+              </Button>
+            )}
+            {(item.state === "Pending" || item.state === "Paused") && (
+              <Button
+                onClick={() =>
+                  setReminderChange({ item, command: "reminder_cancel" })
+                }
+              >
+                {t("لغو یادآور", "Cancel reminder")}
+              </Button>
+            )}
           </div>
         ))}
-        {!reminders.data?.items.length && (
-          <p className="muted">
-            {t(
-              "یادآوری ثبت نشده؛ ارسال تنها با زمان‌بند و مجوز واقعی فعال می‌شود.",
-              "No reminders recorded. Delivery requires an actual scheduler and permission.",
-            )}
+        <div className="form-actions">
+          <span className="small muted">
+            {reminders.data?.items.length ?? 0}/{reminders.data?.total ?? "—"}
+          </span>
+          {reminderCursor && (
+            <Button onClick={() => setReminderCursor(null)}>
+              {t("صفحهٔ اول یادآورها", "First reminder page")}
+            </Button>
+          )}
+          {reminders.data?.next_cursor && (
+            <Button
+              onClick={() => setReminderCursor(reminders.data!.next_cursor)}
+            >
+              {t("یادآورهای بعدی", "Next reminders")}
+            </Button>
+          )}
+        </div>
+        <Modal
+          title={
+            reminderChange?.command === "reminder_cancel"
+              ? t("لغو یادآور", "Cancel reminder")
+              : t("ازسرگیری یادآور", "Resume reminder")
+          }
+          open={!!reminderChange}
+          onOpenChange={(open) => {
+            if (!open) setReminderChange(null);
+          }}
+        >
+          <p>
+            {reminderChange?.command === "reminder_cancel"
+              ? t(
+                  "این یادآور لغو می‌شود و دوباره قابل ارسال نیست.",
+                  "This reminder will be cancelled and cannot be sent again.",
+                )
+              : t(
+                  "زمان اصلی حفظ می‌شود. اگر زمان گذشته باشد، اجرای بعدی کار روزانه یادآور را در همین برنامه تحویل می‌دهد.",
+                  "The original time is preserved. If it is past due, the next daily job delivers the reminder inside this app.",
+                )}
           </p>
-        )}
+          <Button
+            variant="primary"
+            onClick={async () => {
+              if (
+                reminderChange &&
+                (await action(
+                  reminderChange.command,
+                  { reminder_id: reminderChange.item.reminder_id },
+                  Number(reminderChange.item.revision),
+                ))
+              )
+                setReminderChange(null);
+            }}
+          >
+            {t("تأیید تغییر یادآور", "Confirm reminder change")}
+          </Button>
+        </Modal>
+        {!reminders.loading &&
+          !reminders.error &&
+          !reminders.data?.items.length && (
+            <p className="muted">
+              {t(
+                "یادآوری ثبت نشده؛ تحویل درون برنامه با اجرای روزانه یا دستی انجام می‌شود.",
+                "No reminders recorded. In-app delivery runs through the daily or manual job.",
+              )}
+            </p>
+          )}
       </section>
       {message && (
         <p role="status" className="connection-notice">

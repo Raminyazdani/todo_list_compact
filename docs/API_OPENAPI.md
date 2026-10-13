@@ -5,6 +5,7 @@ OpenAPI 3.1 به‌صورت زنده از `GET /api/v1/openapi` تولید می�
 | مسیر                                                     | کاربرد                              | مجوز                                            |
 | -------------------------------------------------------- | ----------------------------------- | ----------------------------------------------- |
 | `GET /api/v1/query`                                      | query با نام operation و JSON input | owner session یا OAuth scope مرتبط              |
+| `POST /api/v1/query`                                     | preview با JSON بزرگ و سقف ۲MiB     | همان مجوز و Origin معتبر برای جلسهٔ مرورگر      |
 | `POST /api/v1/commands`                                  | command مشترک دامنه                 | scope نوشتن، کلید عملیات، revision در صورت لزوم |
 | `/api/v1/tasks`، `/projects`، `/events`، `/time-entries` | نمای resource روی همان دامنه        | همان سیاست query/command                        |
 | `POST /api/v1/files/upload`                              | bytes خصوصی و ثبت پس از checksum    | owner فایل، provider فعال، کلید پایدار          |
@@ -15,6 +16,6 @@ OpenAPI 3.1 به‌صورت زنده از `GET /api/v1/openapi` تولید می�
 | `POST /api/v1/approvals`                                 | تأیید waiver bound به preview       | فقط جلسهٔ مرورگر مالک و Origin معتبر            |
 | `POST /api/mcp`                                          | پروتکل MCP                          | OAuth resource/scope معتبر                      |
 
-JSON موفق `{data,request_id}` دارد. خطا `{error:{code,message,details},request_id}` است. query pagination حداکثر ۲۰۰ رکورد دارد؛ cursor را تا پایان دنبال کنید. `Idempotency-Key` بین ۸ تا ۲۰۰ نویسه است و قصد یکسان باید در retry همان کلید و ورودی را حفظ کند. `If-Match` revision مثبت نسخهٔ خوانده‌شده است.
+JSON موفق `{data,request_id}` دارد. خطا `{error:{code,message,details},request_id}` است. query pagination حداکثر ۲۰۰ رکورد دارد؛ cursor را تا پایان دنبال کنید. `Idempotency-Key` بین ۸ تا ۲۰۰ نویسه است و قصد یکسان باید در retry همان کلید و ورودی را حفظ کند. `If-Match` revision مثبت نسخهٔ خوانده‌شده است؛ مقدار صفر فقط برای ایجاد اولیهٔ preferences غایب پذیرفته می‌شود. ویرایش موجودیت بدون نسخهٔ جاری مجاز نیست. query معمولی در دامنه سقف۱۰۰هزار نویسه دارد؛ preview واردسازی زمان تا۱۰۰۰ رکورد و۲میلیون بایت UTF-8، زیر سقف transport، بررسی می‌شود.
 
 برای تغییر حساس ابتدا query preview، سپس نمایش اثر و commit با `preview_id` اجرا کنید. تغییر نسخه بین preview و commit خطای conflict می‌دهد. MCP و REST Bearer نمی‌توانند برای waiver یا override خودشان مجوز انسانی بسازند. commandهای import/restore/job داخلی سیاست جدا دارند و در catalog عمومی MCP منتشر نمی‌شوند.

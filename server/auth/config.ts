@@ -110,6 +110,7 @@ export function createAuth(bootstrap = false) {
         accessTokenExpiresIn: 300,
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
+        dpop: { signingAlgorithms: [] },
         clientRegistrationDefaultScopes: ["openid", "tasks:read"],
         clientRegistrationAllowedScopes: [
           ...OWNER_SCOPES,
@@ -121,12 +122,19 @@ export function createAuth(bootstrap = false) {
         resources: [
           {
             identifier: resource,
-            allowedScopes: [...OWNER_SCOPES],
+            allowedScopes: [
+              ...OWNER_SCOPES,
+              "openid",
+              "profile",
+              "email",
+              "offline_access",
+            ],
             accessTokenTtl: 300,
           },
         ],
         clientRegistrationDefaultResources: [resource],
         enforcePerClientResources: true,
+        resourceSeedMode: "merge",
       }),
       nextCookies(),
     ],

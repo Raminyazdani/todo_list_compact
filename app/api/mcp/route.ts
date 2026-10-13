@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
-      maxRequestBodySize: 1024 * 1024,
+      maxRequestBodySize: 2 * 1024 * 1024,
     });
     const server = createMcpServer(principal);
     await server.connect(transport);

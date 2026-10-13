@@ -1,16 +1,16 @@
 {
-  "recorded_at": "2026-10-13T22:02:09Z",
+  "recorded_at": "2026-10-13T23:01:26Z",
   "phase": "pre_release_verification",
   "production_verified": false,
   "checks": [
     {
       "command": "pnpm test:coverage",
-      "started_at": "2026-10-13T21:55:22Z",
+      "started_at": "2026-10-13T22:40:18Z",
       "status": "PASS",
-      "test_files_passed": 27,
-      "tests_passed": 187,
-      "tests_skipped": 13,
-      "duration_seconds": 42.18,
+      "test_files_passed": 32,
+      "tests_passed": 233,
+      "tests_skipped": 16,
+      "duration_seconds": 58.21,
       "skipped_reason": "Explicit real PostgreSQL and live HTTP/expiry opt-in fixtures; separate actual runs required."
     },
     { "command": "pnpm typecheck", "status": "PASS" },
@@ -22,23 +22,37 @@
     {
       "command": "pnpm build",
       "status": "PASS",
-      "limitation": "Fourth stable local production build passed; production deployment and later UI additions remain separate checks."
+      "limitation": "Seventh frozen application build passed on 2026-10-13 UTC. Final full browser suite, reviewed production revision and source cutover remain separate checks."
     },
     {
       "command": "node scripts/ops/runtime-smoke.mjs PRIVATE_STAGING_CREDENTIALS",
       "status": "PASS",
       "origin": "http://localhost:3000",
-      "tools_listed": 113,
+      "tools_listed": 122,
       "oauth_pkce": true,
       "canonical_write_readback": true,
       "idempotent_retry": true
     },
     {
       "command": "TEST_POSTGRES=1 node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/domain/postgres.test.ts",
-      "status": "PASS_AFTER_RETRY",
-      "tests_passed": 2,
-      "duration_seconds": 9.98,
-      "earlier_failure": "One 30-second timeout during observed transient DNS/latency; unchanged assertions passed on rerun."
+      "status": "PASS",
+      "tests_passed": 3,
+      "duration_seconds": 11.33,
+      "earlier_failure": "An earlier two-test run encountered transient DNS/latency. The later three-test suite also verifies concurrent same-occurrence reschedules atomically."
+    },
+    {
+      "command": "node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-oidc.test.ts",
+      "status": "PASS",
+      "observed_at": "2026-10-13T22:47:58Z",
+      "tests_passed": 1,
+      "duration_seconds": 4.28,
+      "evidence": "Real DCR/PKCE/OIDC: ID token required, JWKS signature/issuer/audience/subject/nonce verified, UserInfo owner-bound; the same unexpired JWT denied immediately after owner revocation."
+    },
+    {
+      "command": "RUN_AUTH_RATE_LIMIT_TEST=1 node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-rate-limit.test.ts",
+      "status": "PASS",
+      "tests_passed": 6,
+      "evidence": "Real PostgreSQL bigint parsing, safe-range rejection and real HTTP 200/200/200/429 followed by bounded backoff/200; no rate policy weakening or database reset."
     },
     {
       "command": "pnpm test:e2e",
@@ -86,11 +100,11 @@
     }
   ],
   "coverage": {
-    "all_statements_percent": 88.26,
-    "all_branches_percent": 82.87,
-    "domain_statements_percent": 91.68,
-    "domain_branches_percent": 86.15,
-    "domain_lines_percent": 92.41
+    "all_statements_percent": 90.58,
+    "all_branches_percent": 85.92,
+    "domain_statements_percent": 93.66,
+    "domain_branches_percent": 89,
+    "domain_lines_percent": 94.33
   },
   "external_provider_tests": {
     "ai": "MOCK_ONLY_ZERO_LIVE_INFERENCE",

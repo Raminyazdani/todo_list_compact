@@ -84,9 +84,24 @@ export async function query<T>(
   const existing = pendingReads.get(key);
   if (cacheable && existing) return existing as Promise<T>;
   const generation = readGeneration;
-  const promise = fetch(
+  const url = new URL(
     `/api/v1/query?operation=${operation}&input=${encodeURIComponent(JSON.stringify(input))}`,
-    { cache: "no-store", credentials: "same-origin" },
+    window.location.origin,
+  );
+  const post = url.href.length > 12000;
+  const promise = fetch(
+    post ? new URL("/api/v1/query", window.location.origin).href : url.href,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+      ...(post
+        ? {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ operation, input }),
+          }
+        : {}),
+    },
   )
     .then(responseData<T>)
     .then((value) => {

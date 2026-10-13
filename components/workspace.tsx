@@ -381,7 +381,7 @@ function WorkspaceContent({
           ) : pathname === "/time" ? (
             <WorkLog action={action} />
           ) : pathname === "/files" ? (
-            <Files action={action} />
+            <Files action={action} onOpen={setTaskId} />
           ) : pathname === "/assistant" ? (
             <Assistant />
           ) : pathname === "/reports" ? (

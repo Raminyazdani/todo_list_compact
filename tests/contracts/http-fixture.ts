@@ -37,11 +37,18 @@ export async function ownerCookie() {
   check(cookie, "Staging session cookie was not returned.");
   return cookie;
 }
-export async function scopedToken(cookie: string, scopes: string[]) {
+export async function scopedToken(
+  cookie: string,
+  scopes: string[],
+  options: { nonce?: string } = {},
+) {
+  const oidcScopes = new Set(["openid", "profile", "email"]);
   check(
     scopes.length > 0 &&
       scopes.length <= 20 &&
-      scopes.every((scope) => /^[a-z_]+:[a-z_]+$/.test(scope)),
+      scopes.every(
+        (scope) => oidcScopes.has(scope) || /^[a-z_]+:[a-z_]+$/.test(scope),
+      ),
     "Bounded explicit OAuth scopes are required.",
   );
   const requestedScope = [...new Set(scopes)].join(" ");
@@ -78,6 +85,7 @@ export async function scopedToken(cookie: string, scopes: string[]) {
     code_challenge_method: "S256",
     state,
   });
+  if (options.nonce) params.set("nonce", options.nonce);
   const authz = await fetch(origin + "/api/auth/oauth2/authorize?" + params, {
     headers: { Cookie: cookie },
     redirect: "manual",
@@ -139,7 +147,9 @@ export async function scopedToken(cookie: string, scopes: string[]) {
   ) as { exp: number; scope: string };
   check(
     typeof claims.exp === "number" &&
-      scopes.every((scope) => claims.scope.split(" ").includes(scope)),
+      scopes
+        .filter((scope) => !oidcScopes.has(scope))
+        .every((scope) => claims.scope.split(" ").includes(scope)),
     "Token is missing a requested scope.",
   );
   return {
@@ -147,6 +157,7 @@ export async function scopedToken(cookie: string, scopes: string[]) {
     expiresAt: claims.exp * 1000,
     clientId: info.client_id as string,
     callback,
+    idToken: typeof tokens.id_token === "string" ? tokens.id_token : undefined,
   };
 }
 export async function readonlyToken(cookie: string) {
