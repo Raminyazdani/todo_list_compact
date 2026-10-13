@@ -135,7 +135,14 @@ export function ProjectWorkspace({
               {item.notes ||
                 t("جزئیات پروژه را باز کن", "Open the project workspace")}
             </p>
-            <Progress value={item.done ?? 0} max={item.total ?? 0} />
+            <Progress
+              value={item.done ?? 0}
+              max={item.total ?? 0}
+              label={t(
+                `پیشرفت پروژهٔ ${item.title}`,
+                `Progress for ${item.title}`,
+              )}
+            />
             <footer>
               <span>
                 {item.done ?? 0}/{item.total ?? 0} {t("کار", "tasks")}

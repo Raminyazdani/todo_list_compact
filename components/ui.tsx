@@ -2,7 +2,15 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertCircle, ArrowUpRight, LoaderCircle, Plus, X } from "lucide-react";
-import { useSyncExternalStore, type ReactNode } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useId,
+  useSyncExternalStore,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 
 function subscribeToDialogHost(notify: () => void) {
@@ -83,10 +91,24 @@ export function Field({
   label: string;
   children: ReactNode;
 }) {
+  const labelId = useId();
   return (
     <label className="field">
-      <span>{label}</span>
-      {children}
+      <span id={labelId}>{label}</span>
+      {Children.map(children, (child) =>
+        isValidElement(child) &&
+        typeof child.type === "string" &&
+        ["input", "textarea", "select"].includes(child.type) &&
+        (child.props as Record<string, unknown>)["aria-label"] === undefined &&
+        (child.props as Record<string, unknown>)["aria-labelledby"] ===
+          undefined
+          ? cloneElement(child as ReactElement<Record<string, unknown>>, {
+              "aria-labelledby":
+                (child.props as Record<string, unknown>)["aria-labelledby"] ??
+                labelId,
+            })
+          : child,
+      )}
     </label>
   );
 }
@@ -169,11 +191,20 @@ export function AddButton({
     </Button>
   );
 }
-export function Progress({ value, max }: { value: number; max: number }) {
+export function Progress({
+  value,
+  max,
+  label,
+}: {
+  value: number;
+  max: number;
+  label: string;
+}) {
   return (
     <div
       className="progress"
       role="progressbar"
+      aria-label={label}
       aria-valuemin={0}
       aria-valuemax={max || 1}
       aria-valuenow={value}

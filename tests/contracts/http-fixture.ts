@@ -1,25 +1,39 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomBytes, createHash, randomUUID } from "node:crypto";
+import { admitPrivatePath } from "../../scripts/ops/private-paths.mjs";
+import { fileURLToPath } from "node:url";
 export const httpEnabled = !!process.env.TEST_CREDENTIALS_PATH;
 export const origin = process.env.HTTP_TEST_ORIGIN || "http://localhost:3000";
 function check(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
 }
-export async function ownerCookie() {
+export async function ownerCookie(
+  options: { productionGraphDemo?: boolean } = {},
+) {
+  const local = ["localhost", "127.0.0.1"].includes(new URL(origin).hostname);
   check(
-    ["localhost", "127.0.0.1"].includes(new URL(origin).hostname),
+    local ||
+      (options.productionGraphDemo === true &&
+        process.env.RUN_PRODUCTION_GRAPH_DEMO === "1" &&
+        origin === "https://ramin-life-os.vercel.app"),
     "HTTP security tests are restricted to the isolated local staging server.",
   );
   check(
     process.env.TEST_CREDENTIALS_PATH,
     "Private staging credentials are required.",
   );
+  if (!local)
+    await admitPrivatePath(process.env.TEST_CREDENTIALS_PATH, {
+      mustExist: true,
+      repositoryRoot: fileURLToPath(new URL("../../", import.meta.url)),
+    });
   const credentials = JSON.parse(
     await readFile(process.env.TEST_CREDENTIALS_PATH, "utf8"),
   ) as { email: string; password: string };
   const response = await fetch(origin + "/api/auth/sign-in/email", {
     method: "POST",
+    redirect: "manual",
     headers: { "Content-Type": "application/json", Origin: origin },
     body: JSON.stringify({
       email: credentials.email,
@@ -55,6 +69,7 @@ export async function scopedToken(
   const callback = "http://127.0.0.1:39875/callback";
   const registration = await fetch(origin + "/api/auth/oauth2/register", {
     method: "POST",
+    redirect: "manual",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       client_name: "Synthetic independent security QA",
@@ -101,6 +116,7 @@ export async function scopedToken(
   if (target?.includes("/consent")) {
     const consent = await fetch(origin + "/api/auth/oauth2/consent", {
       method: "POST",
+      redirect: "manual",
       headers: {
         "Content-Type": "application/json",
         Cookie: cookie,
@@ -125,6 +141,7 @@ export async function scopedToken(
   check(code, "No authorization code.");
   const exchange = await fetch(origin + "/api/auth/oauth2/token", {
     method: "POST",
+    redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "authorization_code",

@@ -195,5 +195,138 @@ describe.skipIf(!httpEnabled)(
       expect(data.data).toBeUndefined();
       expect(data.error?.code).toBe("UNSUPPORTED_OPERATION");
     });
+    it("POST queries authenticate before parsing and enforce browser Origin while preserving read-only bearer scope", async () => {
+      const endpoint = origin + "/api/v1/query";
+      const body = JSON.stringify({ operation: "whoami", input: {} });
+      const valid = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          Origin: origin,
+          "Content-Type": "application/json",
+        },
+        body,
+      });
+      expect(valid.status).toBe(200);
+      for (const candidate of [
+        undefined,
+        "https://synthetic-cross-site.example.invalid",
+      ]) {
+        const rejected = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Cookie: cookie,
+            "Content-Type": "application/json",
+            ...(candidate ? { Origin: candidate } : {}),
+          },
+          body: "{ malformed",
+        });
+        expect(rejected.status).toBe(403);
+      }
+      expect(
+        (
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { Origin: origin, "Content-Type": "application/json" },
+            body: "{ malformed",
+          })
+        ).status,
+      ).toBe(401);
+      expect(
+        (
+          await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + token,
+              "Content-Type": "application/json",
+            },
+            body,
+          })
+        ).status,
+      ).toBe(200);
+      const denied = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          operation: "time_entry_import_preview",
+          input: {
+            data: {
+              format: "ramin-life-os-time/1",
+              timezone: "Europe/Berlin",
+              entries: [
+                {
+                  entry_id: "synthetic-readonly-import-" + randomUUID(),
+                  employer: "Jena",
+                  starts_at: "2027-01-01T09:00:00Z",
+                  ends_at: "2027-01-01T10:00:00Z",
+                },
+              ],
+            },
+          },
+        }),
+      });
+      expect(denied.status).toBe(403);
+    });
+    it("POST queries reject malformed JSON, wrong operation/input shape and extra authority fields without echoing content", async () => {
+      const marker = "SYNTHETIC_UNTRUSTED_AUTHORITY_CONTENT";
+      for (const body of [
+        "{ invalid",
+        JSON.stringify({ operation: "task_create", input: { title: marker } }),
+        JSON.stringify({ operation: "whoami", input: [] }),
+        JSON.stringify({
+          operation: "whoami",
+          input: {},
+          explicit_user_intent: marker,
+        }),
+      ]) {
+        const response = await fetch(origin + "/api/v1/query", {
+          method: "POST",
+          headers: {
+            Cookie: cookie,
+            Origin: origin,
+            "Content-Type": "application/json",
+          },
+          body,
+        });
+        expect(response.status).toBe(400);
+        const output = await response.text();
+        expect(JSON.parse(output).error.code).toBe("INVALID_INPUT");
+        expect(output).not.toContain(marker);
+      }
+    });
+    it("POST query body streaming enforces the byte bound for Unicode content", async () => {
+      const bytes = new TextEncoder().encode(
+        JSON.stringify({
+          operation: "whoami",
+          input: { text: "ف".repeat(1024 * 1024 + 1) },
+        }),
+      );
+      expect(bytes.byteLength).toBeGreaterThan(2 * 1024 * 1024);
+      let position = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (position >= bytes.length) return controller.close();
+          const end = Math.min(position + 65536, bytes.length);
+          controller.enqueue(bytes.subarray(position, end));
+          position = end;
+        },
+      });
+      const request: RequestInit & { duplex: "half" } = {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          Origin: origin,
+          "Content-Type": "application/json",
+        },
+        body,
+        duplex: "half",
+      };
+      const response = await fetch(origin + "/api/v1/query", request);
+      expect(response.status).toBe(413);
+      expect((await response.json()).error.code).toBe("INVALID_INPUT");
+    });
   },
 );

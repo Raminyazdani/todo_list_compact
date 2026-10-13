@@ -37,6 +37,8 @@ interface Fixture {
 }
 let credentials: TestCredentials;
 let screenshotDirectory: string;
+let originalPreferences:
+  { settings: Record<string, unknown>; revision: number } | undefined;
 const expect = baseExpect.configure({ timeout: 30000 });
 test.setTimeout(180000);
 
@@ -237,9 +239,50 @@ async function openTask(page: Page, task: TaskDTO) {
   ).toBeVisible();
 }
 
-test.beforeEach(async ({ request, context }) => {
+test.beforeEach(async ({ request, context, page }) => {
+  originalPreferences = undefined;
   await signIn(request);
+  const captured = await readQuery<{
+    settings: Record<string, unknown>;
+    revision: number;
+  }>(request, "preferences_get");
+  originalPreferences = captured;
+  if (
+    captured.settings.language !== "fa" ||
+    captured.settings.theme !== "dark"
+  ) {
+    await mutate(
+      request,
+      "preferences_update",
+      { settings: { language: "fa", theme: "dark" } },
+      captured.revision,
+    );
+  }
   await context.addCookies((await request.storageState()).cookies);
+  page.setDefaultTimeout(30000);
+});
+
+test.afterEach(async ({ request }) => {
+  if (
+    !originalPreferences ||
+    ["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname)
+  )
+    return;
+  const current = await readQuery<{
+    settings: Record<string, unknown>;
+    revision: number;
+  }>(request, "preferences_get");
+  await mutate(
+    request,
+    "preferences_update",
+    {
+      settings: {
+        language: originalPreferences.settings.language ?? null,
+        theme: originalPreferences.settings.theme ?? null,
+      },
+    },
+    current.revision,
+  );
 });
 
 test("ui_graph_and_linear_accessible_fallback_are_equivalent", async ({
@@ -702,7 +745,9 @@ test("synthetic_desktop_dark_rtl_and_light_ltr_are_accessible", async ({
   request,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  const data = await fixture(request);
+  const data =
+    await test.step("Create the canonical synthetic graph fixture", () =>
+      fixture(request));
   const preferenceURL = "/api/v1/query?operation=preferences_get&input=%7B%7D";
   const initial = (await (await safeGet(request, preferenceURL)).json()).data;
   try {
@@ -712,19 +757,21 @@ test("synthetic_desktop_dark_rtl_and_light_ltr_are_accessible", async ({
     ]) {
       const current = (await (await safeGet(request, preferenceURL)).json())
         .data;
-      await mutate(
-        request,
-        "preferences_update",
-        {
-          settings: {
-            ...initial.settings,
-            theme: appearance.theme,
-            language: appearance.language,
+      await test.step(`Persist ${appearance.theme} ${appearance.language} appearance`, () =>
+        mutate(
+          request,
+          "preferences_update",
+          {
+            settings: {
+              ...initial.settings,
+              theme: appearance.theme,
+              language: appearance.language,
+            },
           },
-        },
-        current.revision,
-      );
-      await page.goto("/");
+          current.revision,
+        ));
+      await test.step(`Open the ${appearance.theme} dashboard`, () =>
+        page.goto("/"));
       await expect(page.locator("html")).toHaveAttribute("dir", appearance.dir);
       await expect(page.locator("html")).toHaveAttribute(
         "data-theme",
@@ -737,6 +784,10 @@ test("synthetic_desktop_dark_rtl_and_light_ltr_are_accessible", async ({
       for (const location of ["dashboard", "graph"]) {
         if (location === "graph") {
           await page.goto("/tasks");
+          await expect(page.locator("html")).toHaveAttribute(
+            "lang",
+            appearance.language,
+          );
           await page
             .getByPlaceholder(
               appearance.language === "fa"
@@ -758,9 +809,9 @@ test("synthetic_desktop_dark_rtl_and_light_ltr_are_accessible", async ({
             .selectOption(data.a.task_id);
           await expect(page.locator(".react-flow__node")).toHaveCount(4);
         }
-        const axe = await new AxeBuilder({ page })
-          .withTags(["wcag2a", "wcag2aa"])
-          .analyze();
+        const axe =
+          await test.step(`Whole-page axe ${location} ${appearance.theme}`, () =>
+            new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze());
         await test
           .info()
           .attach(
@@ -783,12 +834,13 @@ test("synthetic_desktop_dark_rtl_and_light_ltr_are_accessible", async ({
             targets: item.nodes.map((node) => node.target),
           })),
         ).toEqual([]);
-        await page.screenshot({
-          path: screenshotPath(
-            `synthetic-${location}-${appearance.theme}-${appearance.dir}.png`,
-          ),
-          fullPage: false,
-        });
+        await test.step(`Capture ${location} ${appearance.theme}`, () =>
+          page.screenshot({
+            path: screenshotPath(
+              `synthetic-${location}-${appearance.theme}-${appearance.dir}.png`,
+            ),
+            fullPage: false,
+          }));
       }
     }
   } finally {

@@ -2069,6 +2069,7 @@ export function Reports() {
           <span>{t("کار تکمیل‌شده", "Completed tasks")}</span>
           <strong>{data.data?.tasks.done ?? "—"}</strong>
           <Progress
+            label={t("نسبت کارهای تکمیل‌شده", "Completed task progress")}
             value={data.data?.tasks.done ?? 0}
             max={data.data?.tasks.total ?? 0}
           />
