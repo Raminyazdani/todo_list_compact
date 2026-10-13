@@ -1,0 +1,19 @@
+# Actual agent assignments and ownership
+
+This runtime provides four concurrent slots including the orchestrator. Assignments below refer to real delegated work; logical team roles are consolidated. The shared working checkout uses disjoint path ownership, and the orchestrator serializes shared contracts/root configuration and commits.
+
+| Agent | Responsibilities | Exclusive paths | Read-only dependencies | Review |
+|---|---|---|---|---|
+| Orchestrator | Environment/account audit, architecture/contracts, owner auth, REST/MCP, deployment, integration and release | Root config/package/CI, `app/api/`, `server/auth/`, `server/mcp/`, integration assets and central checkpoint docs unless explicitly delegated | Domain/UI/migration contracts | Independent QA/security review |
+| Domain | PostgreSQL schema/migrations, commands/queries, task/project/graph/checklist/hierarchy/template invariants, concurrency/audit/idempotency | `server/db/`, `server/domain/`, `shared/contracts.ts`, `tests/domain/` | Requirements/reference source contract | Orchestrator and QA |
+| Requirements/UI | Complete contract traceability, UX/reference review; UI after approved contracts | `docs/PRODUCT_SPEC.md`, `docs/EXECUTION_PLAN.md`, `docs/TASK_GRAPH.md`, `docs/AGENT_ASSIGNMENTS.md`, `docs/UX_DESIGN_SYSTEM.md`, `docs/DEPENDENCY_TEST_MATRIX.md`, `docs/ADVANCED_TASK_GRAPH_SPEC.md`, `docs/ACCEPTANCE_CHECKLIST.md`; subsequently `app/` excluding `app/api/`, `components/`, `features/`, `styles/` | Domain DTOs and API contracts, private handoff, read-only reference planner | Orchestrator plus independent accessibility/visual review |
+| Source/integrations | Live read-only source discovery, migration mapping/import/reconcile and reference integration inventory as assigned | Exact migration/integration paths assigned by orchestrator; no shared/root/UI/domain changes | Private source schema and domain importer contracts | Domain and independent QA |
+
+## Boundaries
+
+- Do not edit another owner's files or source Drive/reference planner. Request a specific shared contract change and continue independent work.
+- UI starts only after shared types and service signatures are approved. All API/MCP/AI code calls the canonical domain layer, never a separate store.
+- No private IDs/config/ledger/export/content/screenshots go into this public checkout. Public fixtures are synthetic. Original source remains private and read-only.
+- Agent readiness is provisional. Supply exact changed files, commands/results, integration inputs, risks and evidence. Orchestrator verifies actual diff/tests before committing or releasing.
+- Review cycles/races/auth/prompt injection/migration preservation independently. A green build or named test file is not acceptance evidence.
+- Subagents do not independently claim overall release or background continuation after the session. Checkpoint honestly.

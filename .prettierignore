@@ -1,0 +1,7 @@
+node_modules
+.next
+pnpm-lock.yaml
+.env.local
+coverage
+playwright-report
+test-results
