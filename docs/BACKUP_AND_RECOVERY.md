@@ -1,5 +1,7 @@
 # Backup and recovery
 
+**Current scope, 2026-10-14:** [actual Neon verification](NEON_LIVE_VERIFICATION.md) supersedes the earlier Blob/AI/ChatGPT limits as current delivery conditions. Neon files and both manual metadata/original-byte cloud recovery proofs pass; native Codex OAuth login is complete but current-chat tool loading/read awaits a full restart. In-app AI is deferred. Scheduled cron execution and product-specific calendar grants remain separate. The milestones below retain their original times, counts and scope.
+
 ## Observed hosted recovery
 
 A real encrypted production snapshot containing all 68 tasks present before synthetic cleanup passed persisted encryption/decryption/manifest verification and full restore into the independent hosted staging database. Every restored table and all 48 accepted-operation results matched the source snapshot. The restore retained original owner identities, source mappings, task graph/checklists, history and idempotency receipts; no production replacement or original Google write occurred.
@@ -11,6 +13,10 @@ The separate final read-only cleanup/security proof (`production-final-cleanup-s
 The original production owner namespace used by the successful hosted drill is now populated in the independent staging database. Do not repeat restore into it or reset it as a convenience: the operator requires an independently admitted empty namespace and rejects existing rows. Authentication credentials/sessions are separate from the relational backup and are not restored by this drill.
 
 Private cloud byte backup remains blocked by the actual HTTP 400 Blob quota response; automatic cloud backup is not a demonstrated PASS. Separate local encrypted recovery of all three original Google files (6,698,095 bytes) passed persisted encryption, independent decryption and recovered-file size/SHA verification. This is actual local byte recovery and does not establish a live Blob store or scheduled cloud copy. Private evidence and keys remain outside public Git.
+
+## Actual Neon cloud recovery supplement
+
+On 2026-10-14 the manually executed daily Neon metadata job passed cloud read-back, authenticated decryption and all 32 table checksums/manifest: 509 rows, including 73 tasks, 5 files/versions/links, 93 accepted operations and 159 Activity rows. Same-day replay preserved the exact ciphertext and single provider-specific receipt; selected-provider health reports verified with an actual timestamp. The independently encrypted original-byte package was also copied unchanged to private Neon storage, downloaded, persisted and decrypted; all three originals (6,698,095 bytes) and their retained identity/filename/parent metadata matched. The recovery key was kept separate. No new database restore was performed. This manual proof does not establish that the scheduled cron has run. See [actual Neon verification](NEON_LIVE_VERIFICATION.md). The original-byte package is a separate private operator archive; it is not a normal four-MiB application upload and does not widen application storage-key guards. Existing snapshots and the original source files remain retained.
 
 ## Backup format and protection
 

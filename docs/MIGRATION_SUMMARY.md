@@ -1,5 +1,7 @@
 # Migration evidence
 
+**Current scope, 2026-10-14:** [actual Neon verification](NEON_LIVE_VERIFICATION.md) supersedes the earlier Blob/AI/ChatGPT limits as current delivery conditions. Neon files and both manual metadata/original-byte cloud recovery proofs pass; native Codex OAuth login is complete but current-chat tool loading/read awaits a full restart. In-app AI is deferred. Scheduled cron execution and product-specific calendar grants remain separate. The milestones below retain their original times, counts and scope.
+
 ## Observed production result
 
 The final authorized production import and same-batch replay passed on 2026-10-14. Complete source reconciliation preserves the following original rows, their immutable identities, canonical fields and retained source metadata. These counts identify source-backed records; they are not the total physical table counts after synthetic acceptance tests.

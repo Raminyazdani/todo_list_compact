@@ -1,5 +1,7 @@
 # Dependency, checklist and hierarchy — observed evidence matrix
 
+**Current scope, 2026-10-14:** [actual Neon verification](NEON_LIVE_VERIFICATION.md) supersedes the earlier Blob/AI/ChatGPT limits as current delivery conditions. Neon files and both manual metadata/original-byte cloud recovery proofs pass; native Codex OAuth login is complete but current-chat tool loading/read awaits a full restart. In-app AI is deferred. Scheduled cron execution and product-specific calendar grants remain separate. The milestones below retain their original times, counts and scope.
+
 Observed final checkpoint updated 2026-10-14T07:10:55.759Z; production redeployment and its recovered result are separately recorded. Normative names from ADVANCED_TASK_GRAPH_SPEC §8 are preserved. The captured milestone SHA was **334ee291d9fcea0024e120423860111eaa5120c5**, [exact latest-SHA CI](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38519881381) FULLPASS. A PASS below names the observed layer; it does not imply that every production acceptance substep is complete. Actual production graph/owner UI and independent hosted restore now pass; recovered DG-36/fresh-login parity, final exact cleanup and encrypted export also pass.
 
 ## All 40 normative scenarios

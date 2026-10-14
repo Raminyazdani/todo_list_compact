@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T14:02:24.8895198Z",
+  "updated_at": "2026-10-14T15:21:14.142Z",
   "branch": "master",
-  "commit": "d3474048e7731cd0da4d1b92df09204825afb943",
-  "phase": "owner_changes_deployed_full_CI_PASS_Neon_login_and_native_MCP_reload_required",
+  "commit": "5ef90ec1387fe3243c4fb1163dad37280a80bcbb",
+  "phase": "Neon_live_files_and_manual_cloud_recovery_PASS_native_MCP_reload_required",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -40,12 +40,15 @@
     "actual_distinct_redeploy_DG36_recovered_fresh_owner_readback",
     "exact_QA_cleanup_and_original_45_active_readback",
     "final_private_encrypted_export_independent_decrypt_manifest",
-    "actual_three_original_file_unauthenticated_download_denial"
+    "actual_three_original_file_unauthenticated_download_denial",
+    "actual_existing_Neon_login_and_exact_project_branch_binding",
+    "actual_private_Neon_immutable_PUT_probes_staging_and_production",
+    "actual_Neon_staging_domain_native_protected_download_smoke",
+    "actual_Neon_production_HTTPS_browser_files_and_exact_QA_archive",
+    "actual_Neon_cloud_metadata_decrypt_manifest_and_same_day_replay",
+    "actual_Neon_cloud_original_bytes_download_decrypt_three_checksums"
   ],
-  "active": [
-    "owner_Neon_login_then_private_bucket_and_actual_storage_activation",
-    "reload_same_Codex_chat_then_actual_native_MCP_read"
-  ],
+  "active": ["restart_Codex_continue_same_chat_then_actual_native_MCP_read"],
   "tests": [
     {
       "actual_SDK_tools": 130,
@@ -123,17 +126,12 @@
     }
   },
   "open_severity": {
-    "production_gates": "CORE_PASS_Neon_storage_and_native_Codex_runtime_pending",
+    "production_gates": "Neon_PASS_native_Codex_current_chat_tool_read_pending",
     "known_p0_code_defects": "none_observed_in_verified_snapshot",
-    "known_p1_checks": "No unresolved code defect observed in exact complete CI or published owner UI; live Neon storage and current-chat native tool loading remain unverified.",
-    "external_provider_gates": "AWAITING_OWNER_NEON_LOGIN_AND_ACTUAL_STORAGE_PROOF"
+    "known_p1_checks": "No unresolved code defect observed in exact complete CI or actual production UI/files/cloud recovery; current-chat native tool loading/read remains unverified.",
+    "external_provider_gates": "CURRENT_NATIVE_MCP_RUNTIME_RELOAD_REQUIRED_calendar_grants_separate"
   },
   "blockers": [
-    {
-      "evidence": "Existing Neon PostgreSQL retained; official CLI installed but authenticated account profile absent; no bucket or credential created",
-      "area": "Neon_private_object_storage",
-      "state": "AWAITING_OWNER_ACCOUNT_LOGIN"
-    },
     {
       "evidence": "Native life_os OAuth login successful and CLI reports o_auth; current tool runtime says unknown MCP server",
       "area": "native_Codex_MCP_tool_loading",
@@ -145,9 +143,7 @@
     "root_final_verified_receipts_recorded"
   ],
   "next_actions": [
-    "owner_neon_login_existing_account",
-    "verified_private_bucket_and_conditional_PUT_activation",
-    "reload_same_Codex_chat_then_actual_MCP_read"
+    "restart_Codex_continue_same_chat_then_actual_native_MCP_read"
   ],
   "release_complete": false,
   "execution_prompt": "docs/CONTINUE_PROMPT_FA.md",
@@ -235,13 +231,13 @@
     "independent_diagnosis": "CLEAR"
   },
   "current_deployment": {
-    "id": "dpl_62DeST6AJ3S3We7KMywfXpe6YMka",
+    "id": "dpl_ES9QpWct7NJWY7pqpoivimFHMzWD",
     "branch": "master",
     "app_MCP_catalog": 130,
-    "commit": "d3474048e7731cd0da4d1b92df09204825afb943",
-    "live_Neon_storage": "NOT_RUN_pending_owner_account_login",
-    "actual_owner_UI_proof_commit": "7a4b8ed7b8fddc8a3eb6a686e0d1506aa829632c",
-    "application_source_equivalence": "PASS_test_only_followup_has_zero_runtime_file_changes",
+    "commit": "5ef90ec1387fe3243c4fb1163dad37280a80bcbb",
+    "live_Neon_storage": "PASS_actual_production_HTTPS_and_browser",
+    "actual_owner_UI_proof_commit": "5ef90ec1387fe3243c4fb1163dad37280a80bcbb",
+    "application_source_equivalence": "PASS_zero_runtime_changes_from_fully_tested_d347404",
     "origin": "https://ramin-life-os.vercel.app",
     "original_file_reference_readback": 3,
     "target": "production",
@@ -426,9 +422,9 @@
       "scopes": "normal_business_operations_no_admin_or_backup",
       "configuration": "PASS"
     },
-    "storage_live": "NOT_RUN_AWAITING_OWNER_NEON_LOGIN",
+    "storage_live": "PASS_actual_staging_and_production",
     "ChatGPT_installation": "NOT_REQUIRED_CURRENT_SCOPE",
-    "application_release": "CORE_DEPLOYMENT_OWNER_UI_AND_FULL_CI_PASS_NEON_ACTIVATION_PENDING",
+    "application_release": "Neon_files_and_manual_cloud_recovery_PASS_native_current_chat_tool_read_pending",
     "new_file_provider": "neon_object_storage",
     "owner_password_rotation": {
       "old_sessions_revoked": true,
@@ -442,12 +438,12 @@
     "targeted_verification": {
       "format": "PASS_Windows_end_of_line_auto",
       "backup_failure_provenance": 2,
-      "public_safety": "PASS_310_files_120_actual_private_identifiers_zero_findings",
+      "public_safety": "PASS_311_files_120_actual_private_identifiers_zero_findings",
       "domain_provider_health_subset": 25,
       "AI_disabled_HTTP": 4,
       "file_UI_and_preview": 15,
       "storage_backup_mock_transport": 37,
-      "live_Neon_storage": "NOT_RUN",
+      "live_Neon_storage": "PASS_actual_private_probes_Stage_domain_and_production_HTTPS_UI",
       "typecheck": "PASS",
       "password_rotation": 4,
       "independent_reviews": "CLEAR",
@@ -464,10 +460,12 @@
       "existing_files_versions_links_unchanged": true
     },
     "production_provider_selection": {
-      "writes_enabled": false,
-      "immutable_put_verified": false,
-      "credentials_provisioned": false,
-      "provider": "neon_object_storage"
+      "provider": "neon_object_storage",
+      "writes_enabled": true,
+      "immutable_put_verified": true,
+      "credentials_provisioned": true,
+      "credential_scope": "storage_read_write_server_only",
+      "exact_existing_project_branch_preserved": true
     },
     "application_source_commit": "7a4b8ed7b8fddc8a3eb6a686e0d1506aa829632c",
     "test_only_followup_commit": "d3474048e7731cd0da4d1b92df09204825afb943",
@@ -512,13 +510,123 @@
       "status": "PASS"
     },
     "last_account_probe": {
-      "Neon_S3_credentials_present": false,
-      "Neon_authenticated_profile": "ABSENT",
-      "owner_action": "neon login_existing_account"
+      "Neon_authenticated_profile": "PASS_owner_login",
+      "Neon_S3_credentials_present": true,
+      "owner_action": "completed",
+      "plans_changed": false,
+      "purchases": false
     },
     "requested_password_public_scan": {
       "occurrences": 0,
-      "public_files_checked": 310
+      "public_files_checked": 311
+    },
+    "live_Neon_evidence": {
+      "document": "docs/NEON_LIVE_VERIFICATION.md",
+      "observed_at": "2026-10-14T15:19:43.292Z",
+      "private_bucket": true,
+      "conditional_replacement_HTTP_status": 412,
+      "staging": {
+        "files_created": 2,
+        "versions": 2,
+        "tasks_created": 1,
+        "files_archived": 2,
+        "tasks_archived": 1,
+        "protected_downloads": 2,
+        "anonymous_denials": 2
+      },
+      "production": {
+        "status": "PASS",
+        "uploaded_versions": 2,
+        "same_key_replay": 1,
+        "canonical_intents_verified": 9,
+        "matching_audits_verified": 9,
+        "anonymous_denials": 4,
+        "ui_preview_and_version_comparison": 1,
+        "synthetic_tasks_archived": 1,
+        "synthetic_files_archived": 2,
+        "active_tasks_after": 45,
+        "active_files_after": 3,
+        "existing_source_rows_unchanged": true,
+        "archived_bytes_retained": true,
+        "current_test_session_closed": true
+      },
+      "metadata_cloud_backup": {
+        "status": "PASS",
+        "observed_at": "2026-10-14T15:19:24.666Z",
+        "table_count": 32,
+        "total_rows": 509,
+        "encrypted_bytes": 1103892,
+        "table_counts": {
+          "projects": 29,
+          "tasks": 73,
+          "task_dependency_groups": 8,
+          "task_dependency_edges": 11,
+          "task_checklists": 6,
+          "task_checklist_items": 9,
+          "task_templates": 0,
+          "task_recurrence_rules": 0,
+          "task_recurrence_instances": 0,
+          "task_recurrence_instance_tasks": 0,
+          "project_milestones": 0,
+          "files": 5,
+          "file_annotations": 0,
+          "file_versions": 5,
+          "file_task_links": 5,
+          "task_comments": 0,
+          "tags": 0,
+          "task_tags": 0,
+          "knowledge_items": 0,
+          "calendar_events": 0,
+          "event_reminders": 0,
+          "time_entries": 0,
+          "preferences": 1,
+          "saved_views": 0,
+          "reminders": 0,
+          "notifications": 0,
+          "activity_events": 159,
+          "migration_batches": 1,
+          "source_mappings": 104,
+          "migration_quarantine": 0,
+          "outbox": 0,
+          "idempotency_operations": 93
+        },
+        "authenticated_decrypt_and_manifest": true,
+        "same_day_replay": true,
+        "single_receipt": true,
+        "selected_provider_health": {
+          "backup_status": "verified",
+          "latest_verified_backup_at": "2026-10-14T15:19:23.948Z",
+          "backup_storage_provider": "neon_object_storage",
+          "backup_configured": true
+        },
+        "scheduled_cron_observed": false
+      },
+      "original_byte_cloud_recovery": {
+        "status": "PASS",
+        "original_count": 3,
+        "original_total_bytes": 6698095,
+        "encrypted_package_bytes": 11915322,
+        "exact_cloud_ciphertext_matches": true,
+        "authenticated_decryption_passed": true,
+        "all_three_original_hashes_verified": true,
+        "identity_filename_parent_metadata_preserved": true,
+        "separate_recovery_key": true,
+        "source_write": false,
+        "new_database_restore": false
+      },
+      "provider_calls_by": "root_only",
+      "final_public_safety": {
+        "status": "PASS",
+        "public_files_checked": 311,
+        "actual_private_values_checked": 7,
+        "private_source_identifiers_checked": 120,
+        "occurrences": 0,
+        "requested_password_occurrences": 0,
+        "initial_private_scan_attempt": "Unicode Git path quoting corrected with NUL-delimited paths before the successful full scan"
+      },
+      "private_artifacts": "outside_public_Git",
+      "repeated_import_or_restore": false,
+      "failed_CLI_stdin_attempt": "Retained privately; direct argv data corrected before any bucket/credential mutation; same stable intent resumed after read-only reconciliation"
     }
   },
   "historical_source_verified_deployment": {
@@ -532,5 +640,6 @@
     "state": "READY",
     "id": "dpl_3kaY1N3FrWU5FY8Cr169HtotNjbC",
     "observed_readback_at": "2026-10-14T07:26:48.878Z"
-  }
+  },
+  "final_live_receipt_update": "Operational activation and documentation only; application/tests/schema/dependencies unchanged from complete CI d347404. Prior historical metrics remain scoped to their original snapshots."
 }
