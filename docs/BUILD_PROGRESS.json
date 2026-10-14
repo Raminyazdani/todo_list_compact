@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T05:24:00.5321469Z",
-  "branch": "feat/life-os",
-  "commit": "5de8aaeaa6edb0213298970806677358722c7b68",
-  "phase": "frozen_app17_task_interval_ACK_repair_after_exactSHA_CI",
+  "updated_at": "2026-10-14T05:59:11.0257459Z",
+  "branch": "master",
+  "commit": "463f3cad0310879d23a697f0e1c5d070113fa694",
+  "phase": "production_import_graph_UI_and_hosted_restore_verified_DG36_pending",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -36,8 +36,9 @@
     "mcp_notification_alternative_scope_metadata_wire_test"
   ],
   "active": [
-    "complete_stage_commit_and_exactSHA_CI",
-    "guarded_production_release_migration_restore_redeploy"
+    "production_DG36_force_redeploy_freshlogin_and_final_source_readback",
+    "exact_synthetic_fixture_cleanup_and_final_FA_handoff",
+    "owner_action_time_ChatGPT_grant_and_external_provider_steps"
   ],
   "tests": [
     {
@@ -68,13 +69,13 @@
     }
   ],
   "task_graph_status": {
-    "domain": "implemented_and_verified_locally",
-    "migration": "actual_source_rehearsal_verified",
-    "ui": "core_browser_subsets_passed_extended_scope_not_yet_verified",
-    "release": "pending"
+    "release": "DG36_pending",
+    "migration": "PASS_native_and_API",
+    "ui": "PASS_actual_production21",
+    "domain": "PASS"
   },
   "migration": {
-    "production_imported": false,
+    "production_imported": true,
     "source_written": false,
     "last_verified_counts": {
       "Tasks": 45,
@@ -84,12 +85,27 @@
       "Settings": 36,
       "Guide": 18
     },
-    "private_report": "outside_public_repository"
+    "private_report": "outside_public_repository",
+    "reconciliation": "PASS",
+    "same_batch_replay": "PASS_no_duplicates",
+    "independent_native_and_API": "PASS_all45_tasks_3_files_21_graph_fields_and_zero_fabricated_source_links",
+    "fresh_source": {
+      "verified_at": "2026-10-14T05:45:12.840487Z",
+      "System_three": "PASS",
+      "due_dates_exact": 1,
+      "original_hashes_and_sizes": "PASS",
+      "full_read_seconds": 245.869,
+      "seven_targets_before_after": "UNCHANGED",
+      "native_XLSX_six_tabs": "PASS",
+      "original_files": 3,
+      "due_dates_unspecified": 44,
+      "original_bytes": 6698095
+    }
   },
   "open_severity": {
     "production_gates": "NOT_RUN",
     "known_p0_code_defects": "none_observed_in_verified_snapshot",
-    "known_p1_checks": "Dashboard save/refetch/shortcut guard repaired and real affected build17 E2E PASS48.7s. Historical Stage500 cause remains unproven; no accepted failed-write receipt. Safe acquire diagnostics and preference-only snapshot exemption received40 related PASS and independent clear review. Final exactSHA CI and production gates pending.",
+    "known_p1_checks": "No open observed code defect; operator-onlypooler fix32cases+actualnativeSQL/API passed. DG36/finalcleanup still NOT_RUN.",
     "external_provider_gates": "EXTERNALLY_BLOCKED"
   },
   "blockers": [
@@ -114,79 +130,62 @@
     "completed_scoped_migration_and_read_concurrency_reviews"
   ],
   "next_actions": [
-    "commit_ACK_operator_fix_then_green_exactSHA_CI",
-    "guarded_production_additive_schema_and_master_release",
-    "fresh_source_checkpoint_import_and_canonical_API_verification",
-    "real_production_graph_UI_backup_restore_and_DG36_redeploy",
-    "fixture_cleanup_final_persian_report_and_owner_ChatGPT_confirmation"
+    "production_DG36_force_redeploy_freshlogin_and_final_source_readback",
+    "exact_synthetic_fixture_cleanup_and_final_FA_handoff",
+    "owner_action_time_ChatGPT_grant_and_external_provider_steps"
   ],
   "release_complete": false,
   "execution_prompt": "docs/CONTINUE_PROMPT_FA.md",
   "goal_status": "active",
   "goal_token_budget": null,
   "latest_verified": {
-    "build": 14,
-    "unit_integration_passed": 366,
-    "opt_in_skipped": 28,
-    "test_files_passed": 47,
-    "test_files_skipped": 9,
-    "coverage_seconds": 101.64,
-    "domain_statements_percent": 94.36,
-    "domain_branches_percent": 90.5,
-    "all_statements_percent": 91.4,
-    "all_branches_percent": 87.89,
-    "native_postgres_and_date_passed": 8,
-    "native_seconds": 78.8,
-    "ai_mock_provider_postgres_tests": 52,
-    "connection_and_verifier_admission_passed": 25,
-    "source_identifiers_scanned": 120,
-    "public_files_scanned": 283,
-    "production_imported": false,
-    "browser26_status": "FAIL",
-    "latest_browser_failure": "calendar_reminder_read_before_mutation_ack",
-    "browser_passed": 18,
-    "browser_failed": 7,
-    "browser_skipped": 1,
-    "browser_duration_minutes": 23.3,
-    "native_read_concurrency_passed": 4,
-    "native_read_concurrency_seconds": 33.18,
-    "affected_browser_passed": 6,
-    "affected_browser_minutes": 4.4,
-    "runtime_concurrent_reads": 19,
-    "runtime_concurrent_read_http200": 19,
-    "runtime_concurrent_read_max_ms": 5027
+    "real_expiry_passed": 1,
+    "coverage_files_passed": 51,
+    "OIDC_passed": 1,
+    "coverage_optin_skipped": 28,
+    "browser_failed": 0,
+    "coverage_passed": 382,
+    "browser_skipped": 2,
+    "rate_limit_passed": 6,
+    "run": 38517791730,
+    "coverage_files_skipped": 9,
+    "conclusion": "PASS",
+    "browser_passed": 24,
+    "native_postgres_passed": 12,
+    "HTTP_authorization_notification_passed": 16,
+    "feature_run": 38516650590,
+    "head_sha": "463f3cad0310879d23a697f0e1c5d070113fa694",
+    "actual_SDK_tools": 130
   },
   "latest_observed_CI": {
-    "cause": "Nested Radix accessible dialog count1 is already true before ACK; premature RR read returns0 before time entry commits",
-    "native_postgres_passed": 12,
-    "coverage_optin_skipped": 28,
-    "browser_failed": 1,
-    "conclusion": "FAIL",
-    "browser_minutes": 2.2,
-    "browser_skipped": 2,
-    "browser_passed": 23,
-    "failed_case": "task_precise_deadline_project_reference_and_linked_intervals_share_canonical_state",
-    "head_sha": "5de8aaeaa6edb0213298970806677358722c7b68",
-    "run": 38514771531,
-    "coverage_passed": 382,
+    "real_expiry_passed": 1,
     "coverage_files_passed": 51,
+    "OIDC_passed": 1,
+    "coverage_optin_skipped": 28,
+    "browser_failed": 0,
+    "coverage_passed": 382,
+    "browser_skipped": 2,
+    "rate_limit_passed": 6,
+    "run": 38517791730,
     "coverage_files_skipped": 9,
-    "SDK_and_HTTP_security_after_browser": "NOT_RUN"
+    "conclusion": "PASS",
+    "browser_passed": 24,
+    "native_postgres_passed": 12,
+    "HTTP_authorization_notification_passed": 16,
+    "feature_run": 38516650590,
+    "head_sha": "463f3cad0310879d23a697f0e1c5d070113fa694",
+    "actual_SDK_tools": 130
   },
   "advanced_stage_rehearsal": {
-    "status": "FAIL",
-    "completed_core_steps": 9,
+    "owner_UI_minutes": 1.3,
+    "canonical_snapshots": 21,
+    "completed_steps": 12,
     "created_tasks": 21,
-    "accepted_records": 48,
-    "unique_native_receipts_verified": 42,
-    "failure": "concurrent_expired_token_renewals_exhaust_DCR5_per60",
-    "recorded_clients": 8,
-    "orphan_clients_at_primary_failure": 0,
-    "remaining_scope_and_UI": "NOT_PASS",
-    "resume": "exactsamejournal; no positive mutation/job replay",
-    "last_resume": "TimeoutError after3 retained reads;101.49s",
-    "current_native_wait_probe": "SELECT1 PASS3.7s; no observed otherTX/ownerlock",
-    "transport_diagnosis": "network_connect_timeout; pool total1 idle0 waiting0; firstparty read probe also fails; not specifically OAuth"
+    "status": "PASS",
+    "pending_operations": 0,
+    "owner_UI_steps": 6,
+    "unique_native_audit_receipts": 42,
+    "failed_attempts": "Preserved privately; resumed exactretained journal without replaying core writes"
   },
   "build17_targeted_verification": {
     "build": "PASS",
@@ -217,5 +216,53 @@
     "app_source_changed": false,
     "full_final_CI": "PENDING",
     "independent_diagnosis": "CLEAR"
+  },
+  "current_deployment": {
+    "state": "READY",
+    "branch": "master",
+    "id": "dpl_FWbhA9YfryQxvkeuVsnr5KM1SWW4",
+    "actual_HTTPS_MCP_tools": 130,
+    "commit": "463f3cad0310879d23a697f0e1c5d070113fa694"
+  },
+  "production_graph_proof": {
+    "snapshots": 21,
+    "owner_UI_seconds": 14.5,
+    "seconds": 48.55,
+    "audit_receipts": 42,
+    "private_reports": "outside publicGit",
+    "owner_UI_status": "PASS",
+    "status": "PASS",
+    "steps": 12,
+    "pending_operations": 0,
+    "owner_UI_steps": 6,
+    "tasks": 21
+  },
+  "production_backup_restore": {
+    "links": 3,
+    "accepted_operations": 48,
+    "files": 3,
+    "groups": 6,
+    "versions": 3,
+    "encrypted_persisted_decrypt_manifest": "PASS",
+    "checklist_items": 9,
+    "status": "PASS",
+    "file_bytes": "Independent encrypted recovery matches fresh original hashes; cloudByteBackup blocked",
+    "checklists": 6,
+    "tasks": 68,
+    "source_mappings": 104,
+    "accepted_results_preserved": true,
+    "edges": 8,
+    "original_rows_preserved": true,
+    "hosted_separate_destination": "PASS"
+  },
+  "readonly_native_verifier_fix": {
+    "type_lint_format": "PASS",
+    "reason": "hostedpooler rejectsstartupoptions; each SELECT uses explicitRR READONLY transaction and SETLOCALtimeout",
+    "native_hosted_production_verification": "PASS",
+    "app_source_changed": false,
+    "targeted_cases": 32,
+    "status": "PASS",
+    "seconds": 15.13,
+    "new_CI": "PENDING"
   }
 }

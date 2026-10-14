@@ -464,6 +464,31 @@ describe("author-only admission and native PostgreSQL-engine fixtures; mocked HT
       ],
     ).toContain("notes");
   });
+  it("detects a source-backed change committed during HTTPS verification in its fresh final native reconciliation", async () => {
+    const deps = dependencies(),
+      initial = deps.fetch.getMockImplementation()!;
+    deps.fetch.mockImplementation(async (input, init) => {
+      const response = await initial(input, init);
+      if (
+        new URL(String(input)).searchParams.get("operation") ===
+        "file_get_metadata"
+      )
+        await database.query(
+          "UPDATE tasks SET notes='synthetic change during verification' WHERE task_id=$1",
+          [source().tables.Tasks[0].task_id],
+        );
+      return response;
+    });
+    await expect(verifyProductionState(args(), deps)).rejects.toThrow(
+      "ORIGINAL_SOURCE_CHANGED_DURING_VERIFICATION",
+    );
+    expect(JSON.parse(await readFile(reportPath, "utf8"))).toMatchObject({
+      status: "failed",
+      api_tasks_verified: 2,
+      api_files_verified: 1,
+      failed_check: "ORIGINAL_SOURCE_CHANGED_DURING_VERIFICATION",
+    });
+  });
   it.each([
     [
       "links",

@@ -102,12 +102,13 @@ export function productionDestinationHash(url: string): string {
   });
 }
 
-function nativeReadOnlyDatabase(url: string): Database {
+export function nativeReadOnlyDatabase(url: string): Database {
   const parsed = postgresConnectionUrl(url);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
   if (!local) parsed.searchParams.set("sslmode", "verify-full");
   // The operator does not use getDatabase/migrateDatabase or a domain command.
-  // The connection itself denies writes, including an accidental future query.
+  // Hosted poolers may reject read-only settings in connection startup options.
+  // Apply them inside every leased transaction before any admitted SELECT.
   parsed.searchParams.delete("options");
   const pool = new Pool({
     connectionString: parsed.toString(),
@@ -116,7 +117,6 @@ function nativeReadOnlyDatabase(url: string): Database {
     idleTimeoutMillis: 10000,
     query_timeout: 15000,
     ssl: local ? undefined : { rejectUnauthorized: true },
-    options: "-c default_transaction_read_only=on -c statement_timeout=15000",
   });
   pool.on("error", () => {});
   return {
@@ -128,8 +128,27 @@ function nativeReadOnlyDatabase(url: string): Database {
         /^\s*SELECT\s/i.test(sql) && !sql.includes(";"),
         "READ_ONLY_SQL_REQUIRED",
       );
-      const result = await pool.query(sql, params);
-      return { rows: result.rows as T[], rowCount: result.rowCount };
+      const client = await pool.connect();
+      let discard = false;
+      try {
+        // A fresh snapshot per query preserves the final reconciliation's
+        // detection of changes committed during first-party HTTPS verification.
+        await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        const result = await client.query(sql, params);
+        await client.query("COMMIT");
+        return { rows: result.rows as T[], rowCount: result.rowCount };
+      } catch (error) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          discard = true;
+        }
+        throw error;
+      } finally {
+        if (discard) client.release(true);
+        else client.release();
+      }
     },
     async transaction() {
       throw new VerificationError("READ_ONLY_SQL_REQUIRED");
