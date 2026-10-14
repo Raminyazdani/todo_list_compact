@@ -186,7 +186,7 @@
     "evidence": "Three actual concurrency tests, four DATE parser tests and one real native-pg child probe across three timezones; actual connection helper in use."
   },
   "latest_application_build": {
-    "number": 14,
+    "number": 17,
     "status": "PASS",
     "production": false
   },
@@ -237,5 +237,24 @@
     "duration_seconds": 33.18,
     "no_DDL": true,
     "synthetic_separate_namespace": true
+  },
+  "affected_dashboard_build17": {
+    "status": "PASS",
+    "cases_passed": 1,
+    "duration_seconds": 48.7,
+    "held_actual_ack": "PASS",
+    "disabled_widget_and_shortcut_controls": "PASS",
+    "canonical_reload_and_native_resize": "PASS",
+    "accessibility_reports_and_PWA": "PASS",
+    "stage_build16_failure": "RETAINED: zero accepted failed-height receipt; historical driver cause unproven"
+  },
+  "preferences_and_safe_acquisition": {
+    "status": "PASS",
+    "cases_passed": 40,
+    "new_cases": 7,
+    "duration_seconds": 10.44,
+    "review": "CLEAR",
+    "pool_timeout_lock_limits": "UNCHANGED",
+    "full_exactSHA_CI": "PENDING"
   }
 }

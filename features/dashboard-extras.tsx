@@ -49,6 +49,7 @@ const routes = [
 export function DashboardExtras({
   range,
   action,
+  savePreferences,
   onOpen,
   settings,
   revision,
@@ -56,6 +57,9 @@ export function DashboardExtras({
 }: {
   range: DashboardRange;
   action: Action;
+  savePreferences: (
+    settings: Record<string, unknown>,
+  ) => Promise<MutationResult | null>;
   onOpen: (id: string) => void;
   settings: Record<string, unknown>;
   revision?: number;
@@ -272,21 +276,20 @@ export function DashboardExtras({
                   path: String(data.get("path")),
                 },
               ];
-              if (
-                await action(
-                  "preferences_update",
-                  { settings: { dashboard_shortcuts: next } },
-                  revision,
-                )
-              )
+              if (await savePreferences({ dashboard_shortcuts: next }))
                 form.reset();
             }}
           >
             <Field label={t("عنوان میان‌بر", "Shortcut title")}>
-              <input name="title" required maxLength={100} />
+              <input
+                name="title"
+                required
+                maxLength={100}
+                disabled={revision === undefined}
+              />
             </Field>
             <Field label={t("مقصد میان‌بر", "Shortcut destination")}>
-              <select name="path">
+              <select name="path" disabled={revision === undefined}>
                 {routes.map((route) => (
                   <option key={route} value={route}>
                     {route}
@@ -306,17 +309,11 @@ export function DashboardExtras({
                 type="button"
                 disabled={revision === undefined}
                 onClick={() =>
-                  void action(
-                    "preferences_update",
-                    {
-                      settings: {
-                        dashboard_shortcuts: shortcuts.filter(
-                          (_, i) => i !== index,
-                        ),
-                      },
-                    },
-                    revision,
-                  )
+                  void savePreferences({
+                    dashboard_shortcuts: shortcuts.filter(
+                      (_, i) => i !== index,
+                    ),
+                  })
                 }
               >
                 {t("حذف میان‌بر", "Remove shortcut")} {item.title}

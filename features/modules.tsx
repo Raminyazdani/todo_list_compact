@@ -100,6 +100,13 @@ export function Dashboard({
     settings: Record<string, unknown>;
     revision: number;
   }>("preferences_get");
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const preferencesSavingRef = useRef(false);
+  const preferencesEditable =
+    !!preferences.data &&
+    !preferences.error &&
+    !preferences.fetching &&
+    !preferencesSaving;
   const [customize, setCustomize] = useState(false);
   const [localRange, setLocalRange] = useState<DashboardRange | null>(null);
   const [fallbackDay] = useState(() =>
@@ -179,10 +186,7 @@ export function Dashboard({
       gridColumn: widget(id).width === "wide" ? "1 / -1" : undefined,
       height: widget(id).height || undefined,
       overflow: widget(id).height ? "auto" : undefined,
-      resize:
-        preferences.data && !preferences.error && !preferences.fetching
-          ? ("vertical" as const)
-          : ("none" as const),
+      resize: preferencesEditable ? ("vertical" as const) : ("none" as const),
     };
   }
   function widgetProps(id: string) {
@@ -193,35 +197,53 @@ export function Dashboard({
       "aria-label": widget(id).title,
       hidden: !widget(id).visible,
       style: widgetStyle(id),
-      draggable: true,
-      onDragStart: (event: React.DragEvent<HTMLElement>) =>
-        event.dataTransfer.setData("text/lifeos-widget", id),
-      onDragOver: (event: React.DragEvent<HTMLElement>) =>
-        event.preventDefault(),
+      draggable: preferencesEditable,
+      onDragStart: (event: React.DragEvent<HTMLElement>) => {
+        if (!preferencesEditable || preferencesSavingRef.current) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.setData("text/lifeos-widget", id);
+      },
+      onDragOver: (event: React.DragEvent<HTMLElement>) => {
+        if (preferencesEditable) event.preventDefault();
+      },
       onDrop: (event: React.DragEvent<HTMLElement>) => dropWidget(event, id),
     };
   }
+  async function saveDashboardPreferences(settings: Record<string, unknown>) {
+    if (
+      !preferencesEditable ||
+      preferencesSavingRef.current ||
+      !preferences.data
+    )
+      return null;
+    preferencesSavingRef.current = true;
+    setPreferencesSaving(true);
+    try {
+      return await action(
+        "preferences_update",
+        { settings },
+        preferences.data.revision,
+      );
+    } finally {
+      preferencesSavingRef.current = false;
+      setPreferencesSaving(false);
+    }
+  }
   async function saveWidgets(next: typeof widgets) {
-    if (!preferences.data || preferences.error || preferences.fetching) return;
-    await action(
-      "preferences_update",
-      {
-        settings: {
-          dashboard_widgets: next.map(
-            ({ id, visible, order, width, height }) => ({
-              id,
-              visible,
-              order,
-              width,
-              height,
-            }),
-          ),
-        },
-      },
-      preferences.data?.revision,
-    );
+    return saveDashboardPreferences({
+      dashboard_widgets: next.map(({ id, visible, order, width, height }) => ({
+        id,
+        visible,
+        order,
+        width,
+        height,
+      })),
+    });
   }
   function moveWidget(id: string, delta: number) {
+    if (!preferencesEditable || preferencesSavingRef.current) return;
     const next = [...widgets];
     const from = next.findIndex((item) => item.id === id);
     const to = Math.min(next.length - 1, Math.max(0, from + delta));
@@ -230,6 +252,7 @@ export function Dashboard({
   }
   function dropWidget(event: React.DragEvent<HTMLElement>, id: string) {
     event.preventDefault();
+    if (!preferencesEditable || preferencesSavingRef.current) return;
     const source = event.dataTransfer.getData("text/lifeos-widget");
     const from = widgets.findIndex((item) => item.id === source),
       to = widgets.findIndex((item) => item.id === id);
@@ -239,11 +262,18 @@ export function Dashboard({
     next.splice(to, 0, moved);
     void saveWidgets(next.map((item, index) => ({ ...item, order: index })));
   }
-  const resizeIntent = useRef<{ element: HTMLElement; before: number } | null>(
-    null,
-  );
+  const resizeIntent = useRef<{
+    element: HTMLElement;
+    before: number;
+    revision: number;
+  } | null>(null);
   function beginWidgetResize(event: React.PointerEvent<HTMLElement>) {
-    if (!preferences.data || preferences.error || preferences.fetching) return;
+    if (
+      !preferencesEditable ||
+      preferencesSavingRef.current ||
+      !preferences.data
+    )
+      return;
     const element = (event.target as HTMLElement).closest<HTMLElement>(
       ".dashboard-grid > section",
     );
@@ -253,15 +283,30 @@ export function Dashboard({
       event.clientY >= rect.bottom - 18 &&
       (event.clientX <= rect.left + 18 || event.clientX >= rect.right - 18)
     )
-      resizeIntent.current = { element, before: rect.height };
+      resizeIntent.current = {
+        element,
+        before: rect.height,
+        revision: preferences.data.revision,
+      };
   }
-  function finishWidgetResize() {
+  function finishWidgetResize(commit: boolean) {
     const active = resizeIntent.current;
     resizeIntent.current = null;
     if (!active) return;
     const height = Math.round(active.element.getBoundingClientRect().height);
     const id = active.element.dataset.widgetId;
-    if (id && Math.abs(height - active.before) > 4)
+    const current = widgets.find((item) => item.id === id);
+    // Native CSS resize changes the DOM before persistence. Return to the
+    // canonical height until this exact edit is acknowledged and read back.
+    active.element.style.height = current?.height ? `${current.height}px` : "";
+    if (
+      commit &&
+      preferencesEditable &&
+      !preferencesSavingRef.current &&
+      active.revision === preferences.data?.revision &&
+      id &&
+      Math.abs(height - active.before) > 4
+    )
       void saveWidgets(
         widgets.map((item) =>
           item.id === id
@@ -383,9 +428,7 @@ export function Dashboard({
         </div>
         <div className="form-actions">
           <Button
-            disabled={
-              !preferences.data || !!preferences.error || preferences.fetching
-            }
+            disabled={!preferencesEditable}
             onClick={() => setCustomize(true)}
           >
             {t("چیدمان داشبورد", "Customize dashboard")}
@@ -427,8 +470,7 @@ export function Dashboard({
         key={`${range.from_date}:${range.to_date}:${range.timezone}`}
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!preferences.data || preferences.error || preferences.fetching)
-            return;
+          if (!preferencesEditable || preferencesSavingRef.current) return;
           const form = new FormData(event.currentTarget);
           const next = {
             from_date: String(form.get("from_date")),
@@ -449,13 +491,7 @@ export function Dashboard({
                   "Range must be ordered and at most one year",
                 ),
               );
-            if (
-              await action(
-                "preferences_update",
-                { settings: { dashboard_range: next } },
-                preferences.data?.revision,
-              )
-            )
+            if (await saveDashboardPreferences({ dashboard_range: next }))
               setLocalRange(next);
           } catch (error) {
             window.dispatchEvent(
@@ -469,9 +505,7 @@ export function Dashboard({
         <Field label={t("شروع بازهٔ داشبورد", "Dashboard range starts")}>
           <input
             name="from_date"
-            disabled={
-              !preferences.data || !!preferences.error || preferences.fetching
-            }
+            disabled={!preferencesEditable}
             type="date"
             required
             defaultValue={range.from_date}
@@ -485,9 +519,7 @@ export function Dashboard({
         >
           <input
             name="to_date"
-            disabled={
-              !preferences.data || !!preferences.error || preferences.fetching
-            }
+            disabled={!preferencesEditable}
             type="date"
             required
             defaultValue={range.to_date}
@@ -495,9 +527,7 @@ export function Dashboard({
         </Field>
         <Field label={t("منطقهٔ زمانی داشبورد", "Dashboard timezone")}>
           <select
-            disabled={
-              !preferences.data || !!preferences.error || preferences.fetching
-            }
+            disabled={!preferencesEditable}
             name="timezone"
             defaultValue={range.timezone}
           >
@@ -509,12 +539,7 @@ export function Dashboard({
             ) && <option>{range.timezone}</option>}
           </select>
         </Field>
-        <Button
-          disabled={
-            !preferences.data || !!preferences.error || preferences.fetching
-          }
-          type="submit"
-        >
+        <Button disabled={!preferencesEditable} type="submit">
           {t("ثبت بازهٔ داشبورد", "Save dashboard range")}
         </Button>
       </form>
@@ -565,35 +590,21 @@ export function Dashboard({
       <div
         className="dashboard-grid"
         onPointerDownCapture={beginWidgetResize}
-        onPointerUpCapture={finishWidgetResize}
+        onPointerUpCapture={() => finishWidgetResize(true)}
+        onPointerCancelCapture={() => finishWidgetResize(false)}
       >
         <DashboardExtras
           range={range}
           action={action}
+          savePreferences={saveDashboardPreferences}
           onOpen={onOpen}
           settings={preferences.data?.settings ?? {}}
           revision={
-            preferences.error || preferences.fetching
-              ? undefined
-              : preferences.data?.revision
+            preferencesEditable ? preferences.data?.revision : undefined
           }
           widgetProps={widgetProps}
         />
-        <section
-          className="panel focus-panel"
-          hidden={!widget("focus").visible}
-          data-widget-id="focus"
-          role="region"
-          aria-label={widget("focus").title}
-          tabIndex={0}
-          style={widgetStyle("focus")}
-          draggable
-          onDragStart={(event) =>
-            event.dataTransfer.setData("text/lifeos-widget", "focus")
-          }
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => dropWidget(event, "focus")}
-        >
+        <section className="panel focus-panel" {...widgetProps("focus")}>
           <SectionHeading
             title={t("قدم‌های بعدی", "Your next moves")}
             subtitle={t(
@@ -632,21 +643,7 @@ export function Dashboard({
                 />
               )}
         </section>
-        <section
-          className="panel calendar-peek"
-          hidden={!widget("calendar").visible}
-          data-widget-id="calendar"
-          role="region"
-          aria-label={widget("calendar").title}
-          tabIndex={0}
-          style={widgetStyle("calendar")}
-          draggable
-          onDragStart={(event) =>
-            event.dataTransfer.setData("text/lifeos-widget", "calendar")
-          }
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => dropWidget(event, "calendar")}
-        >
+        <section className="panel calendar-peek" {...widgetProps("calendar")}>
           <SectionHeading
             title={t("فضای روز", "A little room for today")}
             action={
@@ -701,21 +698,7 @@ export function Dashboard({
             <ArrowUpRight size={14} />
           </Link>
         </section>
-        <section
-          className="panel"
-          hidden={!widget("blocked").visible}
-          data-widget-id="blocked"
-          role="region"
-          aria-label={widget("blocked").title}
-          tabIndex={0}
-          style={widgetStyle("blocked")}
-          draggable
-          onDragStart={(event) =>
-            event.dataTransfer.setData("text/lifeos-widget", "blocked")
-          }
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => dropWidget(event, "blocked")}
-        >
+        <section className="panel" {...widgetProps("blocked")}>
           <SectionHeading
             title={t("رادار پیش‌نیازها", "Blocked radar")}
             subtitle={t("چه چیزی باید جلو برود؟", "What needs to move first?")}
@@ -744,21 +727,7 @@ export function Dashboard({
             />
           ) : null}
         </section>
-        <section
-          className="panel"
-          hidden={!widget("activity").visible}
-          data-widget-id="activity"
-          role="region"
-          aria-label={widget("activity").title}
-          tabIndex={0}
-          style={widgetStyle("activity")}
-          draggable
-          onDragStart={(event) =>
-            event.dataTransfer.setData("text/lifeos-widget", "activity")
-          }
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => dropWidget(event, "activity")}
-        >
+        <section className="panel" {...widgetProps("activity")}>
           <SectionHeading
             title={t("رد قدم‌ها", "Your activity")}
             action={
@@ -1043,11 +1012,21 @@ export function Dashboard({
         open={customize}
         onOpenChange={setCustomize}
       >
+        <QueryState {...preferences} retry={preferences.refresh} />
+        {(preferencesSaving || preferences.fetching) && (
+          <p role="status" className="muted small">
+            {t(
+              "در حال ذخیره یا بازخوانی چیدمان…",
+              "Saving or refreshing dashboard preferences…",
+            )}
+          </p>
+        )}
         {widgets.map((item, index) => (
           <div className="widget-option" key={item.id}>
             <label>
               <input
                 type="checkbox"
+                disabled={!preferencesEditable}
                 checked={item.visible}
                 onChange={(event) =>
                   void saveWidgets(
@@ -1062,6 +1041,7 @@ export function Dashboard({
               {item.title}
             </label>
             <select
+              disabled={!preferencesEditable}
               aria-label={`${t("عرض ویجت", "Widget width")} ${item.title}`}
               value={item.width}
               onChange={(event) =>
@@ -1079,6 +1059,7 @@ export function Dashboard({
             </select>
             <input
               type="number"
+              disabled={!preferencesEditable}
               min={200}
               max={1400}
               step={20}
@@ -1105,7 +1086,7 @@ export function Dashboard({
             />
             <Button
               variant="quiet"
-              disabled={index === 0}
+              disabled={!preferencesEditable || index === 0}
               onClick={() => moveWidget(item.id, -1)}
               aria-label={t("بالا بردن", "Move up")}
             >
@@ -1113,7 +1094,7 @@ export function Dashboard({
             </Button>
             <Button
               variant="quiet"
-              disabled={index === widgets.length - 1}
+              disabled={!preferencesEditable || index === widgets.length - 1}
               onClick={() => moveWidget(item.id, 1)}
               aria-label={t("پایین بردن", "Move down")}
             >

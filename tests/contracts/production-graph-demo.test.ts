@@ -62,6 +62,7 @@ type Report = {
   roles: Record<string, string>;
   steps: string[];
   snapshots: Record<string, TaskDTO>;
+  verified_audit_receipts?: number;
 };
 
 function check(value: unknown, code: string): asserts value {
@@ -836,7 +837,9 @@ it.skipIf(!enabled)(
             );
             await transition(F, "task_complete");
             check(
-              (await task(X)).ready_now && (await task(E)).status === "Inbox",
+              (await task(X)).ready_now &&
+                (await task(E)).status === "Next" &&
+                (await task(F)).status === "Done",
               "ANY_ALTERNATIVE_DONE_MUST_QUALIFY",
             );
             await passed("ANY_alternative_and_reopen_readiness");
@@ -1229,13 +1232,25 @@ it.skipIf(!enabled)(
             );
 
             step = "FINAL_ACTIVE_FIXTURE_READBACK";
-            for (const id of report.created.tasks) {
-              const read = await task(id);
-              check(
-                read.archived_at === null,
-                "FIXTURE_MUST_REMAIN_ACTIVE_FOR_RESTORE_PROOF",
-              );
-              report.snapshots[id] = read;
+            for (
+              let offset = 0;
+              offset < report.created.tasks.length;
+              offset += 5
+            ) {
+              const ids = report.created.tasks.slice(offset, offset + 5);
+              // Independent reads may share the five-connection pool. Near
+              // token expiry retain sequential renewal and journal persistence.
+              const reads: TaskDTO[] = [];
+              if (writer && writer.token.expiresAt - Date.now() > 30000)
+                reads.push(...(await Promise.all(ids.map((id) => task(id)))));
+              else for (const id of ids) reads.push(await task(id));
+              for (const read of reads) {
+                check(
+                  read.archived_at === null,
+                  "FIXTURE_MUST_REMAIN_ACTIVE_FOR_RESTORE_PROOF",
+                );
+                report.snapshots[read.task_id] = read;
+              }
             }
             check(
               report.created.tasks.length === 21,
@@ -1246,23 +1261,41 @@ it.skipIf(!enabled)(
                 report.snapshots[X].ready_now,
               "FINAL_GRAPH_DEMO_STATE_WRONG",
             );
-            const aHistory = await query<PageDTO<ActivityDTO>>("get_activity", {
-              entity_id: A,
-              limit: 200,
-            });
-            const aReceipts = report.operations.filter(
-              (op) => op.result?.entity_id === A,
+            const receipts = new Map(
+              report.operations
+                .filter((op) => op.status === "accepted" && op.result)
+                .map((op) => [op.result!.audit_event_id, op.result!]),
             );
+            const missingReceipts = new Set(receipts.keys());
+            let auditCursor: string | null = null;
+            const auditCursors = new Set<string>();
+            for (let page = 0; page < 50 && missingReceipts.size; page += 1) {
+              const history: PageDTO<ActivityDTO> = await query(
+                "get_activity",
+                {
+                  limit: 200,
+                  ...(auditCursor ? { cursor: auditCursor } : {}),
+                },
+              );
+              for (const event of history.items) {
+                const receipt = receipts.get(event.event_id);
+                if (
+                  receipt &&
+                  event.operation_id === receipt.operation_id &&
+                  event.entity_id === receipt.entity_id
+                )
+                  missingReceipts.delete(event.event_id);
+              }
+              auditCursor = history.next_cursor;
+              if (!auditCursor) break;
+              check(!auditCursors.has(auditCursor), "PAGING_CURSOR_REPEATED");
+              auditCursors.add(auditCursor);
+            }
             check(
-              aReceipts.every((op) =>
-                aHistory.items.some(
-                  (event) =>
-                    event.event_id === op.result?.audit_event_id &&
-                    event.operation_id === op.result?.operation_id,
-                ),
-              ),
+              receipts.size > 0 && missingReceipts.size === 0,
               "MCP_MUTATION_RECEIPTS_MUST_HAVE_DURABLE_REST_AUDIT",
             );
+            report.verified_audit_receipts = receipts.size;
             await passed(
               "accepted_mutation_receipts_have_owner_bound_durable_audit",
             );
@@ -1304,5 +1337,8 @@ it.skipIf(!enabled)(
       );
     }
   },
-  600000,
+  // Aggregate operator allowance follows the observed remote Stage latency
+  // (the first five proof steps took359s). Each REST call keeps its30s bound;
+  // graph assertions and the separate performance gates are unchanged.
+  rehearsal ? 1200000 : 600000,
 );

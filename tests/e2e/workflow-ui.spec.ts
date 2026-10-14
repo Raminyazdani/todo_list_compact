@@ -402,6 +402,7 @@ test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_an
     code: string | null;
     message: string | null;
   }[] = [];
+  let releaseHeightAcknowledgement = () => {};
   page.on("response", async (response) => {
     if (
       response.request().method() !== "POST" ||
@@ -456,11 +457,76 @@ test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_an
         timezone: "Asia/Tehran",
       });
     await page
-      .getByRole("button", { name: "چیدمان داشبورد", exact: true })
+      .getByRole("button", { name: "ویرایش میان‌برها", exact: true })
       .click();
     await page
-      .getByLabel("ارتفاع ویجت ماتریس اولویت", { exact: true })
-      .fill("400");
+      .getByRole("button", { name: "چیدمان داشبورد", exact: true })
+      .click();
+    const widgetHeight = page.getByLabel("ارتفاع ویجت ماتریس اولویت", {
+      exact: true,
+    });
+    await expect(widgetHeight).toBeEnabled();
+    let announceAcceptedHeight!: () => void;
+    const acceptedHeight = new Promise<void>((resolve) => {
+      announceAcceptedHeight = resolve;
+    });
+    const heldAcknowledgement = new Promise<void>((resolve) => {
+      releaseHeightAcknowledgement = resolve;
+    });
+    let heightWriteCount = 0;
+    await page.route("**/api/v1/commands", async (route) => {
+      const payload = route.request().postDataJSON();
+      if (
+        payload.command !== "preferences_update" ||
+        !payload.input?.settings?.dashboard_widgets?.some(
+          (item: { id: string; height: number }) =>
+            item.id === "priority" && item.height === 400,
+        )
+      ) {
+        await route.continue();
+        return;
+      }
+      heightWriteCount += 1;
+      const response = await route.fetch();
+      announceAcceptedHeight();
+      await heldAcknowledgement;
+      await route.fulfill({ response });
+    });
+    const heightAccepted = page.waitForResponse((response) => {
+      if (
+        response.request().method() !== "POST" ||
+        !response.url().endsWith("/api/v1/commands")
+      )
+        return false;
+      const payload = response.request().postDataJSON();
+      return (
+        payload.command === "preferences_update" &&
+        payload.input?.settings?.dashboard_widgets?.some(
+          (item: { id: string; height: number }) =>
+            item.id === "priority" && item.height === 400,
+        )
+      );
+    });
+    await widgetHeight.fill("400");
+    await acceptedHeight;
+    await expect(widgetHeight).toBeDisabled();
+    await expect(
+      page.getByLabel("عرض ویجت ماتریس اولویت", { exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByLabel("عنوان میان‌بر", { exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByLabel("مقصد میان‌بر", { exact: true }),
+    ).toBeDisabled();
+    await expect(page.locator('[data-widget-id="priority"]')).toHaveAttribute(
+      "draggable",
+      "false",
+    );
+    expect(heightWriteCount).toBe(1);
+    releaseHeightAcknowledgement();
+    expect((await heightAccepted).status()).toBe(200);
+    await page.unroute("**/api/v1/commands");
     await expect
       .poll(
         async () =>
@@ -470,8 +536,9 @@ test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_an
                 request,
                 "preferences_get",
               )
-            ).settings.dashboard_widgets as { id: string; height: number }[]
-          ).find((item) => item.id === "priority")?.height,
+            ).settings.dashboard_widgets as
+              { id: string; height: number }[] | undefined
+          )?.find((item) => item.id === "priority")?.height,
       )
       .toBe(400);
     await page.keyboard.press("Escape");
@@ -484,6 +551,8 @@ test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_an
       "400px",
     );
     const widget = page.locator('[data-widget-id="priority"]');
+    await expect(widget).toHaveAttribute("draggable", "true");
+    await expect(widget).toHaveCSS("resize", "vertical");
     await widget.scrollIntoViewIfNeeded();
     const rectangle = await widget.boundingBox();
     await page.mouse.move(
@@ -506,8 +575,9 @@ test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_an
                 request,
                 "preferences_get",
               )
-            ).settings.dashboard_widgets as { id: string; height: number }[]
-          ).find((item) => item.id === "priority")?.height,
+            ).settings.dashboard_widgets as
+              { id: string; height: number }[] | undefined
+          )?.find((item) => item.id === "priority")?.height,
       )
       .toBeGreaterThan(400);
     await page.goto("/settings");
@@ -644,6 +714,7 @@ test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_an
       }),
     ).toContainText("سهمیهٔ حساب ذخیره‌ساز را نشان نمی‌دهد");
   } finally {
+    releaseHeightAcknowledgement();
     await test.info().attach("preferences-command-responses", {
       body: JSON.stringify(preferenceResponses),
       contentType: "application/json",

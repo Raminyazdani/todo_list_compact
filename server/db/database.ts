@@ -85,8 +85,44 @@ class PostgresDatabase implements Database {
     sql: string,
     params: unknown[] = [],
   ): Promise<SqlResult<T>> {
-    const result = await this.pool.query(sql, params);
-    return { rows: result.rows as T[], rowCount: result.rowCount };
+    try {
+      const result = await this.pool.query(sql, params);
+      return { rows: result.rows as T[], rowCount: result.rowCount };
+    } catch (error) {
+      // Keep pg-pool's own query/release behavior. Only its exact acquisition
+      // timeout messages identify this phase; SQL/query errors do not.
+      if (this.acquireFailureKind(error) !== "other")
+        this.reportAcquireFailure(error);
+      throw error;
+    }
+  }
+  private acquireFailureKind(error: unknown) {
+    // Exact fixed messages from installed pg-pool, never arbitrary error codes.
+    if (error instanceof Error) {
+      if (error.message === "timeout exceeded when trying to connect")
+        return "pool_wait_timeout";
+      if (error.message === "Connection terminated due to connection timeout")
+        return "network_connect_timeout";
+    }
+    return "other";
+  }
+  private reportAcquireFailure(error: unknown): void {
+    const count = (value: number) =>
+      Number.isSafeInteger(value) && value >= 0 ? value : 0;
+    console.error("DOMAIN_DATABASE_ACQUIRE_FAILED", {
+      classification: this.acquireFailureKind(error),
+      total: count(this.pool.totalCount),
+      idle: count(this.pool.idleCount),
+      waiting: count(this.pool.waitingCount),
+    });
+  }
+  private async acquire(): Promise<PoolClient> {
+    try {
+      return await this.pool.connect();
+    } catch (error) {
+      this.reportAcquireFailure(error);
+      throw error;
+    }
   }
   async transaction<T>(
     ownerId: string,
@@ -105,7 +141,7 @@ class PostgresDatabase implements Database {
     action: (tx: SqlClient) => Promise<T>,
     readOnly: boolean,
   ): Promise<T> {
-    const client: PoolClient = await this.pool.connect();
+    const client: PoolClient = await this.acquire();
     try {
       // Parallel readers use one consistent MVCC snapshot and cannot write SQL.
       // The same owner lock remains exclusive for commands and stored previews.

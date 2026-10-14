@@ -138,7 +138,12 @@ export function createDomainService(database: Database): DomainService {
             );
         }
         const operationId = id("OP"),
-          before = await snapshot(tx, principal.ownerId);
+          // Display/retention configuration never mutates the task graph.
+          // Keep its owner lock, revision, audit and receipt without scanning it.
+          before =
+            command === "preferences_update"
+              ? null
+              : await snapshot(tx, principal.ownerId);
         let change: Change;
         if (command === "legacy_import")
           change = await legacyImport(tx, input, principal);
@@ -277,8 +282,10 @@ export function createDomainService(database: Database): DomainService {
             options.expectedRevision,
             operationId,
           );
-        const after = await snapshot(tx, principal.ownerId),
-          readinessChanges = changedReadiness(before, after);
+        const after =
+            before === null ? null : await snapshot(tx, principal.ownerId),
+          readinessChanges =
+            before && after ? changedReadiness(before, after) : [];
         const auditId = await audit(
           tx,
           principal,
@@ -290,10 +297,12 @@ export function createDomainService(database: Database): DomainService {
           change.reason ?? null,
         );
         if (
-          command === "task_reopen" ||
-          (command === "task_update" &&
-            (change.before as Input)?.status === "Done" &&
-            (change.after as Input)?.status !== "Done")
+          before &&
+          after &&
+          (command === "task_reopen" ||
+            (command === "task_update" &&
+              (change.before as Input)?.status === "Done" &&
+              (change.after as Input)?.status !== "Done"))
         )
           await audit(
             tx,
@@ -320,7 +329,7 @@ export function createDomainService(database: Database): DomainService {
         );
         const version = Number(
           (change.after as Input | null)?.revision ??
-            after.byId.get(change.entityId)?.revision ??
+            after?.byId.get(change.entityId)?.revision ??
             1,
         );
         const result: MutationResult = {
