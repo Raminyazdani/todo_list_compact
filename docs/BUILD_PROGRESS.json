@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T13:35:39.5634304Z",
+  "updated_at": "2026-10-14T14:02:24.8895198Z",
   "branch": "master",
-  "commit": "9ebbe815558c86d6865044daae4741ed802d3304",
-  "phase": "owner_requested_Neon_native_Codex_MCP_and_deferred_in_app_AI",
+  "commit": "d3474048e7731cd0da4d1b92df09204825afb943",
+  "phase": "owner_changes_deployed_full_CI_PASS_Neon_login_and_native_MCP_reload_required",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -43,9 +43,8 @@
     "actual_three_original_file_unauthenticated_download_denial"
   ],
   "active": [
-    "Neon_private_storage_implementation_and_actual_activation",
-    "native_Codex_MCP_runtime_loading",
-    "deferred_AI_UI_and_password_settings_release"
+    "owner_Neon_login_then_private_bucket_and_actual_storage_activation",
+    "reload_same_Codex_chat_then_actual_native_MCP_read"
   ],
   "tests": [
     {
@@ -67,6 +66,26 @@
       "coverage_optin_skipped": 28,
       "browser_passed": 24,
       "rate_limit_passed": 6
+    },
+    {
+      "rate_limit_passed": 6,
+      "coverage_files_skipped": 9,
+      "HTTP_authorization_notification_passed": 16,
+      "native_postgres_passed": 12,
+      "browser_skipped": 3,
+      "coverage_files_passed": 60,
+      "run": 38574338435,
+      "real_expiry_passed": 1,
+      "domain_branches_percent": 91.14,
+      "browser_failed": 0,
+      "head_sha": "d3474048e7731cd0da4d1b92df09204825afb943",
+      "conclusion": "PASS",
+      "browser_passed": 24,
+      "domain_statements_percent": 94.63,
+      "actual_SDK_tools": 130,
+      "OIDC_passed": 1,
+      "coverage_passed": 462,
+      "coverage_optin_skipped": 28
     }
   ],
   "task_graph_status": {
@@ -104,10 +123,10 @@
     }
   },
   "open_severity": {
-    "production_gates": "CORE_PASS_external_provider_and_actual_ChatGPT_gates_open",
+    "production_gates": "CORE_PASS_Neon_storage_and_native_Codex_runtime_pending",
     "known_p0_code_defects": "none_observed_in_verified_snapshot",
-    "known_p1_checks": "No observed unresolved code defect in final complete CI and actual core-production verification; provider/access gates remain explicit.",
-    "external_provider_gates": "EXTERNALLY_BLOCKED"
+    "known_p1_checks": "No unresolved code defect observed in exact complete CI or published owner UI; live Neon storage and current-chat native tool loading remain unverified.",
+    "external_provider_gates": "AWAITING_OWNER_NEON_LOGIN_AND_ACTUAL_STORAGE_PROOF"
   },
   "blockers": [
     {
@@ -122,8 +141,8 @@
     }
   ],
   "available_agents": [
-    "root_completed_final_source_batch_and_evidence",
-    "scoped_domain_migration_and_release_reviews_finished"
+    "all_scoped_implementation_and_independent_reviews_completed",
+    "root_final_verified_receipts_recorded"
   ],
   "next_actions": [
     "owner_neon_login_existing_account",
@@ -135,44 +154,44 @@
   "goal_status": "blocked_prior_scope_new_human_request_in_progress",
   "goal_token_budget": null,
   "latest_verified": {
-    "actual_SDK_tools": 130,
+    "rate_limit_passed": 6,
     "coverage_files_skipped": 9,
-    "real_expiry_passed": 1,
     "HTTP_authorization_notification_passed": 16,
-    "OIDC_passed": 1,
-    "domain_statements_percent": 94.7,
-    "coverage_files_passed": 53,
-    "browser_failed": 0,
-    "conclusion": "PASS",
-    "run": 38527496681,
-    "coverage_passed": 410,
     "native_postgres_passed": 12,
-    "head_sha": "9ebbe815558c86d6865044daae4741ed802d3304",
     "browser_skipped": 3,
-    "domain_branches_percent": 91.13,
-    "coverage_optin_skipped": 28,
+    "coverage_files_passed": 60,
+    "run": 38574338435,
+    "real_expiry_passed": 1,
+    "domain_branches_percent": 91.14,
+    "browser_failed": 0,
+    "head_sha": "d3474048e7731cd0da4d1b92df09204825afb943",
+    "conclusion": "PASS",
     "browser_passed": 24,
-    "rate_limit_passed": 6
+    "domain_statements_percent": 94.63,
+    "actual_SDK_tools": 130,
+    "OIDC_passed": 1,
+    "coverage_passed": 462,
+    "coverage_optin_skipped": 28
   },
   "latest_observed_CI": {
-    "actual_SDK_tools": 130,
+    "rate_limit_passed": 6,
     "coverage_files_skipped": 9,
-    "real_expiry_passed": 1,
     "HTTP_authorization_notification_passed": 16,
-    "OIDC_passed": 1,
-    "domain_statements_percent": 94.7,
-    "coverage_files_passed": 53,
-    "browser_failed": 0,
-    "conclusion": "PASS",
-    "run": 38527496681,
-    "coverage_passed": 410,
     "native_postgres_passed": 12,
-    "head_sha": "9ebbe815558c86d6865044daae4741ed802d3304",
     "browser_skipped": 3,
-    "domain_branches_percent": 91.13,
-    "coverage_optin_skipped": 28,
+    "coverage_files_passed": 60,
+    "run": 38574338435,
+    "real_expiry_passed": 1,
+    "domain_branches_percent": 91.14,
+    "browser_failed": 0,
+    "head_sha": "d3474048e7731cd0da4d1b92df09204825afb943",
+    "conclusion": "PASS",
     "browser_passed": 24,
-    "rate_limit_passed": 6
+    "domain_statements_percent": 94.63,
+    "actual_SDK_tools": 130,
+    "OIDC_passed": 1,
+    "coverage_passed": 462,
+    "coverage_optin_skipped": 28
   },
   "advanced_stage_rehearsal": {
     "owner_UI_minutes": 1.3,
@@ -216,16 +235,17 @@
     "independent_diagnosis": "CLEAR"
   },
   "current_deployment": {
-    "native_and_owner_API_original_files": 3,
-    "origin": "https://ramin-life-os.vercel.app",
-    "native_and_owner_API_original_tasks": 45,
+    "id": "dpl_62DeST6AJ3S3We7KMywfXpe6YMka",
     "branch": "master",
-    "commit": "9ebbe815558c86d6865044daae4741ed802d3304",
-    "target": "production",
     "app_MCP_catalog": 130,
-    "state": "READY",
-    "id": "dpl_3kaY1N3FrWU5FY8Cr169HtotNjbC",
-    "observed_readback_at": "2026-10-14T07:26:48.878Z"
+    "commit": "d3474048e7731cd0da4d1b92df09204825afb943",
+    "live_Neon_storage": "NOT_RUN_pending_owner_account_login",
+    "actual_owner_UI_proof_commit": "7a4b8ed7b8fddc8a3eb6a686e0d1506aa829632c",
+    "application_source_equivalence": "PASS_test_only_followup_has_zero_runtime_file_changes",
+    "origin": "https://ramin-life-os.vercel.app",
+    "original_file_reference_readback": 3,
+    "target": "production",
+    "state": "READY"
   },
   "production_graph_proof": {
     "snapshots": 21,
@@ -408,7 +428,7 @@
     },
     "storage_live": "NOT_RUN_AWAITING_OWNER_NEON_LOGIN",
     "ChatGPT_installation": "NOT_REQUIRED_CURRENT_SCOPE",
-    "application_release": "FROZEN_BATCH_READY_FOR_REQUIRED_CI",
+    "application_release": "CORE_DEPLOYMENT_OWNER_UI_AND_FULL_CI_PASS_NEON_ACTIVATION_PENDING",
     "new_file_provider": "neon_object_storage",
     "owner_password_rotation": {
       "old_sessions_revoked": true,
@@ -422,7 +442,7 @@
     "targeted_verification": {
       "format": "PASS_Windows_end_of_line_auto",
       "backup_failure_provenance": 2,
-      "public_safety": "PASS_310_files",
+      "public_safety": "PASS_310_files_120_actual_private_identifiers_zero_findings",
       "domain_provider_health_subset": 25,
       "AI_disabled_HTTP": 4,
       "file_UI_and_preview": 15,
@@ -448,6 +468,69 @@
       "immutable_put_verified": false,
       "credentials_provisioned": false,
       "provider": "neon_object_storage"
+    },
+    "application_source_commit": "7a4b8ed7b8fddc8a3eb6a686e0d1506aa829632c",
+    "test_only_followup_commit": "d3474048e7731cd0da4d1b92df09204825afb943",
+    "required_CI": {
+      "rate_limit_passed": 6,
+      "coverage_files_skipped": 9,
+      "HTTP_authorization_notification_passed": 16,
+      "native_postgres_passed": 12,
+      "browser_skipped": 3,
+      "coverage_files_passed": 60,
+      "run": 38574338435,
+      "real_expiry_passed": 1,
+      "domain_branches_percent": 91.14,
+      "browser_failed": 0,
+      "head_sha": "d3474048e7731cd0da4d1b92df09204825afb943",
+      "conclusion": "PASS",
+      "browser_passed": 24,
+      "domain_statements_percent": 94.63,
+      "actual_SDK_tools": 130,
+      "OIDC_passed": 1,
+      "coverage_passed": 462,
+      "coverage_optin_skipped": 28
+    },
+    "superseded_CI": {
+      "run": 38573197546,
+      "reason": "Old real HTTP test expected provider-disconnected error instead of explicit feature-deferred error; test-only expectation corrected before final verification",
+      "head_sha": "7a4b8ed7b8fddc8a3eb6a686e0d1506aa829632c",
+      "earlier_static_unit_postgres_and_build_steps": "PASS_observed_before_cancel",
+      "status": "CANCELLED"
+    },
+    "actual_owner_UI_and_HTTP": {
+      "business_writes": 0,
+      "owner_UI_signin": "PASS",
+      "real_screenshots_or_traces": "NONE",
+      "AI_UI_and_HTTP": "PASS",
+      "initial_operator_failure": "Retained privately; API probe corrected to send same-origin Origin header",
+      "original_Drive_references": 3,
+      "anonymous_original_download_denials": 3,
+      "existing_owner_preserved": true,
+      "observed_at": "2026-10-14T13:40:04.966Z",
+      "password_form_minimum": 8,
+      "status": "PASS"
+    },
+    "last_account_probe": {
+      "Neon_S3_credentials_present": false,
+      "Neon_authenticated_profile": "ABSENT",
+      "owner_action": "neon login_existing_account"
+    },
+    "requested_password_public_scan": {
+      "occurrences": 0,
+      "public_files_checked": 310
     }
+  },
+  "historical_source_verified_deployment": {
+    "native_and_owner_API_original_files": 3,
+    "origin": "https://ramin-life-os.vercel.app",
+    "native_and_owner_API_original_tasks": 45,
+    "branch": "master",
+    "commit": "9ebbe815558c86d6865044daae4741ed802d3304",
+    "target": "production",
+    "app_MCP_catalog": 130,
+    "state": "READY",
+    "id": "dpl_3kaY1N3FrWU5FY8Cr169HtotNjbC",
+    "observed_readback_at": "2026-10-14T07:26:48.878Z"
   }
 }

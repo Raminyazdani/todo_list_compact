@@ -22,7 +22,9 @@ endpoint واقعی `https://ramin-life-os.vercel.app/api/mcp` با ۱۳۰ اب�
 
 # E. گزارش تست/امنیت/طراحی
 
-آخرین CI کامل ثبت‌شده روی commit `9ebbe815558c86d6865044daae4741ed802d3304`، [run 38527496681](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38527496681)، موفق است: ۴۱۰ تست coverage، ۱۲ تست PostgreSQL واقعی، ۲۴ تست مرورگر، ۱۶ تست HTTP دسترسی/notification، یک OIDC، شش rate-limit و یک آزمون انقضای واقعی توکن. ۲۸ تست opt-in و سه سناریوی مرورگر در CI عادی به‌صراحت skip شدند؛ دموی تولید و DG36 جداگانه اجرا شدند.
+با تغییر محدودهٔ مالک، آخرین نسخهٔ کامل آزموده‌شده d347404 و [CI 38574338435](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38574338435) موفق است: ۴۶۲ coverage، ۱۲ PostgreSQL، ۲۴ مرورگر، SDK با ۱۳۰ ابزار، ۱۶ HTTP، یک OIDC، شش rate-limit و یک انقضای واقعی. ۲۸ opt-in و سه سناریوی مرورگر skip صریح‌اند. deployment تولید READY است. ورود واقعی با رمز انتخابی، AI غیرفعال، تنظیمات Codex و سه دانلود بی‌مجوز401 روی نسخهٔ منتشرشده تأیید شدند. تغییر تستی نهایی هیچ فایل runtime را عوض نکرد؛ برابری کد با نسخهٔ بررسی‌شدهٔ UI تأیید شد. متن و شواهد بعدی این بخش، تاریخچهٔ پیش از تغییر محدوده‌اند.
+
+CI تاریخی ثبت‌شده روی commit `9ebbe815558c86d6865044daae4741ed802d3304`، [run 38527496681](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38527496681)، موفق است: ۴۱۰ تست coverage، ۱۲ تست PostgreSQL واقعی، ۲۴ تست مرورگر، ۱۶ تست HTTP دسترسی/notification، یک OIDC، شش rate-limit و یک آزمون انقضای واقعی توکن. ۲۸ تست opt-in و سه سناریوی مرورگر در CI عادی به‌صراحت skip شدند؛ دموی تولید و DG36 جداگانه اجرا شدند.
 
 در DG36، اجرای اولیهٔ ابزار با خطای child process پایان یافت؛ همان deployment پذیرفته‌شده و READY بدون redeploy دوباره بازیابی و با ورود تازه، UI و دادهٔ دقیق چهار fixture تأیید شد. نتیجهٔ اولیه در شواهد خصوصی حفظ شده است. تمام اصل‌ها و ۲۱ task گراف نیز پس از deployment مستقل بررسی شدند.
 
