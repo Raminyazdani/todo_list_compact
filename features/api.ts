@@ -187,6 +187,7 @@ export function useQuery<T>(
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [version, setVersion] = useState(0);
+  const [resolvedVersion, setResolvedVersion] = useState(-1);
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
   useEffect(() => {
     if (!enabled) return;
@@ -197,6 +198,7 @@ export function useQuery<T>(
           setData(value);
           setError(null);
           setResolvedKey(requestKey);
+          setResolvedVersion(version);
         }
       })
       .catch((cause: unknown) => {
@@ -205,6 +207,7 @@ export function useQuery<T>(
             cause instanceof Error ? cause.message : "Connection failed",
           );
           setResolvedKey(requestKey);
+          setResolvedVersion(version);
         }
       })
       .finally(() => {
@@ -227,6 +230,9 @@ export function useQuery<T>(
   return {
     data: resolvedKey === requestKey ? data : null,
     loading: enabled && (loading || resolvedKey !== requestKey),
+    fetching:
+      enabled &&
+      (loading || resolvedKey !== requestKey || resolvedVersion !== version),
     error: resolvedKey === requestKey ? error : null,
     refresh,
   };

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { zonedLocalToInstant } from "@/shared/datetime";
+import { instantToLocalDateTime, zonedLocalToInstant } from "@/shared/datetime";
 import {
   ArrowDown,
   ArrowUp,
@@ -42,6 +42,7 @@ import { WORKFLOW_STATUSES } from "@/shared/contracts";
 import { query, useQuery } from "./api";
 import { useLabels, useLocale } from "./locale";
 import { PlanningPanel } from "./planning";
+import { TaskSchedule } from "./task-schedule";
 import {
   AddButton,
   Button,
@@ -126,7 +127,11 @@ export function TaskRow({
           <Circle size={19} />
         )}
       </button>
-      <button className="task-title" onClick={() => onOpen(task.task_id)}>
+      <button
+        className="task-title"
+        data-task-id={task.task_id}
+        onClick={() => onOpen(task.task_id)}
+      >
         <span>{task.title}</span>
         {task.next_action && <small>{task.next_action}</small>}
       </button>
@@ -287,17 +292,40 @@ export function TaskExplorer({
   const params = useSearchParams();
   const [search, setSearch] = useState(params.get("search") ?? "");
   const [filter, setFilter] = useState(params.get("filter") ?? "all");
+  const [projectId, setProjectId] = useState(params.get("project_id") ?? "");
+  const [priorityFilter, setPriorityFilter] = useState(
+    params.get("priority") ?? "",
+  );
+  const [projectCursor, setProjectCursor] = useState<string | null>(null);
+  const projects = useQuery<PageDTO<ProjectDTO>>("project_list", {
+    limit: 100,
+    cursor: projectCursor,
+    include_archived: true,
+  });
+  const selectedProject = useQuery<ProjectDTO>(
+    "project_get",
+    { project_id: projectId },
+    !!projectId,
+  );
   const [cursor, setCursor] = useState<string | null>(null);
   const [graphCursor, setGraphCursor] = useState<string | null>(null);
   const [graphRoot, setGraphRoot] = useState("");
   const [graphDirection, setGraphDirection] = useState("both");
-  const [view, setView] = useState("list");
+  const [view, setView] = useState(
+    ["list", "board", "tree", "graph", "timeline"].includes(
+      params.get("view") ?? "",
+    )
+      ? params.get("view")!
+      : "list",
+  );
   const [create, setCreate] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const input = {
     limit: 100,
     ...(cursor ? { cursor } : {}),
     ...(search ? { search } : {}),
+    ...(projectId ? { project_id: projectId } : {}),
+    ...(priorityFilter ? { priority: priorityFilter } : {}),
     ...(filter === "archived"
       ? { include_archived: true, archived_only: true }
       : {}),
@@ -317,6 +345,8 @@ export function TaskExplorer({
       limit: 200,
       ...(graphCursor ? { cursor: graphCursor } : {}),
       ...(search ? { search } : {}),
+      ...(projectId ? { project_id: projectId } : {}),
+      ...(priorityFilter ? { priority: priorityFilter } : {}),
       ...(filter === "overdue" ? { overdue: true } : {}),
       ...(filter === "archived"
         ? { include_archived: true, archived_only: true }
@@ -439,6 +469,16 @@ export function TaskExplorer({
               setSearch(
                 typeof filters.search === "string" ? filters.search : "",
               );
+              setProjectId(
+                typeof filters.project_id === "string"
+                  ? filters.project_id
+                  : "",
+              );
+              setPriorityFilter(
+                typeof filters.priority === "string" ? filters.priority : "",
+              );
+              setGraphRoot("");
+              setSelected([]);
               setFilter(
                 filters.archived_only === true
                   ? "archived"
@@ -469,6 +509,61 @@ export function TaskExplorer({
             </option>
           ))}
         </select>
+        <select
+          aria-label={t("فیلتر پروژه", "Project filter")}
+          value={projectId}
+          onChange={(event) => {
+            setProjectId(event.target.value);
+            setCursor(null);
+            setGraphCursor(null);
+            setGraphRoot("");
+            setSelected([]);
+          }}
+        >
+          <option value="">{t("همهٔ پروژه‌ها", "All projects")}</option>
+          {projectId &&
+            !projects.data?.items.some(
+              (project) => project.project_id === projectId,
+            ) && (
+              <option value={projectId}>
+                {selectedProject.data?.title ??
+                  t("پروژهٔ انتخاب‌شده", "Selected project")}
+              </option>
+            )}
+          {projects.data?.items.map((project) => (
+            <option key={project.project_id} value={project.project_id}>
+              {project.title}
+              {project.archived_at ? t(" (بایگانی)", " (archived)") : ""}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={t("فیلتر اولویت", "Priority filter")}
+          value={priorityFilter}
+          onChange={(event) => {
+            setPriorityFilter(event.target.value);
+            setCursor(null);
+            setGraphCursor(null);
+            setSelected([]);
+          }}
+        >
+          <option value="">{t("همهٔ اولویت‌ها", "All priorities")}</option>
+          {["Low", "Normal", "High", "Urgent"].map((value) => (
+            <option key={value} value={value}>
+              {labels.priority[value as keyof typeof labels.priority]}
+            </option>
+          ))}
+        </select>
+        {projectCursor && (
+          <Button onClick={() => setProjectCursor(null)}>
+            {t("ابتدای پروژه‌ها", "First projects")}
+          </Button>
+        )}
+        {projects.data?.next_cursor && (
+          <Button onClick={() => setProjectCursor(projects.data!.next_cursor)}>
+            {t("پروژه‌های بیشتر", "More projects")}
+          </Button>
+        )}
         <label className="search-box">
           <Search size={16} />
           <input
@@ -488,6 +583,16 @@ export function TaskExplorer({
           {t("ذخیرهٔ نما", "Save view")}
         </Button>
       </div>
+      {projectId && (
+        <p className="small muted">
+          {t("کارهای پروژه:", "Project tasks:")}{" "}
+          {selectedProject.data?.title ?? "…"} ·{" "}
+          {t(
+            "ترتیب نمایش از عدد کمتر به بیشتر است؛ آن را در جزئیات هر کار تغییر بده.",
+            "Tasks use ascending display order; change an individual task's order in its details.",
+          )}
+        </p>
+      )}
       {(view === "graph" || view === "timeline") && (
         <div className="filter-bar graph-scope">
           <Field label={t("کار محوری گراف", "Graph focus task")}>
@@ -703,7 +808,12 @@ export function TaskExplorer({
           </>
         )}
       </div>
-      <CreateTask open={create} setOpen={setCreate} action={action} />
+      <CreateTask
+        open={create}
+        setOpen={setCreate}
+        action={action}
+        projectId={projectId || undefined}
+      />
       <Modal
         title={t("تأیید تغییر گروهی", "Confirm batch change")}
         open={!!bulkPreview}
@@ -745,6 +855,7 @@ function TaskTree({
   onOpen: (id: string) => void;
   action: Action;
 }) {
+  const { t } = useLocale();
   const [collapsed, setCollapsed] = useState<string[]>([]);
   function branch(parentId: string | null, depth: number): React.ReactNode {
     return tasks
@@ -779,10 +890,36 @@ function TaskTree({
           {!collapsed.includes(task.task_id) &&
             depth < 12 &&
             branch(task.task_id, depth + 1)}
+          {!collapsed.includes(task.task_id) &&
+            depth >= 12 &&
+            tasks.some((child) => child.parent_task_id === task.task_id) && (
+              <Button onClick={() => onOpen(task.task_id)}>
+                {t(
+                  "سطوح عمیق‌تر را از بخش زیرکارهای این کار باز کن",
+                  "Open deeper levels from this task's subtasks",
+                )}
+              </Button>
+            )}
         </div>
       ));
   }
-  return <div className="task-list">{branch(null, 0)}</div>;
+  return (
+    <div className="task-list">
+      {tasks.some(
+        (task) =>
+          task.parent_task_id &&
+          !tasks.some((parent) => parent.task_id === task.parent_task_id),
+      ) && (
+        <p className="warning">
+          {t(
+            "بعضی والدها خارج از این صفحه یا فیلترند؛ این شاخه‌ها مستقل نمایش داده می‌شوند. والد اصلی در جزئیات کار در دسترس است.",
+            "Some parents are outside this page or filter. Their branches appear independently; the actual parent remains available in task details.",
+          )}
+        </p>
+      )}
+      {branch(null, 0)}
+    </div>
+  );
 }
 
 function TaskTimeline({
@@ -877,6 +1014,12 @@ export function TaskDetail({
     !!taskId,
   );
   const [tab, setTab] = useState("overview");
+  const [projectCursor, setProjectCursor] = useState<string | null>(null);
+  const projects = useQuery<PageDTO<ProjectDTO>>(
+    "project_list",
+    { limit: 100, cursor: projectCursor, include_archived: true },
+    !!taskId,
+  );
   const [child, setChild] = useState(false);
   const [preview, setPreview] = useState<PreviewDTO | null>(null);
   const [waiver, setWaiver] = useState<string | null>(null);
@@ -884,6 +1027,20 @@ export function TaskDetail({
     [],
   );
   const task = data.data;
+  const [draftProject, setDraftProject] = useState<{
+    taskId: string;
+    projectId: string;
+    title: string;
+  } | null>(null);
+  const selectedProjectId =
+    draftProject && draftProject.taskId === task?.task_id
+      ? draftProject.projectId
+      : (task?.project_id ?? "");
+  const currentProject = useQuery<ProjectDTO>(
+    "project_get",
+    { project_id: task?.project_id ?? "" },
+    !!task?.project_id,
+  );
   async function getPreview(
     operation:
       | "task_dependency_add_preview"
@@ -906,24 +1063,56 @@ export function TaskDetail({
     event.preventDefault();
     if (!task) return;
     const form = new FormData(event.currentTarget);
-    await action(
-      "task_update",
-      {
-        task_id: task.task_id,
-        title: form.get("title"),
-        notes: form.get("notes"),
-        next_action: form.get("next_action"),
-        waiting_for: form.get("waiting_for"),
-        priority: form.get("priority"),
-        category: form.get("category"),
-        start_date: form.get("start_date") || null,
-        due_date: form.get("due_date") || null,
-        estimated_minutes: form.get("estimated_minutes")
-          ? Number(form.get("estimated_minutes"))
-          : null,
-      },
-      task.revision,
-    );
+    try {
+      const initialDue = task.due_at
+        ? instantToLocalDateTime(task.due_at, task.timezone)
+        : "";
+      const enteredDue = String(form.get("due_at_local") ?? "");
+      const timezone = String(form.get("timezone") ?? task.timezone);
+      const dueAt =
+        enteredDue === initialDue ||
+        (initialDue.endsWith(":00") && enteredDue === initialDue.slice(0, -3))
+          ? task.due_at
+          : enteredDue
+            ? zonedLocalToInstant(
+                enteredDue,
+                timezone,
+                String(form.get("disambiguation")) as
+                  "reject" | "earlier" | "later",
+              )
+            : null;
+      await action(
+        "task_update",
+        {
+          task_id: task.task_id,
+          title: form.get("title"),
+          notes: form.get("notes"),
+          next_action: form.get("next_action"),
+          waiting_for: form.get("waiting_for"),
+          project_id: form.get("project_id") || null,
+          source_reference: form.get("source_reference"),
+          ...(dueAt !== task.due_at ? { due_at: dueAt } : {}),
+          ...(timezone !== task.timezone ? { timezone } : {}),
+          priority: form.get("priority"),
+          category: form.get("category"),
+          start_date: form.get("start_date") || null,
+          due_date: form.get("due_date") || null,
+          estimated_minutes: form.get("estimated_minutes")
+            ? Number(form.get("estimated_minutes"))
+            : null,
+          ...(Number(form.get("display_order")) !== task.sort_key
+            ? { sort_key: Number(form.get("display_order")) }
+            : {}),
+        },
+        task.revision,
+      );
+    } catch (error) {
+      window.dispatchEvent(
+        new CustomEvent("lifeos:error", {
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
   }
   return (
     <Modal
@@ -946,6 +1135,11 @@ export function TaskDetail({
               {t("نسخه", "Revision")} {task.revision}
             </span>
             <div className="spacer" />
+            {task.parent_task_id && (
+              <Button onClick={() => onOpen(task.parent_task_id!)}>
+                {t("بازکردن کار والد", "Open parent task")}
+              </Button>
+            )}
             <Button
               variant="quiet"
               title={t(
@@ -1036,6 +1230,7 @@ export function TaskDetail({
               ["subtasks", t("زیرکارها", "Subtasks")],
               ["dependencies", t("پیش‌نیازها", "Prerequisites")],
               ["unblocks", t("آزاد می‌کند", "Unblocks")],
+              ["schedule", t("تقویم و زمان واقعی", "Calendar & actual time")],
               ["files", t("فایل‌ها", "Files")],
               ["discussion", t("یادداشت و برچسب", "Discussion & tags")],
               ["history", t("تاریخچه", "History")],
@@ -1057,6 +1252,26 @@ export function TaskDetail({
             >
               <Field label={t("عنوان", "Title")}>
                 <input name="title" required defaultValue={task.title} />
+              </Field>
+              <Field
+                label={t(
+                  "ترتیب نمایش (عدد کمتر جلوتر)",
+                  "Display order (lower numbers first)",
+                )}
+              >
+                <input
+                  name="display_order"
+                  type="number"
+                  step="any"
+                  required
+                  defaultValue={task.sort_key}
+                />
+                <small className="muted">
+                  {t(
+                    "فقط جای همین کار در فهرست تغییر می‌کند؛ ترتیب کارهای دیگر و رابطه‌های آن تغییر نمی‌کند.",
+                    "Only this task's list position changes; other tasks and relationships keep their order.",
+                  )}
+                </small>
               </Field>
               <div className="form-columns">
                 <Field label={t("اولویت", "Priority")}>
@@ -1108,6 +1323,128 @@ export function TaskDetail({
               <Field label={t("قدم بعدی", "Next action")}>
                 <input name="next_action" defaultValue={task.next_action} />
               </Field>
+              <Field label={t("پروژهٔ کار", "Task project")}>
+                <select
+                  name="project_id"
+                  value={selectedProjectId}
+                  onChange={(event) =>
+                    setDraftProject({
+                      taskId: task.task_id,
+                      projectId: event.target.value,
+                      title: event.target.selectedOptions[0]?.textContent ?? "",
+                    })
+                  }
+                >
+                  <option value="">{t("بدون پروژه", "No project")}</option>
+                  {selectedProjectId &&
+                    !projects.data?.items.some(
+                      (project) => project.project_id === selectedProjectId,
+                    ) && (
+                      <option value={selectedProjectId}>
+                        {(draftProject?.taskId === task.task_id
+                          ? draftProject.title
+                          : currentProject.data?.title) ??
+                          t("پروژهٔ فعلی", "Current project")}
+                      </option>
+                    )}
+                  {projects.data?.items.map((project) => (
+                    <option key={project.project_id} value={project.project_id}>
+                      {project.title}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="form-actions">
+                {projectCursor && (
+                  <Button type="button" onClick={() => setProjectCursor(null)}>
+                    {t("ابتدای پروژه‌ها", "First projects")}
+                  </Button>
+                )}
+                {projects.data?.next_cursor && (
+                  <Button
+                    type="button"
+                    onClick={() => setProjectCursor(projects.data!.next_cursor)}
+                  >
+                    {t("پروژه‌های بیشتر", "More projects")}
+                  </Button>
+                )}
+              </div>
+              <div className="form-columns">
+                <Field
+                  label={t(
+                    "زمان دقیق مهلت (اختیاری)",
+                    "Exact deadline time (optional)",
+                  )}
+                >
+                  <input
+                    type="datetime-local"
+                    name="due_at_local"
+                    step="1"
+                    defaultValue={
+                      task.due_at
+                        ? instantToLocalDateTime(task.due_at, task.timezone)
+                        : ""
+                    }
+                  />
+                </Field>
+                <Field label={t("منطقهٔ زمانی کار", "Task timezone")}>
+                  <input
+                    name="timezone"
+                    required
+                    defaultValue={task.timezone}
+                    list="task-timezones"
+                  />
+                  <datalist id="task-timezones">
+                    <option value="Europe/Berlin" />
+                    <option value="Asia/Tehran" />
+                    <option value="UTC" />
+                  </datalist>
+                </Field>
+              </div>
+              <Field label={t("ساعت تکراری پاییز", "Autumn repeated time")}>
+                <select name="disambiguation" defaultValue="reject">
+                  <option value="reject">
+                    {t(
+                      "برای ساعت مبهم انتخاب لازم است",
+                      "Require a choice for ambiguous time",
+                    )}
+                  </option>
+                  <option value="earlier">
+                    {t("بار اول", "First occurrence")}
+                  </option>
+                  <option value="later">
+                    {t("بار دوم", "Second occurrence")}
+                  </option>
+                </select>
+              </Field>
+              <p className="muted small">
+                {t(
+                  "تاریخ مهلت مستقل است. تغییر فقط منطقهٔ زمانی، لحظهٔ فعلی مهلت را حفظ می‌کند؛ برای تغییر لحظه، زمان دقیق را هم ویرایش کن.",
+                  "The deadline date is independent. Changing only timezone preserves the deadline instant; edit its time to change the instant.",
+                )}
+              </p>
+              <Field
+                label={t(
+                  "مرجع اصلی (پیوند یا شناسه)",
+                  "Original reference (link or ID)",
+                )}
+              >
+                <input
+                  name="source_reference"
+                  defaultValue={task.source_reference}
+                  dir="auto"
+                />
+              </Field>
+              {/^[Hh][Tt][Tt][Pp][Ss]?:\/\//.test(task.source_reference) && (
+                <a
+                  className="text-link"
+                  href={task.source_reference}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t("بازکردن مرجع اصلی", "Open original reference")}
+                </a>
+              )}
               <Field label={t("منتظر چه کسی / چیزی؟", "Waiting for")}>
                 <input name="waiting_for" defaultValue={task.waiting_for} />
               </Field>
@@ -1168,6 +1505,7 @@ export function TaskDetail({
             </form>
           )}
           {tab === "checklists" && <Checklists task={task} action={action} />}
+          {tab === "schedule" && <TaskSchedule task={task} action={action} />}
           {tab === "subtasks" && (
             <>
               <div className="section-heading">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Folder } from "lucide-react";
 import type {
@@ -230,6 +231,26 @@ export function ProjectWorkspace({
               <p className="muted">{current.notes}</p>
             )}
             <SectionHeading title={t("کارهای پروژه", "Project tasks")} />
+            <nav
+              className="form-actions"
+              aria-label={t("نماهای کارهای پروژه", "Project task views")}
+            >
+              {[
+                ["list", t("فهرست پروژه", "Project backlog")],
+                ["tree", t("درخت پروژه", "Project tree")],
+                ["board", t("برد پروژه", "Project board")],
+                ["timeline", t("زمان‌بندی پروژه", "Project timeline")],
+                ["graph", t("گراف پروژه", "Project graph")],
+              ].map(([view, label]) => (
+                <Link
+                  className="button"
+                  key={view}
+                  href={`/tasks?project_id=${encodeURIComponent(current.project_id)}&view=${view}`}
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
             <QueryState {...tasks} retry={tasks.refresh} />
             {tasks.data?.items.map((task) => (
               <TaskRow

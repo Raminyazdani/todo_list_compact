@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-13T23:04:07.802Z",
+  "updated_at": "2026-10-14T03:08:34.446Z",
   "branch": "feat/life-os",
-  "commit": "b423652c5f908531bcde45eabc6243b42013b30e",
-  "phase": "final_frozen_ui_browser_and_ci_verification",
+  "commit": "b19190f4ee78f29ad5cdab18434a4f3793849d19",
+  "phase": "frozen_build14_complete_commit_and_CI",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -29,12 +29,15 @@
     "four_synthetic_desktop_axe_checks",
     "real_oidc_id_token_userinfo_and_immediate_revocation",
     "auth_postgres_bigint_rate_window_regression_fixed_and_verified",
-    "frozen_seventh_application_build"
+    "frozen_seventh_application_build",
+    "original_three_file_bytes_independent_encrypted_recovery",
+    "canonical_source_field_reconciliation_repair",
+    "postgres_domain_only_calendar_date_decoder_three_timezones",
+    "mcp_notification_alternative_scope_metadata_wire_test"
   ],
   "active": [
-    "full_eighteen_scenario_browser_verification",
-    "private_source_cutover_operator_admission_repair",
-    "github_ci_and_production_release"
+    "complete_stage_commit_and_exactSHA_CI",
+    "guarded_production_release_migration_restore_redeploy"
   ],
   "tests": [
     {
@@ -47,13 +50,27 @@
       "browser_redeploy_skipped": 1,
       "actual_postgres_passed": 3,
       "actual_local_mcp_tools": 122,
-      "initial_production_mcp_tools": 113
+      "initial_production_mcp_tools": 113,
+      "latest_completed_full_browser_run": {
+        "build": 8,
+        "tests_passed": 13,
+        "tests_failed": 4,
+        "tests_skipped": 1,
+        "limitation": "Affected reruns passed reminder cancellation and native DST drag; build9 Plan DATE test passed. New full scope has not yet received a coherent browser run."
+      },
+      "original_byte_recovery": {
+        "files": 3,
+        "bytes": 6698095,
+        "local_encryption_and_independent_decrypt": "PASS",
+        "fresh_source_recheck": "NOT_RUN",
+        "live_cloud_backup": "EXTERNALLY_BLOCKED"
+      }
     }
   ],
   "task_graph_status": {
     "domain": "implemented_and_verified_locally",
     "migration": "actual_source_rehearsal_verified",
-    "ui": "core_nine_browser_scenarios_passed_final_eighteen_scenario_run_in_progress",
+    "ui": "core_browser_subsets_passed_extended_scope_not_yet_verified",
     "release": "pending"
   },
   "migration": {
@@ -72,7 +89,7 @@
   "open_severity": {
     "production_gates": "NOT_RUN",
     "known_p0_code_defects": "none_observed_in_verified_snapshot",
-    "known_p1_checks": "Observed Linux calendar-button contrast and all-day DST move defects fixed; full frozen-browser verification pending. Private cutover report admission repair in progress.",
+    "known_p1_checks": "Read contention fixed and19 actual HTTP responses200;6 affected browser cases pass. No concrete remaining reviewed-codeP1; exact full CI and actual production gates still pending.",
     "external_provider_gates": "EXTERNALLY_BLOCKED"
   },
   "blockers": [
@@ -94,18 +111,51 @@
   ],
   "available_agents": [
     "root",
-    "requirements",
-    "source_audit",
-    "domain_engine",
-    "release_review"
+    "completed_scoped_migration_and_read_concurrency_reviews"
   ],
   "next_actions": [
-    "final_freeze_build_browser_and_http_authority_checks",
-    "push_feature_pr_and_verified_ci",
-    "deploy_exact_repo_to_new_vercel_project",
-    "fresh_source_checkpoint_import_and_reconcile",
-    "production_mcp_redeploy_and_hosted_restore_drill",
-    "concrete_owner_provider_and_chatgpt_grant_steps"
+    "repair_shared_read_contention_with_native_lock_tests_and_targeted_browser_rechecks",
+    "finish_frozen_browser_run_and_fix_only_affected_case",
+    "commit_all_related_paths_then_green_exact_commit_ci",
+    "guarded_production_additive_schema_and_master_release",
+    "fresh_source_checkpoint_import_and_canonical_API_verification",
+    "real_production_graph_UI_backup_restore_and_DG36_redeploy",
+    "fixture_cleanup_final_persian_report_and_owner_ChatGPT_confirmation"
   ],
-  "release_complete": false
+  "release_complete": false,
+  "execution_prompt": "docs/CONTINUE_PROMPT_FA.md",
+  "goal_status": "active",
+  "goal_token_budget": null,
+  "latest_verified": {
+    "build": 14,
+    "unit_integration_passed": 366,
+    "opt_in_skipped": 28,
+    "test_files_passed": 47,
+    "test_files_skipped": 9,
+    "coverage_seconds": 101.64,
+    "domain_statements_percent": 94.36,
+    "domain_branches_percent": 90.5,
+    "all_statements_percent": 91.4,
+    "all_branches_percent": 87.89,
+    "native_postgres_and_date_passed": 8,
+    "native_seconds": 78.8,
+    "ai_mock_provider_postgres_tests": 52,
+    "connection_and_verifier_admission_passed": 25,
+    "source_identifiers_scanned": 120,
+    "public_files_scanned": 283,
+    "production_imported": false,
+    "browser26_status": "FAIL",
+    "latest_browser_failure": "calendar_reminder_read_before_mutation_ack",
+    "browser_passed": 18,
+    "browser_failed": 7,
+    "browser_skipped": 1,
+    "browser_duration_minutes": 23.3,
+    "native_read_concurrency_passed": 4,
+    "native_read_concurrency_seconds": 33.18,
+    "affected_browser_passed": 6,
+    "affected_browser_minutes": 4.4,
+    "runtime_concurrent_reads": 19,
+    "runtime_concurrent_read_http200": 19,
+    "runtime_concurrent_read_max_ms": 5027
+  }
 }

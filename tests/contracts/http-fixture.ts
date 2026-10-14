@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { admitPrivatePath } from "../../scripts/ops/private-paths.mjs";
 import { fileURLToPath } from "node:url";
+import { boundedSignIn } from "../../scripts/ops/bounded-signin.mjs";
 export const httpEnabled = !!process.env.TEST_CREDENTIALS_PATH;
 export const origin = process.env.HTTP_TEST_ORIGIN || "http://localhost:3000";
 function check(value: unknown, message: string): asserts value {
@@ -31,15 +32,7 @@ export async function ownerCookie(
   const credentials = JSON.parse(
     await readFile(process.env.TEST_CREDENTIALS_PATH, "utf8"),
   ) as { email: string; password: string };
-  const response = await fetch(origin + "/api/auth/sign-in/email", {
-    method: "POST",
-    redirect: "manual",
-    headers: { "Content-Type": "application/json", Origin: origin },
-    body: JSON.stringify({
-      email: credentials.email,
-      password: credentials.password,
-    }),
-  });
+  const response = await boundedSignIn(origin, credentials);
   check(
     response.ok,
     "Staging owner sign-in failed with status " + response.status,

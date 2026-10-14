@@ -7,6 +7,7 @@ import {
   type JsonValue,
 } from "../../shared/contracts";
 import type { Database } from "../../server/db/database";
+import { hash as domainHash } from "../../server/domain/core";
 
 export const SOURCE_TABLES = [
   "Tasks",
@@ -351,7 +352,132 @@ export async function importPrepared(
   );
 }
 
-/** Reconcile by immutable IDs and retained complete original attrs, never row order. */
+const sourceNullable = (value: unknown) =>
+  value === undefined || value === null || value === "" ? null : value;
+function sourceJson(value: unknown): unknown {
+  if (typeof value === "string" && value) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return { unparsed_legacy_json: value };
+    }
+  }
+  return value ?? null;
+}
+/** Compare instants semantically; exact source spelling remains in legacy_metadata. */
+function sameCanonicalValue(field: string, actual: unknown, expected: unknown) {
+  if (expected === null) return actual === null;
+  if (field.endsWith("_at")) {
+    const left =
+      actual instanceof Date ? actual.getTime() : Date.parse(String(actual));
+    const right = Date.parse(String(expected));
+    return Number.isFinite(left) && left === right;
+  }
+  if (field === "size_bytes")
+    return (
+      /^(0|[1-9]\d*)$/.test(String(actual)) &&
+      /^(0|[1-9]\d*)$/.test(String(expected)) &&
+      BigInt(String(actual)) === BigInt(String(expected))
+    );
+  return canonicalJson(actual) === canonicalJson(expected);
+}
+function mismatchedFields(
+  actual: Record<string, unknown>,
+  expected: Record<string, unknown>,
+) {
+  return Object.entries(expected)
+    .filter(
+      ([field, value]) => !sameCanonicalValue(field, actual[field], value),
+    )
+    .map(([field]) => field);
+}
+function canonicalSourceRow(
+  table: SourceTable,
+  source: SourceRecord,
+  owner: string,
+) {
+  const id = string(source, KEYS[table]);
+  if (table === "Tasks") {
+    const project = sourceNullable(source.project);
+    return {
+      task_id: id,
+      owner_id: owner,
+      project_id: project
+        ? `P-legacy-${domainHash({ owner, project }).slice(0, 24)}`
+        : null,
+      title: source.title,
+      status: source.status,
+      priority: source.priority,
+      category: source.category,
+      notes: source.notes ?? "",
+      next_action: source.next_action ?? "",
+      waiting_for: source.waiting_for ?? "",
+      source_reference: source.source_reference ?? "",
+      due_date: sourceNullable(source.due_date),
+      due_at: sourceNullable(source.due_at),
+      created_at: source.created_at,
+      updated_at: source.updated_at,
+      closed_at: sourceNullable(source.closed_at),
+      completed_at:
+        source.status === "Done" ? sourceNullable(source.closed_at) : null,
+      revision: source.revision,
+      parent_task_id: null,
+      start_date: null,
+    };
+  }
+  if (table === "Files")
+    return {
+      file_id: id,
+      owner_id: owner,
+      title: source.display_name ?? source.original_filename ?? id,
+      original_filename: source.original_filename ?? "",
+      provider: "google_drive",
+      external_id: sourceNullable(source.drive_file_id),
+      external_url: sourceNullable(source.drive_url),
+      storage_key: null,
+      state: source.state,
+      mime_type: source.mime_type ?? "application/octet-stream",
+      size_bytes: sourceNullable(source.size_bytes),
+      sha256: sourceNullable(source.sha256),
+      version_group_id: sourceNullable(source.version_group_id) ?? id,
+      parent_id: sourceNullable(source.parent_folder_id),
+      last_active_parent_id: sourceNullable(source.last_active_parent_id),
+      protected: source.state === "External",
+      archived_at: sourceNullable(source.archived_at),
+      created_at: source.uploaded_at,
+      updated_at: source.updated_at,
+      revision: source.revision,
+    };
+  if (table === "Links")
+    return {
+      link_id: id,
+      owner_id: owner,
+      file_id: source.file_record_id,
+      task_id: source.task_id,
+      purpose: source.relation ?? source.purpose ?? "Reference",
+      active: source.active === true,
+      created_at: source.created_at,
+      ended_at: sourceNullable(source.ended_at),
+      notes: source.notes ?? "",
+      revision: source.revision,
+    };
+  return {
+    event_id: id,
+    owner_id: owner,
+    entity_id:
+      source.entity_id ?? source.task_id ?? source.file_record_id ?? id,
+    event_type: `legacy.${source.action ?? "event"}`,
+    actor_id: source.actor ?? "unknown_legacy_actor",
+    channel: "import",
+    operation_id: source.operation_id ?? `OP-legacy-${id}`,
+    before: sourceJson(source.before_json),
+    after: sourceJson(source.after_json),
+    reason: sourceNullable(source.note),
+    occurred_at: source.occurred_at,
+  };
+}
+
+/** Reconcile immutable identities, real normalized fields and complete retained attrs. */
 export async function reconcileMigration(
   database: Database,
   ownerId: string,
@@ -370,19 +496,47 @@ export async function reconcileMigration(
       destination: number;
       missing: string[];
       changed: string[];
+      canonical_mismatches: Record<string, string[]>;
     }
   > = {};
+  const projects = new Map(
+    (
+      await database.query<Record<string, unknown>>(
+        "SELECT * FROM projects WHERE owner_id=$1",
+        [ownerId],
+      )
+    ).rows.map((row) => [String(row.project_id), row]),
+  );
+  const versions = new Map(
+    (
+      await database.query<Record<string, unknown>>(
+        "SELECT * FROM file_versions WHERE owner_id=$1",
+        [ownerId],
+      )
+    ).rows.map((row) => [String(row.version_id), row]),
+  );
+  const sourceMappings = new Map(
+    (
+      await database.query<Record<string, unknown>>(
+        "SELECT * FROM source_mappings WHERE owner_id=$1",
+        [ownerId],
+      )
+    ).rows.map((row) => [canonicalJson([row.source_kind, row.source_id]), row]),
+  );
   for (const table of ["Tasks", "Files", "Links", "Activity"] as const) {
     const [sqlTable, idField] = mappings[table];
     const rows = (
       await database.query<Record<string, unknown>>(
-        "SELECT * FROM " + sqlTable + " WHERE owner_id=$1",
+        (table === "Tasks"
+          ? "SELECT *,due_date::text AS due_date,start_date::text AS start_date FROM tasks"
+          : "SELECT * FROM " + sqlTable) + " WHERE owner_id=$1",
         [ownerId],
       )
     ).rows;
     const byId = new Map(rows.map((row) => [String(row[idField]), row]));
     const missing: string[] = [],
       changed: string[] = [];
+    const canonicalMismatches: Record<string, string[]> = Object.create(null);
     let destination = 0;
     for (const source of prepared.tables[table]) {
       const id = string(source, KEYS[table]);
@@ -393,18 +547,66 @@ export async function reconcileMigration(
       }
       destination++;
       const retained = row.legacy_metadata;
-      if (recordHash(retained) !== recordHash(source)) changed.push(id);
+      const fields = mismatchedFields(
+        row,
+        canonicalSourceRow(table, source, ownerId),
+      );
+      const mapping = sourceMappings.get(canonicalJson([table, id]));
+      if (
+        !mapping ||
+        mapping.destination_id !== id ||
+        mapping.source_hash !== domainHash(source)
+      )
+        fields.push("source_mapping");
+      if (table === "Tasks" && sourceNullable(source.project)) {
+        const project = sourceNullable(source.project);
+        const projectId = `P-legacy-${domainHash({ owner: ownerId, project }).slice(0, 24)}`;
+        const actual = projects.get(projectId);
+        if (
+          !actual ||
+          actual.title !== String(project) ||
+          recordHash(actual.legacy_metadata) !==
+            recordHash({ source_project: project })
+        )
+          fields.push("project_source");
+      }
+      if (table === "Files") {
+        const versionId = `V-legacy-${domainHash({ owner: ownerId, fileId: id }).slice(0, 24)}`;
+        const original = versions.get(versionId);
+        const versionFields = original
+          ? mismatchedFields(original, {
+              version_id: versionId,
+              owner_id: ownerId,
+              file_id: id,
+              storage_key: null,
+              sha256: sourceNullable(source.sha256),
+              size_bytes: sourceNullable(source.size_bytes),
+              created_at: source.uploaded_at,
+            })
+          : ["missing"];
+        fields.push(
+          ...versionFields.map((field) => "original_version." + field),
+        );
+      }
+      if (fields.length) canonicalMismatches[id] = fields;
+      if (fields.length || recordHash(retained) !== recordHash(source))
+        changed.push(id);
     }
     results[table] = {
       source: prepared.counts[table],
       destination,
       missing,
       changed,
+      canonical_mismatches: canonicalMismatches,
     };
   }
   const batches = (
-    await database.query<{ source_metadata: Record<string, unknown> }>(
-      "SELECT source_metadata FROM migration_batches WHERE owner_id=$1 AND batch_id=$2",
+    await database.query<{
+      source_metadata: Record<string, unknown>;
+      source_hash: string;
+      status: string;
+    }>(
+      "SELECT source_metadata,source_hash,status FROM migration_batches WHERE owner_id=$1 AND batch_id=$2",
       [ownerId, prepared.batchId],
     )
   ).rows;
@@ -427,17 +629,47 @@ export async function reconcileMigration(
     recordHash(
       orderedRows("Settings", metadata.settings ?? metadata.Settings),
     ) === recordHash(orderedRows("Settings", prepared.tables.Settings));
+  const preferences = (
+    await database.query<{ settings: Record<string, unknown> }>(
+      "SELECT settings FROM preferences WHERE owner_id=$1",
+      [ownerId],
+    )
+  ).rows[0]?.settings;
+  const canonicalSettingsPreserved =
+    !!preferences &&
+    recordHash(preferences.legacy_settings) ===
+      recordHash(
+        Object.fromEntries(
+          prepared.tables.Settings.map((row) => [
+            string(row, "key"),
+            row.value ?? null,
+          ]),
+        ),
+      );
+  const canonicalGuidePreserved =
+    !!preferences &&
+    recordHash(orderedRows("Guide", preferences.legacy_guide)) ===
+      recordHash(orderedRows("Guide", prepared.tables.Guide));
+  const batchVerified =
+    batches[0]?.source_hash === prepared.sourceHash &&
+    batches[0]?.status === "Verified import";
   return {
     batch_id: prepared.batchId,
     results,
     guides_preserved: guidesPreserved,
     settings_preserved: settingsPreserved,
+    canonical_settings_preserved: canonicalSettingsPreserved,
+    canonical_guide_preserved: canonicalGuidePreserved,
+    batch_verified: batchVerified,
     source_unchanged: true,
     pass:
       Object.values(results).every(
         (result) => result.missing.length === 0 && result.changed.length === 0,
       ) &&
       guidesPreserved &&
-      settingsPreserved,
+      settingsPreserved &&
+      canonicalSettingsPreserved &&
+      canonicalGuidePreserved &&
+      batchVerified,
   };
 }

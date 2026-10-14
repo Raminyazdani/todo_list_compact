@@ -1,6 +1,18 @@
 import { z } from "zod";
 import { COMMAND_NAMES, DomainError } from "@/shared/contracts";
+import { READ_SCHEMAS } from "@/server/mcp/catalog";
 
+export const AI_READ_NAMES = [
+  "task_search",
+  "task_get",
+  "task_graph_get",
+  "task_dependencies_get",
+  "task_find_ready",
+  "task_find_blocked",
+  "task_completion_impact_preview",
+  "task_template_list",
+] as const;
+const alias = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/);
 export const modelPlanSchema = z
   .object({
     answer: z.string().max(12000),
@@ -11,10 +23,22 @@ export const modelPlanSchema = z
             command: z.enum(COMMAND_NAMES),
             input: z.record(z.string(), z.unknown()),
             expected_revision: z.number().int().positive().optional(),
+            local_ref: alias.optional(),
           })
           .strict(),
       )
       .max(20),
+    reads: z
+      .array(
+        z
+          .object({
+            query: z.enum(AI_READ_NAMES),
+            input: z.record(z.string(), z.unknown()),
+          })
+          .strict(),
+      )
+      .max(4)
+      .default([]),
     warnings: z.array(z.string().max(2000)).max(30).default([]),
   })
   .strict();
@@ -30,6 +54,7 @@ const allowed = new Set([
   "task_checklist_item_add",
   "task_checklist_item_check",
   "task_checklist_item_uncheck",
+  "task_checklist_item_promote",
   "subtask_create",
   "task_dependency_add_commit",
   "task_dependency_remove_commit",
@@ -44,15 +69,62 @@ const allowed = new Set([
   "time_entry_create",
   "time_entry_update",
 ]);
+const taskReferenceFields = new Set([
+  "task_id",
+  "parent_task_id",
+  "dependent_task_id",
+  "prerequisite_task_id",
+]);
+export function proposalReference(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  return Object.keys(row).length === 1 &&
+    alias.safeParse(row.proposal_ref).success
+    ? String(row.proposal_ref)
+    : null;
+}
+export function originalItemChoice(
+  message: string,
+): "archive" | "keep_reference" | null {
+  // The presence of a choice word is not consent. Negated, hypothetical or
+  // interrogative wording stays unresolved and asks the owner explicitly.
+  if (
+    /\b(?:not|never|without|don't|don’t|dont|cannot|can't|can’t|should|whether|maybe)\b|نکن|نکرد|نباید|نمی|نشود|نشه|نگه\s+ندار|حفظ\s+ن|بدون|[؟?]/iu.test(
+      message,
+    )
+  )
+    return null;
+  const keep =
+    /keep_reference|keep\s+(?:the\s+)?(?:original|reference)|(?:اصل|اصلی|مرجع).{0,24}(?:نگه|حفظ)|حفظ.{0,16}(?:اصل|اصلی|مرجع)/i.test(
+      message,
+    );
+  const archive =
+    /archive\s+(?:the\s+)?original|(?:اصل|اصلی).{0,24}(?:آرشیو|بایگانی)|(?:آرشیو|بایگانی).{0,16}(?:اصل|اصلی)/i.test(
+      message,
+    );
+  return keep === archive ? null : keep ? "keep_reference" : "archive";
+}
 export function applyPlanPolicy(
   raw: unknown,
   message: string,
   knownIds: ReadonlySet<string>,
+  revisions: ReadonlyMap<string, number> = new Map(),
 ): ModelPlan {
   const plan = modelPlanSchema.parse(raw);
-  function validateNested(value: unknown): void {
+  if (plan.reads.length && plan.actions.length)
+    throw new DomainError(
+      "INVALID_INPUT",
+      "خواندن زمینه و پیشنهاد تغییر باید در مراحل جدا باشد.",
+    );
+  const aliases = new Set<string>();
+  function validateNested(value: unknown, allowRefs: boolean, depth = 0): void {
+    if (depth > 12)
+      throw new DomainError(
+        "INVALID_INPUT",
+        "ساختار پیشنهادی بیش از حد تو در تو است.",
+      );
     if (Array.isArray(value)) {
-      value.forEach(validateNested);
+      value.forEach((item) => validateNested(item, allowRefs, depth + 1));
       return;
     }
     if (!value || typeof value !== "object") return;
@@ -65,6 +137,9 @@ export function applyPlanPolicy(
           "force",
           "explicit_user_intent",
           "human_confirmation_id",
+          "owner_id",
+          "ownerId",
+          "reserved_task_id",
         ].includes(key)
       )
         throw new DomainError(
@@ -78,7 +153,21 @@ export function applyPlanPolicy(
           "INVALID_INPUT",
           "پیش‌نمایش باید توسط سرور ساخته شود.",
         );
+      if (key === "proposal_ref")
+        throw new DomainError(
+          "INVALID_INPUT",
+          "ارجاع محلی فقط در فیلد شناسهٔ تسک مجاز است.",
+        );
       if ((key.endsWith("_id") || key.endsWith("_ids")) && item !== null) {
+        const ref = proposalReference(item);
+        if (ref !== null) {
+          if (!allowRefs || !taskReferenceFields.has(key) || !aliases.has(ref))
+            throw new DomainError(
+              "INVALID_INPUT",
+              "ارجاع محلی باید به تسک قبلی همین پیشنهاد اشاره کند.",
+            );
+          continue;
+        }
         const ids = Array.isArray(item) ? item : [item];
         if (ids.some((id) => typeof id !== "string" || !knownIds.has(id)))
           throw new DomainError(
@@ -86,11 +175,29 @@ export function applyPlanPolicy(
             "شناسه در داده‌های بازیابی‌شده وجود ندارد.",
           );
       }
-      validateNested(item);
+      validateNested(item, allowRefs, depth + 1);
     }
   }
+  for (const read of plan.reads) {
+    validateNested(read.input, false);
+    read.input = READ_SCHEMAS[read.query].parse(read.input) as Record<
+      string,
+      unknown
+    >;
+    if (typeof read.input.limit === "number" && read.input.limit > 40)
+      read.input.limit = 40;
+    if (
+      [
+        "task_search",
+        "task_find_ready",
+        "task_find_blocked",
+        "task_graph_get",
+        "task_template_list",
+      ].includes(read.query)
+    )
+      read.input.limit ??= 40;
+  }
   for (const action of plan.actions) {
-    validateNested(action.input);
     if (!allowed.has(action.command))
       throw new DomainError(
         "INSUFFICIENT_PERMISSIONS",
@@ -98,47 +205,47 @@ export function applyPlanPolicy(
         {},
         403,
       );
-    if (
-      action.input.override_reason ||
-      action.input.override ||
-      action.input.confirmed ||
-      action.input.force ||
-      action.input.explicit_user_intent
-    )
+    if (action.command === "task_create" && "task_id" in action.input)
       throw new DomainError(
-        "INSUFFICIENT_PERMISSIONS",
-        "دستیار اجازهٔ دور زدن پیش‌نیازها را ندارد.",
-        {},
-        403,
+        "INVALID_INPUT",
+        "شناسهٔ تسک جدید فقط توسط سرور ساخته می‌شود.",
       );
-    if (
-      action.command.includes("waive") &&
-      !/معاف|نادیده|waiv|override/i.test(message)
-    )
-      throw new DomainError(
-        "INSUFFICIENT_PERMISSIONS",
-        "معاف‌کردن پیش‌نیاز به درخواست صریح نیاز دارد.",
-        {},
-        403,
-      );
-    for (const [key, value] of Object.entries(action.input)) {
-      if (key === "preview_id")
+    validateNested(action.input, true);
+    if (action.local_ref) {
+      if (action.command !== "task_create" || aliases.has(action.local_ref))
         throw new DomainError(
           "INVALID_INPUT",
-          "پیش‌نمایش باید توسط سرور ساخته شود.",
+          "نام محلی یکتا فقط برای ساخت تسک مجاز است.",
         );
-      if ((key.endsWith("_id") || key.endsWith("_ids")) && value !== null) {
-        const ids = Array.isArray(value) ? value : [value];
-        if (
-          ids.some((value) => typeof value !== "string" || !knownIds.has(value))
-        )
-          throw new DomainError(
-            "INVALID_INPUT",
-            "شناسهٔ پیشنهادی در داده‌های بازیابی‌شده وجود ندارد؛ مورد را دقیق‌تر مشخص کنید.",
-          );
-      }
+      aliases.add(action.local_ref);
     }
-    // The model cannot invent a deadline when the message contains no explicit date/time.
+    if (action.command === "task_checklist_item_promote") {
+      const choice = originalItemChoice(message);
+      if (!choice) {
+        plan.actions = [];
+        plan.answer =
+          "آیتم اصلی را پس از تبدیل به زیرکار، به‌صورت مرجعِ تیک‌خورده نگه دارم یا آرشیو کنم؟";
+        return plan;
+      }
+      if (action.input.original !== choice)
+        throw new DomainError(
+          "INVALID_INPUT",
+          "انتخاب آیتم اصلی باید مطابق درخواست صریح شما باشد.",
+        );
+      const revision = revisions.get(String(action.input.item_id));
+      if (
+        !revision ||
+        (action.expected_revision !== undefined &&
+          action.expected_revision !== revision)
+      )
+        throw new DomainError(
+          "REVISION_CONFLICT",
+          "نسخهٔ واقعی آیتم باید از زمینهٔ بازیابی‌شده تأیید شود.",
+          {},
+          409,
+        );
+      action.expected_revision = revision;
+    }
     if (
       !/\d{4}[-/]\d{1,2}[-/]\d{1,2}|[۰-۹]{4}[-/][۰-۹]{1,2}[-/][۰-۹]{1,2}|\d{1,2}:\d{2}|فردا|پس‌فردا|هفتهٔ? آینده|tomorrow|next week/i.test(
         message,

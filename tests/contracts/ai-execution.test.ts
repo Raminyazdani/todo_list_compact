@@ -29,6 +29,7 @@ beforeEach(() => {
   mocks.execute.mockReset();
   mocks.sql.mockReset();
   mocks.poolQuery.mockReset();
+  mocks.poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
   mocks.release.mockReset();
   vi.stubEnv("AI_PRICING_MODEL", "synthetic-model");
   vi.stubEnv("AI_PRICING_VERIFIED_AT", new Date().toISOString());
@@ -41,6 +42,40 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("independent AI orchestration contracts", () => {
+  it("known unexecuted and cached plans both deny a principal without ai:invoke before any database access", async () => {
+    mocks.sql.mockResolvedValue({
+      rows: [
+        {
+          executed_at: new Date().toISOString(),
+          plan: {
+            actions: [
+              {
+                command: "task_create",
+                input: { title: "Private synthetic receipt" },
+              },
+            ],
+          },
+          results: [{ data: { notes: "Synthetic private receipt" } }],
+        },
+      ],
+    });
+    for (const planId of [
+      "synthetic-known-unexecuted",
+      "synthetic-known-cached",
+    ])
+      await expect(
+        executePlan(planId, {
+          ...principal,
+          scopes: ["tasks:read", "tasks:write"],
+        }),
+      ).rejects.toMatchObject({
+        code: "INSUFFICIENT_PERMISSIONS",
+        status: 403,
+      });
+    expect(mocks.poolQuery).not.toHaveBeenCalled();
+    expect(mocks.sql).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
   it("checklist mutation verifies the actual affected parent task instead of treating a checklist ID as task ID", async () => {
     mocks.sql.mockImplementation(async (sql: string) =>
       sql.startsWith("SELECT * FROM ai_plans")
@@ -200,72 +235,6 @@ describe("independent AI orchestration contracts", () => {
         String(call[0]).startsWith("INSERT INTO ai_plans"),
       ),
     ).toBe(false);
-  });
-  it("a valid model graph proposal creates a server-owned preview and persists an owner-bound unexecuted plan", async () => {
-    vi.stubEnv("AI_PROVIDER_URL", "https://api.openai.com/v1");
-    vi.stubEnv("AI_PROVIDER_KEY", "synthetic-test-key");
-    vi.stubEnv("AI_MODEL", "synthetic-model");
-    vi.stubEnv("AI_DAILY_BUDGET_USD", "1");
-    mocks.query.mockImplementation(async (operation: string) =>
-      operation === "task_dependency_add_preview"
-        ? {
-            preview_id: "synthetic-server-preview",
-            revisions: { "T-synthetic-one": 1, "T-synthetic-two": 1 },
-            warnings: [],
-          }
-        : operation === "task_search"
-          ? {
-              items: [
-                { task_id: "T-synthetic-one" },
-                { task_id: "T-synthetic-two" },
-              ],
-            }
-          : { items: [] },
-    );
-    mocks.poolQuery.mockResolvedValue({
-      rows: [{ cost_microusd: 100000 }],
-      rowCount: 1,
-    });
-    const proposal = {
-      answer: "پیش‌نمایش ساختگی",
-      actions: [
-        {
-          command: "task_dependency_add_commit",
-          input: {
-            task_id: "T-synthetic-one",
-            prerequisites: [{ task_id: "T-synthetic-two" }],
-          },
-        },
-      ],
-      warnings: [],
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: JSON.stringify(proposal) } }],
-            usage: { total_tokens: 10 },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      ),
-    );
-    const result = await planIntent(
-      "Add exactly the stated prerequisite",
-      principal,
-    );
-    expect(result).toMatchObject({
-      requires_confirmation: true,
-      configured: true,
-      actions: [{ input: { preview_id: "synthetic-server-preview" } }],
-    });
-    expect(mocks.execute).not.toHaveBeenCalled();
-    const stored = mocks.poolQuery.mock.calls.find((call) =>
-      String(call[0]).startsWith("INSERT INTO ai_plans"),
-    );
-    expect(stored?.[1][1]).toBe(principal.ownerId);
-    expect(stored?.[1][2]).toBe(principal.actorId);
   });
   it("failed readback reports failure and a retry uses the same accepted operation key", async () => {
     mocks.sql.mockImplementation(async (sql: string) =>

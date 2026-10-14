@@ -1,6 +1,44 @@
-import { Pool, type PoolClient } from "pg";
+import {
+  Pool,
+  types as postgresTypes,
+  type PoolClient,
+  type CustomTypesConfig,
+} from "pg";
 import { DomainError } from "../../shared/contracts";
 import { MIGRATION_SQL } from "./schema";
+import { postgresConnectionUrl } from "./connection-target";
+
+/** DATE is a calendar label, never a local-midnight timestamp. */
+function calendarDate(value: string | Buffer): string {
+  let label: string;
+  if (Buffer.isBuffer(value)) {
+    if (value.length !== 4) throw new TypeError("DOMAIN_DATABASE_DATE_INVALID");
+    // PostgreSQL binary DATE is a signed day count since2000-01-01.
+    const days = value.readInt32BE();
+    if (days === 2147483647 || days === -2147483648)
+      throw new RangeError("DOMAIN_DATABASE_DATE_NONFINITE");
+    const date = new Date(Date.UTC(2000, 0, 1) + days * 86400000);
+    if (!Number.isFinite(date.getTime()))
+      throw new RangeError("DOMAIN_DATABASE_DATE_INVALID");
+    label = date.toISOString().slice(0, 10);
+  } else label = value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(label) || label.startsWith("0000-"))
+    throw new TypeError("DOMAIN_DATABASE_DATE_INVALID");
+  const parsed = Date.parse(label + "T00:00:00Z");
+  if (
+    !Number.isFinite(parsed) ||
+    new Date(parsed).toISOString().slice(0, 10) !== label
+  )
+    throw new TypeError("DOMAIN_DATABASE_DATE_INVALID");
+  return label;
+}
+const domainTypes: CustomTypesConfig = {
+  getTypeParser(oid, format) {
+    return oid === 1082
+      ? calendarDate
+      : postgresTypes.getTypeParser(oid, format);
+  },
+};
 
 export interface SqlResult<T = Record<string, unknown>> {
   rows: T[];
@@ -17,13 +55,18 @@ export interface Database extends SqlClient {
     ownerId: string,
     action: (tx: SqlClient) => Promise<T>,
   ): Promise<T>;
+  /** Optional for adapters already pinned inside an exclusive transaction. */
+  readTransaction?<T>(
+    ownerId: string,
+    action: (tx: SqlClient) => Promise<T>,
+  ): Promise<T>;
   close?(): Promise<void>;
 }
 
 class PostgresDatabase implements Database {
   private readonly pool: Pool;
   constructor(url: string) {
-    const parsed = new URL(url);
+    const parsed = postgresConnectionUrl(url);
     const local = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
     if (!local) parsed.searchParams.set("sslmode", "verify-full");
     this.pool = new Pool({
@@ -32,6 +75,7 @@ class PostgresDatabase implements Database {
       idleTimeoutMillis: 20000,
       connectionTimeoutMillis: 8000,
       ssl: local ? undefined : { rejectUnauthorized: true },
+      types: domainTypes,
     });
     this.pool.on("error", () =>
       console.error("DOMAIN_DATABASE_CONNECTION_FAILED"),
@@ -48,11 +92,30 @@ class PostgresDatabase implements Database {
     ownerId: string,
     action: (tx: SqlClient) => Promise<T>,
   ): Promise<T> {
+    return this.runTransaction(ownerId, action, false);
+  }
+  async readTransaction<T>(
+    ownerId: string,
+    action: (tx: SqlClient) => Promise<T>,
+  ): Promise<T> {
+    return this.runTransaction(ownerId, action, true);
+  }
+  private async runTransaction<T>(
+    ownerId: string,
+    action: (tx: SqlClient) => Promise<T>,
+    readOnly: boolean,
+  ): Promise<T> {
     const client: PoolClient = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      // Parallel readers use one consistent MVCC snapshot and cannot write SQL.
+      // The same owner lock remains exclusive for commands and stored previews.
       await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+        readOnly ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN",
+      );
+      await client.query(
+        readOnly
+          ? "SELECT pg_advisory_xact_lock_shared(hashtextextended($1,0))"
+          : "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
         [ownerId],
       );
       const result = await action({

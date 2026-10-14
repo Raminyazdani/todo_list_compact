@@ -140,6 +140,54 @@ export interface FileDTO {
   revision: number;
   archived_at: string | null;
   legacy_metadata: Record<string, JsonValue>;
+  description?: string;
+  tags?: string[];
+}
+export interface ReportRangeDTO {
+  timezone: string;
+  from_date: string | null;
+  to_date: string | null;
+  applies_to: string;
+}
+export interface ReportsDTO {
+  range: ReportRangeDTO;
+  overdue_ageing: {
+    as_of_date: string;
+    total: number;
+    buckets: {
+      key: string;
+      min_days: number;
+      max_days: number | null;
+      count: number;
+    }[];
+    items: PageDTO<TaskDTO & { due_local_date: string; overdue_days: number }>;
+  };
+  files_scope_granted: boolean;
+  registered_files: null | {
+    scope: "owner_registered_records";
+    total: number;
+    known_size_bytes: string;
+    unknown_size_count: number;
+    by_source: {
+      source: string;
+      total: number;
+      known_size_bytes: string;
+      unknown_size_count: number;
+    }[];
+  };
+  duplicate_candidates: null | {
+    basis: "canonical_verified_private_blob_sha256";
+    total_groups: number;
+    excluded_unverified_count: number;
+    groups: {
+      sha256: string;
+      size_bytes: string;
+      file_count: number;
+      files: FileDTO[];
+      truncated: boolean;
+    }[];
+    truncated: boolean;
+  };
 }
 export interface EventDTO {
   event_id: string;
@@ -155,6 +203,7 @@ export interface EventDTO {
   timezone: string;
   all_day: boolean;
   provider: string;
+  category?: "Work" | "Personal" | "Other";
   task_id: string | null;
   notes: string;
   recurrence_rule: string | null;
@@ -180,6 +229,18 @@ export interface ReminderDTO {
   revision: number;
   past_due?: boolean;
   warnings?: string[];
+}
+export interface CalendarReminderDTO {
+  reminder_id: string;
+  event_id: string;
+  occurrence_starts_at: string | null;
+  remind_at: string;
+  channel: "in_app";
+  state: "Pending" | "Paused" | "Cancelled" | "Succeeded";
+  revision: number;
+  past_due?: boolean;
+  warnings?: string[];
+  event_title?: string;
 }
 export interface TimeImportEntryDTO {
   entry_id: string;
@@ -330,6 +391,7 @@ export const COMMAND_NAMES = [
   "task_template_instantiate_commit",
   "file_register_external_link",
   "file_register_upload",
+  "file_metadata_update",
   "file_link_to_task",
   "file_unlink_from_task",
   "file_archive",
@@ -338,6 +400,10 @@ export const COMMAND_NAMES = [
   "calendar_update_local_event",
   "calendar_delete_local_event",
   "calendar_occurrence_reschedule_commit",
+  "calendar_reminder_create",
+  "calendar_reminder_pause",
+  "calendar_reminder_resume",
+  "calendar_reminder_cancel",
   "time_entry_create",
   "time_entry_update",
   "time_entry_archive",
@@ -404,12 +470,15 @@ export const QUERY_NAMES = [
   "calendar_events_query",
   "calendar_availability",
   "calendar_occurrence_reschedule_preview",
+  "calendar_reminder_list",
+  "calendar_reminder_get",
   "time_entry_list",
   "time_summary",
   "time_entry_import_preview",
   "get_activity",
   "search_all",
   "analytics_summary",
+  "reports_summary",
   "preferences_get",
   "saved_view_list",
   "reminder_list",

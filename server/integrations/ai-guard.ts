@@ -211,15 +211,17 @@ export async function boundedAiContext(
 ) {
   const aiPrincipal = { ...principal, channel: "AI" as const },
     admin = principal.scopes.includes("admin:manage");
-  const [taskResult, projectResult, fileResult] = await Promise.all([
-    domain.query("task_search", { limit: 100 }, aiPrincipal),
-    admin || principal.scopes.includes("projects:read")
-      ? domain.query("project_list", { limit: 40 }, aiPrincipal)
-      : Promise.resolve({ items: [] }),
-    admin || principal.scopes.includes("files:read")
-      ? domain.query("file_search", { limit: 40 }, aiPrincipal)
-      : Promise.resolve({ items: [] }),
-  ]);
+  const [taskResult, projectResult, fileResult, templateResult] =
+    await Promise.all([
+      domain.query("task_search", { limit: 100 }, aiPrincipal),
+      admin || principal.scopes.includes("projects:read")
+        ? domain.query("project_list", { limit: 40 }, aiPrincipal)
+        : Promise.resolve({ items: [] }),
+      admin || principal.scopes.includes("files:read")
+        ? domain.query("file_search", { limit: 40 }, aiPrincipal)
+        : Promise.resolve({ items: [] }),
+      domain.query("task_template_list", { limit: 20 }, aiPrincipal),
+    ]);
   const selected = rows(taskResult)
     .sort((a, b) => relevantScore(b, message) - relevantScore(a, message))
     .slice(0, 40);
@@ -257,6 +259,18 @@ export async function boundedAiContext(
           "revision",
         ]),
       ),
+    templates: rows(templateResult)
+      .slice(0, 20)
+      .map((template) => ({
+        ...boundedPick(template, ["template_id", "title", "revision"]),
+        task_count:
+          template.definition &&
+          typeof template.definition === "object" &&
+          "tasks" in template.definition &&
+          Array.isArray(template.definition.tasks)
+            ? template.definition.tasks.length
+            : null,
+      })),
     task_details: details
       .filter(
         (detail): detail is RecordValue =>

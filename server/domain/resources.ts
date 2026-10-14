@@ -20,6 +20,7 @@ import {
   optionalText,
   text,
   timezone,
+  requireScope,
   type Input,
 } from "./core";
 import type { Change } from "./tasks";
@@ -30,6 +31,12 @@ import {
 import { runRecurringTasks } from "./recurrence";
 import { commitCalendarOccurrence } from "./calendar";
 import { commitTimeImport } from "./time-import";
+import { annotationFields, fileMetadata } from "./annotations";
+import {
+  cancelEventReminders,
+  deliverEventReminders,
+  eventReminderCommand,
+} from "./event-reminders";
 import * as RRulePackage from "rrule";
 const RRule = (RRulePackage.RRule ??
   Reflect.get(RRulePackage, "default")?.RRule) as typeof RRulePackage.RRule;
@@ -329,6 +336,26 @@ export async function resourceCommand(
       affected: [],
     };
   }
+  if (command === "file_metadata_update") {
+    const fileId = text(input, "file_id", undefined, 512),
+      before = await fileMetadata(tx, fileId, owner);
+    guard(before, revision);
+    const next = annotationFields(input, before);
+    await tx.query(
+      "INSERT INTO file_annotations(file_id,owner_id,description,tags) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(file_id) DO UPDATE SET description=$3,tags=$4::jsonb,updated_at=now()",
+      [fileId, owner, next.description, json(next.tags)],
+    );
+    await tx.query(
+      "UPDATE files SET revision=revision+1,updated_at=now() WHERE file_id=$1 AND owner_id=$2",
+      [fileId, owner],
+    );
+    return {
+      entityId: fileId,
+      before,
+      after: await fileMetadata(tx, fileId, owner),
+      affected: [],
+    };
+  }
   if (command === "file_link_to_task") {
     const fileId = text(input, "file_id"),
       taskId = text(input, "task_id");
@@ -432,6 +459,8 @@ export async function resourceCommand(
     return commitTimeImport(tx, input, principal, operationId);
   if (command === "calendar_occurrence_reschedule_commit")
     return commitCalendarOccurrence(tx, input, principal, operationId);
+  if (command.startsWith("calendar_reminder_"))
+    return eventReminderCommand(tx, command, input, principal, revision);
   if (command.startsWith("calendar_") || command.startsWith("time_entry_"))
     return scheduledCommand(
       tx,
@@ -448,7 +477,58 @@ export async function resourceCommand(
     );
     const before = rows.rows[0] ?? { revision: 0, settings: {} };
     if (rows.rows[0]) guard(before, revision);
+    else guard(before, revision ?? 0);
     const settings = { ...object(before.settings), ...object(input.settings) };
+    const changed = object(input.settings);
+    if (
+      Object.keys(changed).some((key) =>
+        [
+          "density",
+          "large_text",
+          "high_contrast",
+          "reduce_motion",
+          "reduced_motion",
+        ].includes(key),
+      )
+    )
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Use canonical display_density and nested accessibility settings.",
+      );
+    if (
+      "display_density" in changed &&
+      !["comfortable", "compact"].includes(String(changed.display_density))
+    )
+      throw new DomainError("INVALID_INPUT", "Invalid display density.");
+    if (
+      "retention_days" in changed &&
+      (typeof changed.retention_days !== "number" ||
+        !Number.isInteger(changed.retention_days) ||
+        changed.retention_days < 0 ||
+        changed.retention_days > 36500)
+    )
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Retention must be0..36500 days; zero keeps history forever.",
+      );
+    if ("accessibility" in changed) {
+      const accessibility = object(changed.accessibility);
+      if (
+        Object.keys(accessibility).some(
+          (key) =>
+            !["reduced_motion", "high_contrast", "large_text"].includes(key) ||
+            typeof accessibility[key] !== "boolean",
+        )
+      )
+        throw new DomainError(
+          "INVALID_INPUT",
+          "Invalid accessibility preferences.",
+        );
+      settings.accessibility = {
+        ...object(object(before.settings).accessibility ?? {}),
+        ...accessibility,
+      };
+    }
     const encoded = json(settings);
     if (encoded.length > 50000)
       throw new DomainError("INVALID_INPUT", "Preference document too large.");
@@ -576,6 +656,11 @@ export async function resourceCommand(
         notificationId,
         owner,
       );
+    requireScope(
+      principal,
+      before.target_type === "calendar" ? "calendar" : "tasks",
+      true,
+    );
     guard(before, revision);
     if (!before.read_at)
       await tx.query(
@@ -670,6 +755,11 @@ export async function resourceCommand(
       delivered++;
       notifications.push(notificationId);
     }
+    const eventReminders = await deliverEventReminders(
+      tx,
+      principal,
+      operationId,
+    );
     const recurring = await runRecurringTasks(
       tx,
       principal,
@@ -684,10 +774,15 @@ export async function resourceCommand(
       entityId: id("JOB"),
       before: { due_reminder_ids: due.rows.map((r) => r.reminder_id) },
       after: {
-        delivered,
-        cancelled,
+        delivered: delivered + eventReminders.delivered,
+        cancelled: cancelled + eventReminders.cancelled,
+        task_reminders: { delivered, cancelled },
+        event_reminders: eventReminders,
         pruned_previews: expired.rows.length,
-        notification_ids: notifications,
+        notification_ids: [
+          ...notifications,
+          ...eventReminders.notification_ids,
+        ],
         recurring,
         channel: "in_app",
         precision: "daily scheduler; manual run supported",
@@ -749,6 +844,13 @@ async function scheduledCommand(
       `UPDATE ${table} SET archived_at=$3,revision=revision+1 WHERE ${column}=$1 AND owner_id=$2`,
       [entityId, owner, archivedAt],
     );
+    if (!isTime)
+      await cancelEventReminders(
+        tx,
+        [entityId, ...overrides.map((row) => String(row.event_id))],
+        principal,
+        operationId,
+      );
     if (overrides.length) {
       const archived = cleanRows(
         (
@@ -921,7 +1023,7 @@ async function scheduledCommand(
     }
     if (creation)
       await tx.query(
-        "INSERT INTO calendar_events(event_id,owner_id,title,starts_at,ends_at,timezone,all_day,task_id,notes,recurrence_rule,recurrence_exceptions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)",
+        "INSERT INTO calendar_events(event_id,owner_id,title,starts_at,ends_at,timezone,all_day,task_id,notes,recurrence_rule,recurrence_exceptions,category) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12)",
         [
           entityId,
           owner,
@@ -934,11 +1036,12 @@ async function scheduledCommand(
           text(source, "notes", ""),
           recurrence,
           json(exceptions),
+          choice(source, "category", ["Work", "Personal", "Other"], "Other"),
         ],
       );
     else
       await tx.query(
-        "UPDATE calendar_events SET title=$3,starts_at=$4,ends_at=$5,timezone=$6,all_day=$7,task_id=$8,notes=$9,recurrence_rule=$10,recurrence_exceptions=$11::jsonb,revision=revision+1 WHERE event_id=$1 AND owner_id=$2",
+        "UPDATE calendar_events SET title=$3,starts_at=$4,ends_at=$5,timezone=$6,all_day=$7,task_id=$8,notes=$9,recurrence_rule=$10,recurrence_exceptions=$11::jsonb,category=$12,revision=revision+1 WHERE event_id=$1 AND owner_id=$2",
         [
           entityId,
           owner,
@@ -951,6 +1054,7 @@ async function scheduledCommand(
           text(source, "notes", ""),
           recurrence,
           json(exceptions),
+          choice(source, "category", ["Work", "Personal", "Other"], "Other"),
         ],
       );
   }

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { getDatabase, type Database } from "../../server/db/database";
+import { postgresConnectionUrl } from "../../server/db/connection-target";
 import { createDomainService } from "../../server/domain/service";
 import {
   importPrepared,
@@ -31,7 +32,7 @@ interface Dependencies {
   database?: () => Database;
 }
 function destinationHash(url: string) {
-  const parsed = new URL(url);
+  const parsed = postgresConnectionUrl(url);
   if (
     !["postgres:", "postgresql:"].includes(parsed.protocol) ||
     !parsed.hostname ||

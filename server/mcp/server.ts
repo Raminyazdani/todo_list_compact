@@ -41,7 +41,9 @@ export function createMcpServer(principal: Principal) {
           openWorldHint: tool.openWorld,
         },
         _meta: {
-          securitySchemes: [{ type: "oauth2", scopes: tool.scopes }],
+          securitySchemes: (tool.scopeAlternatives ?? [tool.scopes]).map(
+            (scopes) => ({ type: "oauth2", scopes }),
+          ),
         },
       },
       async (args: Record<string, unknown>) => {

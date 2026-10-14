@@ -40,7 +40,8 @@ flowchart TD
 | D/P      | Implemented; independent layer checks recorded | PostgreSQL domain, REST/OpenAPI and OAuth MCP checks in the test matrix and operator checkpoint                                      |
 | V        | Authenticated baseline proof recorded          | Browser/REST/genuine OAuth MCP agree on graph/checklist state; fresh extended regression remains required                            |
 | MIG      | Rehearsal checks recorded                      | Exact source replay/reconciliation/restore in isolated storage; production import/cutover remains orchestrator-gated                 |
-| U/F/C/AI | Implemented; current full UI proof pending     | Authenticated baseline browser evidence exists; extended UI requires fresh build, new workflow tests and all-view visual inspection  |
+| U/F/C    | Breadth implemented; local proof recorded      | Build-10/11 workflow and all 30 responsive main-view checks; build-12 complete repaired Dashboard/Settings/PWA/Reports PASS          |
+| AI       | Independent scope review open                  | Normative action/retrieval/simulation requirements must be implemented and proved; configured provider execution remains separate    |
 | I        | Adapter implementation present                 | Each provider's actual authorization/storage/model runtime must be proved independently                                              |
 | Q        | In progress                                    | Meaningful tests, race/auth/restore/load and automated/manual visual evidence; unchecked or externally blocked gates remain explicit |
 | DEP/LIVE | Orchestrator verification                      | Exact deployed SHA, authenticated production checks, cutover and actual redeployment persistence                                     |

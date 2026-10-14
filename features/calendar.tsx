@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Clock3, Download } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { dayFlags, type HolidayRegion } from "@/server/integrations/holidays";
@@ -23,6 +23,8 @@ import type {
 import { query, useQuery } from "./api";
 import { useLocale } from "./locale";
 import { TimeTransfer } from "./time-transfer";
+import { WeeklyWorkGrid } from "./work-grid";
+import { EventReminders } from "./event-reminders";
 import { moveLocalEventToDate } from "./calendar-dates";
 import {
   AddButton,
@@ -58,6 +60,16 @@ export function CalendarView({
   const [view, setView] = useState("month");
   const [showTasks, setShowTasks] = useState(true);
   const [showExternal, setShowExternal] = useState(true);
+  const [calendarId, setCalendarId] = useState("");
+  const [calendarSearch, setCalendarSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [draft, setDraft] = useState<{ starts: string; ends: string } | null>(
+    null,
+  );
+  const [now] = useState(() => new Date().toISOString());
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const creation = useRef<{ day: string; minute: number } | null>(null);
+  const resizing = useRef<{ event: EventDTO; y: number } | null>(null);
   const [editing, setEditing] = useState<EventDTO | null>(null);
   const [create, setCreate] = useState(false);
   const [eventCursor, setEventCursor] = useState<string | null>(null);
@@ -94,11 +106,19 @@ export function CalendarView({
       to: zonedLocalToInstant(`${end}T00:00`, ZONE),
       limit: 200,
       cursor: eventCursor,
+      ...(calendarId ? { calendar_id: calendarId } : {}),
+      ...(calendarSearch ? { search: calendarSearch } : {}),
+      ...(categoryFilter ? { category: categoryFilter } : {}),
     },
   );
   const tasks = useQuery<PageDTO<TaskDTO>>(
     "task_search",
-    { limit: 200, due_from: start, due_to: end },
+    {
+      limit: 200,
+      due_from: start,
+      due_to: end,
+      ...(calendarSearch ? { search: calendarSearch } : {}),
+    },
     showTasks,
   );
   const deadline = (task: TaskDTO) =>
@@ -132,6 +152,14 @@ export function CalendarView({
     }
   }
   const calendars = useQuery<PageDTO<Record<string, unknown>>>("calendar_list");
+  const upcoming = useQuery<PageDTO<EventDTO>>("calendar_events_query", {
+    from: now,
+    to: new Date(Date.parse(now) + 7 * 86400000).toISOString(),
+    limit: 5,
+    ...(calendarId ? { calendar_id: calendarId } : {}),
+    ...(calendarSearch ? { search: calendarSearch } : {}),
+    ...(categoryFilter ? { category: categoryFilter } : {}),
+  });
   const visible = (events.data?.items ?? []).filter(
     (event) => showExternal || event.provider === "local",
   );
@@ -147,6 +175,56 @@ export function CalendarView({
       value.setUTCMonth(value.getUTCMonth() + direction);
       setDate(value.toISOString().slice(0, 10));
     } else setDate(add(date, direction * (view === "week" ? 7 : 1)));
+  }
+  function finishSwipe(event: React.TouchEvent<HTMLElement>) {
+    const first = touchStart.current;
+    touchStart.current = null;
+    if (!first) return;
+    const last = event.changedTouches[0];
+    const dx = last.clientX - first.x,
+      dy = last.clientY - first.y;
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 35) move(dx < 0 ? 1 : -1);
+  }
+  function openDraft(day: string, minute: number, endMinute: number) {
+    const point = (value: number) =>
+      value >= 1440
+        ? `${add(day, 1)}T00:00`
+        : `${day}T${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+    setDraft({
+      starts: point(Math.min(minute, endMinute)),
+      ends: point(
+        Math.min(
+          1440,
+          minute === endMinute ? endMinute + 15 : Math.max(minute, endMinute),
+        ),
+      ),
+    });
+    setEditing(null);
+    setCreate(true);
+  }
+  async function finishResize(pointer: React.PointerEvent<HTMLButtonElement>) {
+    const current = resizing.current;
+    resizing.current = null;
+    if (!current) return;
+    const delta =
+      Math.round((((pointer.clientY - current.y) / 52) * 60) / 15) * 15;
+    if (!delta) return;
+    const ends_at = new Date(
+      Date.parse(current.event.ends_at) + delta * 60000,
+    ).toISOString();
+    if (Date.parse(ends_at) <= Date.parse(current.event.starts_at)) {
+      window.dispatchEvent(
+        new CustomEvent("lifeos:error", {
+          detail: t("پایان باید بعد از شروع باشد", "End must follow start"),
+        }),
+      );
+      return;
+    }
+    await action(
+      "calendar_update_local_event",
+      { event_id: current.event.event_id, ends_at },
+      current.event.revision,
+    );
   }
   const monthLabel = new Intl.DateTimeFormat(
     language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
@@ -171,7 +249,12 @@ export function CalendarView({
             )}
           </p>
         </div>
-        <AddButton onClick={() => setCreate(true)}>
+        <AddButton
+          onClick={() => {
+            setDraft(null);
+            setCreate(true);
+          }}
+        >
           {t("رویداد تازه", "New event")}
         </AddButton>
       </div>
@@ -225,9 +308,57 @@ export function CalendarView({
         </div>
       </div>
       <div className="calendar-layers">
+        <Field label={t("منبع تقویم", "Calendar source")}>
+          <select
+            value={calendarId}
+            onChange={(event) => {
+              setCalendarId(event.target.value);
+              setEventCursor(null);
+            }}
+          >
+            <option value="">
+              {t("همهٔ منابع مجاز", "All authorized sources")}
+            </option>
+            {calendars.data?.items.map((calendar) => (
+              <option
+                key={String(calendar.calendar_id)}
+                value={String(calendar.calendar_id)}
+              >
+                {String(calendar.title)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t("جست‌وجوی تقویم", "Calendar search")}>
+          <input
+            value={calendarSearch}
+            onChange={(event) => {
+              setCalendarSearch(event.target.value);
+              setEventCursor(null);
+            }}
+            placeholder={t("عنوان یا یادداشت…", "Title or notes…")}
+          />
+        </Field>
+        <Field label={t("کار یا شخصی", "Work or personal")}>
+          <select
+            value={categoryFilter}
+            onChange={(event) => {
+              setCategoryFilter(event.target.value);
+              setEventCursor(null);
+            }}
+          >
+            <option value="">{t("همهٔ دسته‌ها", "All categories")}</option>
+            <option value="Work">{t("کار", "Work")}</option>
+            <option value="Personal">{t("شخصی", "Personal")}</option>
+            <option value="Other">{t("سایر", "Other")}</option>
+          </select>
+        </Field>
         <label>
           {t("تعطیلات", "Holidays")}
           <select
+            disabled={
+              !preferences.data || !!preferences.error || preferences.fetching
+            }
             value={region}
             onChange={(event) => {
               const value = event.target.value as HolidayRegion;
@@ -236,7 +367,6 @@ export function CalendarView({
                 "preferences_update",
                 {
                   settings: {
-                    ...preferences.data?.settings,
                     holiday_region: value,
                   },
                 },
@@ -279,6 +409,42 @@ export function CalendarView({
         </span>
       </div>
       <QueryState {...events} retry={events.refresh} />
+      <details className="calendar-upcoming">
+        <summary>
+          {t("رویدادهای هفت روز آینده", "Events in the next seven days")}
+        </summary>
+        <QueryState {...upcoming} retry={upcoming.refresh} />
+        {upcoming.data?.items
+          .filter((event) => showExternal || event.provider === "local")
+          .map((event) => (
+            <div
+              className="dependency-row"
+              key={event.occurrence_key ?? event.event_id}
+            >
+              <Button onClick={() => setEditing(event)}>{event.title}</Button>
+              <time>
+                {new Date(event.starts_at).toLocaleString(
+                  language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
+                  { timeZone: ZONE },
+                )}
+              </time>
+            </div>
+          ))}
+        {upcoming.data && !upcoming.data.items.length && (
+          <Empty
+            title={t(
+              "رویدادی در هفت روز آینده نیست",
+              "No events in the next seven days",
+            )}
+          />
+        )}
+        <p className="small muted">
+          {t(
+            "۵ رخداد نخست منابع و دستهٔ انتخابی؛ تقویم‌های خارجی فقط خواندنی‌اند.",
+            "First 5 occurrences for selected source and category; external calendars are read-only.",
+          )}
+        </p>
+      </details>
       {!!events.data?.source_warnings?.length && (
         <p role="status" className="warning">
           {t(
@@ -360,7 +526,14 @@ export function CalendarView({
         </p>
       )}
       {view === "month" ? (
-        <div className="month-calendar">
+        <div
+          className="month-calendar"
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            touchStart.current = { x: touch.clientX, y: touch.clientY };
+          }}
+          onTouchEnd={finishSwipe}
+        >
           <div className="week-labels">
             {Array.from({ length: 7 }, (_, index) =>
               new Intl.DateTimeFormat(language === "fa" ? "fa-IR" : "en-GB", {
@@ -403,7 +576,7 @@ export function CalendarView({
                   .map((event) => (
                     <button
                       key={event.occurrence_key ?? event.event_id}
-                      className={`calendar-event ${event.provider === "local" ? "local" : "external"}`}
+                      className={`calendar-event ${event.provider === "local" ? "local" : "external"} ${event.category?.toLowerCase() ?? ""}`}
                       draggable={
                         event.provider === "local" && !event.recurrence_rule
                       }
@@ -444,7 +617,7 @@ export function CalendarView({
             visible.map((event) => (
               <button
                 key={event.occurrence_key ?? event.event_id}
-                className="agenda-row"
+                className={`agenda-row ${event.category?.toLowerCase() ?? ""}`}
                 onClick={() => setEditing(event)}
               >
                 <div className="agenda-day">
@@ -478,6 +651,9 @@ export function CalendarView({
         <>
           <div
             className="calendar-all-day"
+            role="region"
+            tabIndex={0}
+            aria-label={t("رویدادهای تمام‌روز", "All-day events")}
             dir="ltr"
             style={{
               gridTemplateColumns: `54px repeat(${days.length}, minmax(90px,1fr))`,
@@ -491,7 +667,7 @@ export function CalendarView({
                   .map((event) => (
                     <button
                       key={event.occurrence_key ?? event.event_id}
-                      className="calendar-event"
+                      className={`calendar-event ${event.category?.toLowerCase() ?? ""}`}
                       onClick={() => setEditing(event)}
                     >
                       {event.title}
@@ -514,6 +690,15 @@ export function CalendarView({
           </div>
           <div
             className="week-calendar"
+            onTouchStart={(event) => {
+              if (view !== "day") return;
+              const touch = event.touches[0];
+              touchStart.current = { x: touch.clientX, y: touch.clientY };
+            }}
+            onTouchEnd={finishSwipe}
+            role="region"
+            aria-label={t("جدول ساعت‌های تقویم", "Calendar hourly timeline")}
+            tabIndex={0}
             style={{
               gridTemplateColumns: `54px repeat(${days.length},minmax(90px,1fr))`,
             }}
@@ -531,6 +716,7 @@ export function CalendarView({
                   className="week-day-head"
                   onClick={() => {
                     setDate(day);
+                    setDraft(null);
                     setCreate(true);
                   }}
                 >
@@ -541,7 +727,26 @@ export function CalendarView({
                 </button>
                 <div className="day-hours">
                   {Array.from({ length: 24 }, (_, hour) => (
-                    <div className="hour-slot" key={hour} />
+                    <button
+                      className="hour-slot hour-create"
+                      key={hour}
+                      aria-label={`${t("ساخت رویداد در", "Create event on")} ${day} ${String(hour).padStart(2, "0")}:00`}
+                      onPointerDown={() => {
+                        creation.current = { day, minute: hour * 60 };
+                      }}
+                      onPointerUp={() => {
+                        const first = creation.current;
+                        creation.current = null;
+                        if (first && first.day === day)
+                          openDraft(day, first.minute, hour * 60);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openDraft(day, hour * 60, hour * 60);
+                        }
+                      }}
+                    />
                   ))}
                   {visible
                     .filter((event) => !event.all_day && occursOn(event, day))
@@ -578,23 +783,59 @@ export function CalendarView({
                           : Number(endClock[0]) * 60 + Number(endClock[1]);
                       const duration = Math.max(0, endMinute - minute);
                       return (
-                        <button
+                        <div
                           key={event.occurrence_key ?? event.event_id}
-                          className="time-block"
+                          className={`time-block ${event.category?.toLowerCase() ?? ""}`}
                           style={{
                             top: `${(minute / 60) * 52}px`,
                             height: `${Math.max(26, (duration / 60) * 52)}px`,
                           }}
-                          onClick={() => setEditing(event)}
                         >
-                          {event.title}
-                          <small>
-                            {instantToLocalTime(event.starts_at, ZONE).slice(
-                              0,
-                              5,
+                          <button
+                            className="time-block-open"
+                            onClick={() => setEditing(event)}
+                          >
+                            {event.title}
+                            <small>
+                              {instantToLocalTime(event.starts_at, ZONE).slice(
+                                0,
+                                5,
+                              )}
+                            </small>
+                          </button>
+                          {event.provider === "local" &&
+                            !event.recurrence_rule && (
+                              <button
+                                className="event-resize-handle"
+                                aria-label={`${t("تغییر طول رویداد", "Resize event")} ${event.title}`}
+                                onKeyDown={(key) => {
+                                  if (key.key === "Enter" || key.key === " ") {
+                                    key.preventDefault();
+                                    setEditing(event);
+                                  }
+                                }}
+                                onPointerDown={(pointer) => {
+                                  pointer.preventDefault();
+                                  pointer.stopPropagation();
+                                  resizing.current = {
+                                    event,
+                                    y: pointer.clientY,
+                                  };
+                                  pointer.currentTarget.setPointerCapture(
+                                    pointer.pointerId,
+                                  );
+                                }}
+                                onPointerUp={(pointer) =>
+                                  void finishResize(pointer)
+                                }
+                                onPointerCancel={() => {
+                                  resizing.current = null;
+                                }}
+                              >
+                                <span aria-hidden="true">⋯</span>
+                              </button>
                             )}
-                          </small>
-                        </button>
+                        </div>
                       );
                     })}
                 </div>
@@ -613,6 +854,7 @@ export function CalendarView({
           setEditing(null);
         }}
         action={action}
+        draft={draft}
       />
     </>
   );
@@ -624,12 +866,14 @@ function EventEditor({
   date,
   close,
   action,
+  draft,
 }: {
   open: boolean;
   event: EventDTO | null;
   date: string;
   close: () => void;
   action: Action;
+  draft?: { starts: string; ends: string } | null;
 }) {
   const { t } = useLocale();
   const [error, setError] = useState("");
@@ -644,14 +888,14 @@ function EventEditor({
         event?.timezone ?? ZONE,
         "yyyy-MM-dd'T'HH:mm",
       )
-    : `${date}T09:00`;
+    : (draft?.starts ?? `${date}T09:00`);
   const endValue = originalEnd
     ? formatInTimeZone(
         originalEnd,
         event?.timezone ?? ZONE,
         "yyyy-MM-dd'T'HH:mm",
       )
-    : `${date}T10:00`;
+    : (draft?.ends ?? `${date}T10:00`);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -703,6 +947,7 @@ function EventEditor({
           timezone: zone,
           all_day: allDay,
           notes: data.get("notes"),
+          ...(data.get("category") ? { category: data.get("category") } : {}),
           apply_to_series: data.get("confirm_series") === "on",
           ...(event?.recurrence_rule
             ? {
@@ -766,6 +1011,22 @@ function EventEditor({
             defaultValue={event?.title ?? ""}
             readOnly={!!external}
           />
+        </Field>
+        <Field label={t("دستهٔ رویداد", "Event category")}>
+          <select
+            name="category"
+            defaultValue={event?.category ?? ""}
+            disabled={!!external}
+          >
+            {!event?.category && (
+              <option value="">
+                {t("بدون دستهٔ ثبت‌شده", "No recorded category")}
+              </option>
+            )}
+            <option value="Work">{t("کار", "Work")}</option>
+            <option value="Personal">{t("شخصی", "Personal")}</option>
+            <option value="Other">{t("سایر", "Other")}</option>
+          </select>
         </Field>
         <Field label={t("منطقهٔ زمانی", "Time zone")}>
           <select
@@ -904,6 +1165,7 @@ function EventEditor({
           </Button>
         )}
       </form>
+      {event && !external && <EventReminders event={event} action={action} />}
       {event?.series_event_id && (
         <p className="muted small">
           {t(
@@ -1213,6 +1475,9 @@ export function WorkLog({ action }: { action: Action }) {
   const [month, setMonth] = useState(today().slice(0, 7));
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<TimeEntryDTO | null>(null);
+  const [draft, setDraft] = useState<{ starts: string; ends: string } | null>(
+    null,
+  );
   const [cursor, setCursor] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState(today);
   const [error, setError] = useState("");
@@ -1258,10 +1523,10 @@ export function WorkLog({ action }: { action: Action }) {
   };
   const startValue = editing
     ? formatInTimeZone(editing.starts_at, ZONE, "yyyy-MM-dd'T'HH:mm")
-    : "";
+    : (draft?.starts ?? "");
   const endValue = editing
     ? formatInTimeZone(editing.ends_at, ZONE, "yyyy-MM-dd'T'HH:mm")
-    : "";
+    : (draft?.ends ?? "");
   return (
     <>
       <div className="page-heading">
@@ -1280,6 +1545,7 @@ export function WorkLog({ action }: { action: Action }) {
         <AddButton
           onClick={() => {
             setEditing(null);
+            setDraft(null);
             setError("");
             setOpen(true);
           }}
@@ -1468,6 +1734,9 @@ export function WorkLog({ action }: { action: Action }) {
         </div>
         <div
           className="week-calendar"
+          role="region"
+          aria-label={t("جدول ساعت‌های کار", "Work hourly timeline")}
+          tabIndex={0}
           style={{ gridTemplateColumns: "54px 1fr" }}
           dir="ltr"
         >
@@ -1538,6 +1807,21 @@ export function WorkLog({ action }: { action: Action }) {
           </p>
         )}
       </section>
+      <WeeklyWorkGrid
+        key={selectedWeek}
+        week={selectedWeek}
+        onEdit={(entry) => {
+          setEditing(entry);
+          setError("");
+          setOpen(true);
+        }}
+        onNew={(starts, ends) => {
+          setEditing(null);
+          setDraft({ starts, ends });
+          setError("");
+          setOpen(true);
+        }}
+      />
       <Modal
         title={
           editing

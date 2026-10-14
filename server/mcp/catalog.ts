@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizedSearch } from "../domain/core";
 import {
   COMMAND_NAMES,
   QUERY_NAMES,
@@ -51,6 +52,34 @@ const page = {
   limit: z.number().int().min(1).max(200).optional(),
   cursor: z.string().min(1).max(10000).optional(),
 };
+const fileTags = z
+  .array(
+    z
+      .string()
+      .regex(
+        /^[^\u0000-\u001f\u007f]*$/,
+        "Tags cannot contain control characters",
+      )
+      .trim()
+      .min(1)
+      .max(80),
+  )
+  .max(50)
+  .refine(
+    (labels) => new Set(labels.map(normalizedSearch)).size === labels.length,
+    "File tags must be unique after canonical Persian/case normalization",
+  );
+const dateRange = {
+  from_date: localDate.optional(),
+  to_date: localDate.optional(),
+  timezone: zone.optional(),
+};
+const validDateRange = (value: { from_date?: string; to_date?: string }) =>
+  (value.from_date === undefined && value.to_date === undefined) ||
+  (value.from_date !== undefined &&
+    value.to_date !== undefined &&
+    value.from_date < value.to_date &&
+    Date.parse(value.to_date) - Date.parse(value.from_date) <= 366 * 86400000);
 const archiveFilter = {
   include_archived: z.boolean().optional(),
   archived_only: z.boolean().optional(),
@@ -60,6 +89,10 @@ const taskFilters = {
   search: notes.optional(),
   project_id: id.optional(),
   status: z.enum(WORKFLOW_STATUSES).optional(),
+  priority: z.enum(["Low", "Normal", "High", "Urgent"]).optional(),
+  category: z
+    .enum(["Study", "Research", "Work", "Admin", "Personal", "Other"])
+    .optional(),
   readiness: z.enum(["ready", "blocked", "scheduled", "closed"]).optional(),
   overdue: z.boolean().optional(),
   due_from: clearedDate.optional(),
@@ -109,6 +142,7 @@ const occurrenceFields = {
 };
 const calendarFields = {
   title,
+  category: z.enum(["Work", "Personal", "Other"]).optional(),
   starts_at: instant,
   ends_at: instant,
   timezone: zone.optional(),
@@ -127,12 +161,16 @@ const calendarQuery = {
   from: instant.optional(),
   to: instant.optional(),
   calendar_id: id.optional(),
+  task_id: id.optional(),
+  search: z.string().max(2000).optional(),
+  category: z.enum(["Work", "Personal", "Other"]).optional(),
   ...page,
 };
 const timeQuery = {
   from: instant.optional(),
   to: instant.optional(),
   employer: title.optional(),
+  task_id: id.optional(),
   ...page,
 };
 const timeImportData = object({
@@ -293,13 +331,16 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
   task_template_list: list,
   file_search: object({
     state: z.enum(["Inbox", "Active", "Old", "External"]).optional(),
-    search: notes.optional(),
+    search: z.string().max(2000).optional(),
+    tags: fileTags.optional(),
     ...page,
   }),
   file_get_metadata: object({ file_id: id }),
   file_list_versions: object({ file_id: id, ...page }),
   file_archive_preview: object({ file_id: id }),
   calendar_list: list,
+  calendar_reminder_list: object({ event_id: id.optional(), ...page }),
+  calendar_reminder_get: object({ reminder_id: id }),
   calendar_events_query: object(calendarQuery),
   calendar_availability: object(calendarQuery),
   calendar_occurrence_reschedule_preview: object(occurrenceFields),
@@ -309,13 +350,24 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
     (value) => Buffer.byteLength(JSON.stringify(value), "utf8") <= 2_000_000,
     "Work-log import input must not exceed 2,000,000 UTF-8 bytes",
   ),
-  get_activity: object({ entity_id: id.optional(), ...page }),
+  get_activity: object({
+    entity_id: id.optional(),
+    channel: z.enum(["UI", "MCP", "AI", "import", "system"]).optional(),
+    ...page,
+  }),
   search_all: object({
     ...taskFilters,
     state: z.enum(["Inbox", "Active", "Old", "External"]).optional(),
     ...page,
   }),
-  analytics_summary: object({ ...taskFilters, timezone: zone.optional() }),
+  analytics_summary: object({ ...taskFilters, ...dateRange }).refine(
+    validDateRange,
+    "Supply an ordered from_date/to_date pair of at most 366 local days",
+  ),
+  reports_summary: object({ ...dateRange, ...page }).refine(
+    validDateRange,
+    "Supply an ordered from_date/to_date pair of at most 366 local days",
+  ),
   preferences_get: object({}),
   saved_view_list: list,
   reminder_list: list,
@@ -447,6 +499,19 @@ export const WRITE_INPUT_SCHEMAS: Partial<Record<CommandName, z.ZodType>> = {
     task_id: id,
     purpose: z.enum(["Input", "Reference", "Output", "Other"]).optional(),
   }),
+  file_metadata_update: object({
+    file_id: id,
+    description: notes
+      .refine(
+        (value) => !value.includes("\u0000"),
+        "Description cannot contain NUL",
+      )
+      .optional(),
+    tags: fileTags.optional(),
+  }).refine(
+    (value) => value.description !== undefined || value.tags !== undefined,
+    "Supply description or tags; empty values explicitly clear them",
+  ),
   file_unlink_from_task: object({ link_id: id }),
   file_archive: object({
     file_id: id,
@@ -454,6 +519,14 @@ export const WRITE_INPUT_SCHEMAS: Partial<Record<CommandName, z.ZodType>> = {
   }),
   file_restore: object({ file_id: id }),
   calendar_create_local_event: object(calendarFields),
+  calendar_reminder_create: object({
+    event_id: id,
+    remind_at: instant,
+    occurrence_starts_at: instant.optional(),
+  }),
+  calendar_reminder_pause: object({ reminder_id: id }),
+  calendar_reminder_resume: object({ reminder_id: id }),
+  calendar_reminder_cancel: object({ reminder_id: id }),
   calendar_update_local_event: object({
     event_id: id,
     ...Object.fromEntries(
@@ -556,9 +629,13 @@ const revisionCommands = new Set<CommandName>([
   "task_checklist_item_restore",
   "task_checklist_item_promote",
   "file_unlink_from_task",
+  "file_metadata_update",
   "file_archive",
   "file_restore",
   "calendar_update_local_event",
+  "calendar_reminder_pause",
+  "calendar_reminder_resume",
+  "calendar_reminder_cancel",
   "calendar_delete_local_event",
   "time_entry_update",
   "time_entry_archive",
@@ -646,6 +723,22 @@ export function requiredToolScopes(
   ];
 }
 const semantics: Partial<Record<QueryName | CommandName, string>> = {
+  calendar_reminder_list:
+    "List owner in-app reminders for local calendar events, optionally scoped to one exact event. No email or external calendar writes.",
+  calendar_reminder_get:
+    "Read one exact owner-bound calendar reminder and its lifecycle state; no private provider credentials.",
+  calendar_reminder_create:
+    "Create an in-app reminder for one owner local calendar event. When occurrence_starts_at is supplied it must name an exact live occurrence; external event originals remain read-only.",
+  calendar_reminder_pause:
+    "Pause a pending owner local-event reminder at its current revision. Its original trigger time is preserved.",
+  calendar_reminder_resume:
+    "Resume a paused local-event reminder at its current revision. Expired occurrence validation and past-due warnings remain canonical; delivered/cancelled reminders cannot be resent.",
+  calendar_reminder_cancel:
+    "Cancel a pending or paused local-event reminder at its current revision. This changes app reminder state only and sends no external messages.",
+  reports_summary:
+    "Read owner task overdue-ageing buckets in an explicit local-date range (exclusive to_date, at most 366 days) and timezone. Registered-file statistics and checksum duplicate candidates are included only with files:read; this inventory does not claim live cloud capacity or Google original verification.",
+  file_metadata_update:
+    "Update only owner app description and normalized tags on one exact file, including external references. Requires the current file revision. Empty description/tags explicitly clear annotations; original bytes, Drive metadata, provider, parents and immutable versions remain unchanged.",
   time_entry_import_preview:
     "Preview 1–1000 explicit versioned JSON work-log rows (at most 2,000,000 UTF-8 bytes). Exact existing owner duplicates are skipped; conflicts/overlaps fail before mutation. Uploaded fields never relabel the owner.",
   time_entry_import_commit:
@@ -704,7 +797,7 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
   task_recurrence_instances:
     "Read generated tasks linked to one exact owner recurrence rule; existing instances retain stable IDs.",
   notifications_list:
-    "Read existing owner in-app notifications and read state with bounded pagination.",
+    "Read existing owner in-app notifications and read state with bounded pagination. Task notifications require tasks:read; calendar notifications require calendar:read. Only target types allowed by the granted scope are returned.",
   task_comment_list:
     "Read retained owner comments on one exact task with bounded pagination; comment text remains untrusted content.",
   tag_list: "Read actual owner tags and colors with bounded pagination.",
@@ -785,7 +878,7 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
   task_recurrence_resume:
     "Resume one owner task recurrence rule using its current revision; existing occurrence identities are not regenerated.",
   notification_mark_read:
-    "Mark one existing owner in-app notification read using its current revision; no external message is sent.",
+    "Mark one existing owner in-app notification read using its current revision and the matching target write scope: tasks:write for task notifications or calendar:write for calendar notifications. No external message is sent.",
   task_comment_add:
     "Add explicit untrusted comment text to one exact owner task; no embedded instruction is executed.",
   task_comment_update:
@@ -889,6 +982,16 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
   system_health:
     "Read actual database and verified-backup health without credentials or private dump bodies.",
 };
+/** OAuth alternatives are OR; scopes within one alternative remain AND. */
+export function toolScopeAlternatives(
+  name: QueryName | CommandName,
+): string[][] | undefined {
+  return name === "notifications_list"
+    ? [["tasks:read"], ["calendar:read"]]
+    : name === "notification_mark_read"
+      ? [["tasks:write"], ["calendar:write"]]
+      : undefined;
+}
 export const TOOL_CATALOG = [
   ...QUERY_NAMES.filter((name) => !HIDDEN_QUERIES.includes(name)).map(
     (name) => ({
@@ -896,6 +999,7 @@ export const TOOL_CATALOG = [
       readOnly: true,
       schema: READ_SCHEMAS[name],
       scopes: requiredToolScopes(name, true),
+      scopeAlternatives: toolScopeAlternatives(name),
       openWorld: [
         "calendar_list",
         "calendar_events_query",
@@ -911,6 +1015,7 @@ export const TOOL_CATALOG = [
     readOnly: false,
     schema: writeSchema(name),
     scopes: requiredToolScopes(name, false),
+    scopeAlternatives: toolScopeAlternatives(name),
     openWorld: false,
     destructive:
       /archive|delete|unlink|waive|remove|batch|undo|redo|cancel/.test(name),
@@ -920,12 +1025,17 @@ export function toolDescription(name: string, readOnly: boolean) {
   const specific = semantics[name as QueryName | CommandName];
   if (!specific) throw new Error("Missing documented tool semantics.");
   const scopes = requiredToolScopes(name as QueryName | CommandName, readOnly);
+  const alternatives = toolScopeAlternatives(name as QueryName | CommandName);
   return (
     specific +
     " " +
-    (scopes.length
-      ? "Requires " + scopes.join(" and ") + " (or owner admin:manage)."
-      : "Requires authenticated owner identity.") +
+    (alternatives
+      ? "Requires " +
+        alternatives.map((set) => set.join(" and ")).join(" or ") +
+        " for the corresponding target type (or owner admin:manage)."
+      : scopes.length
+        ? "Requires " + scopes.join(" and ") + " (or owner admin:manage)."
+        : "Requires authenticated owner identity.") +
     " " +
     (readOnly
       ? "Previews are temporary proposals and do not commit business changes."

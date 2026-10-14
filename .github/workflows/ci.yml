@@ -39,11 +39,14 @@ jobs:
       - run: pnpm security:scan
       - run: pnpm audit --prod --audit-level high
       - run: pnpm test:coverage
+      - name: Initialize isolated PostgreSQL schema
+        run: pnpm db:migrate
       - name: Real PostgreSQL transaction guards
-        run: node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/domain/postgres.test.ts
+        run: node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/domain/postgres.test.ts tests/domain/postgres-dates.test.ts tests/domain/postgres-read-concurrency.test.ts
         env:
           TEST_POSTGRES: "1"
-      - run: pnpm db:migrate
+      - name: Recheck idempotent schema migration
+        run: pnpm db:migrate
       - run: pnpm exec tsx --env-file=.env.local scripts/ops/auth-migrate.ts
       - run: pnpm exec tsx --env-file=.env.local scripts/ops/bootstrap-owner.ts /tmp/lifeos-ci-credentials.json
       - run: pnpm build
@@ -62,7 +65,7 @@ jobs:
           PLAYWRIGHT_CHROMIUM_CHANNEL: chromium
       - name: Real HTTP authorization, revocation and token expiry
         run: |
-          node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth.test.ts tests/security/http-auth-human-authority.test.ts tests/security/http-auth-revocation.test.ts
+          node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth.test.ts tests/security/http-auth-human-authority.test.ts tests/security/http-auth-revocation.test.ts tests/security/http-notification-scopes.test.ts
           node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-oidc.test.ts
           node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-rate-limit.test.ts
           node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-expiry.test.ts

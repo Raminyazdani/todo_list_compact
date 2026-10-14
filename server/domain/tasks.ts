@@ -299,6 +299,7 @@ export async function taskCommand(
   principal: Principal,
   revision: number | undefined,
   operationId: string,
+  reservedId?: string,
 ): Promise<Change> {
   let input = initial;
   if (
@@ -316,7 +317,19 @@ export async function taskCommand(
   if (command === "task_create" || command === "subtask_create") {
     if (command === "subtask_create" && !input.parent_task_id)
       throw new DomainError("INVALID_INPUT", "parent_task_id required.");
-    const task = await createTask(tx, input, principal);
+    if (reservedId) {
+      const exists = await tx.query("SELECT 1 FROM tasks WHERE task_id=$1", [
+        reservedId,
+      ]);
+      if (exists.rows.length)
+        throw new DomainError(
+          "IDEMPOTENCY_CONFLICT",
+          "The reserved task identity is already in use by another operation.",
+          {},
+          409,
+        );
+    }
+    const task = await createTask(tx, input, principal, reservedId);
     return {
       entityId: String(task.task_id),
       before: null,

@@ -21,6 +21,7 @@ import {
   snapshot,
   taskFromSnapshot,
   text,
+  timezone,
   type Input,
   type Snapshot,
 } from "./core";
@@ -37,7 +38,10 @@ import {
   externalCalendarStatus,
 } from "../integrations/calendar-runtime";
 import { resolveAiConfiguration } from "../integrations/ai-guard";
-import { analyticsTrends } from "./analytics";
+import { analyticsRange, analyticsTrends } from "./analytics";
+import { fileMetadata, fileTags } from "./annotations";
+import { reports } from "./reports";
+import { taskOverdue } from "./deadline";
 import { previewCalendarOccurrence } from "./calendar";
 import { previewTimeImport } from "./time-import";
 import { instantToLocalDate } from "../../shared/datetime";
@@ -487,13 +491,19 @@ export async function domainQuery(
     );
   }
   if (operation === "notifications_list") {
-    requireScope(principal, "tasks");
+    const tasksAllowed =
+        principal.scopes.includes("admin:manage") ||
+        principal.scopes.includes("tasks:read"),
+      calendarAllowed =
+        principal.scopes.includes("admin:manage") ||
+        principal.scopes.includes("calendar:read");
+    if (!tasksAllowed && !calendarAllowed) requireScope(principal, "tasks");
     return page(
       cleanRows(
         (
           await tx.query<Input>(
-            "SELECT * FROM notifications WHERE owner_id=$1 ORDER BY created_at DESC,notification_id",
-            [owner],
+            "SELECT * FROM notifications WHERE owner_id=$1 AND ((target_type='task' AND $2) OR (target_type='calendar' AND $3)) ORDER BY created_at DESC,notification_id",
+            [owner, tasksAllowed, calendarAllowed],
           )
         ).rows,
       ),
@@ -543,6 +553,12 @@ export async function domainQuery(
     if (input.entity_id) {
       params.push(text(input, "entity_id"));
       condition += " AND entity_id=$2";
+    }
+    if (input.channel !== undefined) {
+      params.push(
+        choice(input, "channel", ["UI", "MCP", "AI", "import", "system"]),
+      );
+      condition += ` AND channel=$${params.length}`;
     }
     const rows = cleanRows(
       (
@@ -595,10 +611,14 @@ export async function domainQuery(
   }
   if (operation.startsWith("file_")) {
     requireScope(principal, "files");
+    const requestedTags =
+      input.tags === undefined
+        ? []
+        : fileTags(input.tags).map(normalizedSearch);
     if (operation === "file_archive_preview")
       return archiveEligibility(tx, text(input, "file_id"), owner);
     if (operation === "file_get_metadata")
-      return entity(tx, "files", "file_id", text(input, "file_id"), owner);
+      return fileMetadata(tx, text(input, "file_id"), owner);
     if (operation === "file_list_versions") {
       const file = await entity(
         tx,
@@ -610,7 +630,7 @@ export async function domainQuery(
       const rows = cleanRows(
         (
           await tx.query<Input>(
-            "SELECT * FROM files WHERE owner_id=$1 AND version_group_id=$2 ORDER BY created_at,file_id",
+            "SELECT f.*,COALESCE(a.description,'') description,COALESCE(a.tags,'[]'::jsonb) tags FROM files f LEFT JOIN file_annotations a ON a.file_id=f.file_id AND a.owner_id=f.owner_id WHERE f.owner_id=$1 AND f.version_group_id=$2 ORDER BY f.created_at,f.file_id",
             [owner, file.version_group_id],
           )
         ).rows,
@@ -620,7 +640,7 @@ export async function domainQuery(
     const rows = cleanRows(
       (
         await tx.query<Input>(
-          "SELECT * FROM files WHERE owner_id=$1 ORDER BY created_at DESC,file_id",
+          "SELECT f.*,COALESCE(a.description,'') description,COALESCE(a.tags,'[]'::jsonb) tags FROM files f LEFT JOIN file_annotations a ON a.file_id=f.file_id AND a.owner_id=f.owner_id WHERE f.owner_id=$1 ORDER BY f.created_at DESC,f.file_id",
           [owner],
         )
       ).rows,
@@ -629,10 +649,54 @@ export async function domainQuery(
         (!input.state || f.state === input.state) &&
         (!input.search ||
           normalizedSearch(
-            String(f.title) + " " + String(f.original_filename),
-          ).includes(normalizedSearch(text(input, "search")))),
+            String(f.title) +
+              " " +
+              String(f.original_filename) +
+              " " +
+              String(f.description) +
+              " " +
+              (f.tags as string[]).join(" "),
+          ).includes(
+            normalizedSearch(text(input, "search", undefined, 2000)),
+          )) &&
+        requestedTags.every((tag) =>
+          (f.tags as string[]).some(
+            (stored) => normalizedSearch(stored) === tag,
+          ),
+        ),
     );
     return page(rows, input, (r) => String(r.file_id));
+  }
+  if (
+    operation === "calendar_reminder_get" ||
+    operation === "calendar_reminder_list"
+  ) {
+    requireScope(principal, "calendar");
+    if (operation === "calendar_reminder_get")
+      return entity(
+        tx,
+        "event_reminders",
+        "reminder_id",
+        text(input, "reminder_id"),
+        owner,
+      );
+    if (input.event_id)
+      await entity(
+        tx,
+        "calendar_events",
+        "event_id",
+        text(input, "event_id"),
+        owner,
+      );
+    const reminders = cleanRows(
+      (
+        await tx.query<Input>(
+          "SELECT r.*,e.title event_title,r.remind_at<=now() past_due FROM event_reminders r JOIN calendar_events e ON e.event_id=r.event_id AND e.owner_id=r.owner_id WHERE r.owner_id=$1 AND ($2::text IS NULL OR r.event_id=$2) ORDER BY r.remind_at,r.reminder_id",
+          [owner, input.event_id ?? null],
+        )
+      ).rows,
+    );
+    return page(reminders, input, (r) => String(r.reminder_id));
   }
   if (operation.startsWith("calendar_") || operation.startsWith("time_")) {
     const isTime = operation.startsWith("time_");
@@ -663,6 +727,12 @@ export async function domainQuery(
       column = isTime ? "entry_id" : "event_id";
     const params: unknown[] = [owner];
     let condition = "owner_id=$1 AND archived_at IS NULL";
+    if (input.task_id) {
+      const taskId = text(input, "task_id", undefined, 512);
+      await entity(tx, "tasks", "task_id", taskId, owner);
+      params.push(taskId);
+      condition += ` AND task_id=$${params.length}`;
+    }
     if (input.from) {
       params.push(instant(input, "from"));
       condition += isTime
@@ -768,6 +838,27 @@ export async function domainQuery(
           event,
         );
       expanded.splice(0, expanded.length, ...uniqueEvents.values());
+      const searched =
+        input.search === undefined
+          ? null
+          : normalizedSearch(text(input, "search", undefined, 2000));
+      const category =
+        input.category === undefined
+          ? null
+          : choice(input, "category", ["Work", "Personal", "Other"]);
+      expanded.splice(
+        0,
+        expanded.length,
+        ...expanded.filter(
+          (event) =>
+            (!input.task_id || event.task_id === input.task_id) &&
+            (!category || event.category === category) &&
+            (!searched ||
+              normalizedSearch(
+                String(event.title) + " " + String(event.notes ?? ""),
+              ).includes(searched)),
+        ),
+      );
       expanded.sort((a, b) =>
         String(a.starts_at).localeCompare(String(b.starts_at)),
       );
@@ -912,7 +1003,7 @@ export async function domainQuery(
         ? cleanRows(
             (
               await tx.query(
-                `SELECT f.* FROM files f JOIN file_task_links l ON l.file_id=f.file_id AND l.owner_id=f.owner_id WHERE l.task_id=$1 AND l.owner_id=$2 AND l.active=true`,
+                `SELECT f.*,COALESCE(a.description,'') description,COALESCE(a.tags,'[]'::jsonb) tags FROM files f JOIN file_task_links l ON l.file_id=f.file_id AND l.owner_id=f.owner_id LEFT JOIN file_annotations a ON a.file_id=f.file_id AND a.owner_id=f.owner_id WHERE l.task_id=$1 AND l.owner_id=$2 AND l.active=true`,
                 [task.task_id, owner],
               )
             ).rows,
@@ -998,6 +1089,26 @@ export async function domainQuery(
   if (input.project_id)
     tasks = tasks.filter((t) => t.project_id === input.project_id);
   if (input.status) tasks = tasks.filter((t) => t.status === input.status);
+  if (input.priority) {
+    const priority = choice(input, "priority", [
+      "Low",
+      "Normal",
+      "High",
+      "Urgent",
+    ]);
+    tasks = tasks.filter((task) => task.priority === priority);
+  }
+  if (input.category) {
+    const category = choice(input, "category", [
+      "Study",
+      "Research",
+      "Work",
+      "Admin",
+      "Personal",
+      "Other",
+    ]);
+    tasks = tasks.filter((task) => task.category === category);
+  }
   if (input.search || input.query) {
     const needle = normalizedSearch(
       text(input, input.search ? "search" : "query"),
@@ -1031,7 +1142,7 @@ export async function domainQuery(
       (task) =>
         matches(task.due_date) ||
         matches(
-          task.due_at ? instantToLocalDate(task.due_at, "Europe/Berlin") : null,
+          task.due_at ? instantToLocalDate(task.due_at, timezone(input)) : null,
         ),
     );
   }
@@ -1042,15 +1153,7 @@ export async function domainQuery(
     !explicitContext &&
     (operation === "task_list_overdue" || input.overdue === true)
   ) {
-    const today = new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Europe/Berlin",
-    }).format(new Date());
-    tasks = tasks.filter(
-      (t) =>
-        t.readiness !== "closed" &&
-        ((t.due_at && Date.parse(t.due_at) < Date.now()) ||
-          (t.due_date && t.due_date < today)),
-    );
+    tasks = tasks.filter((task) => taskOverdue(task, timezone(input)));
   }
   if (operation === "task_graph_get") {
     // A selected task's owner-authorized context takes precedence over inventory filters.
@@ -1101,10 +1204,13 @@ export async function domainQuery(
     } else if (input.task_id) tasks = taskContext(data, input);
     return topologicalPlan(data, tasks);
   }
+  if (operation === "reports_summary")
+    return reports(tx, tasks, input, principal, (items) =>
+      page(items, input, (task) => task.task_id),
+    );
   if (operation === "analytics_summary") {
-    const today = new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Europe/Berlin",
-    }).format(new Date());
+    const range = analyticsRange(input),
+      trends = await analyticsTrends(tx, tasks, input, principal);
     const recent =
       principal.scopes.includes("activity:read") ||
       principal.scopes.includes("admin:manage")
@@ -1160,15 +1266,26 @@ export async function domainQuery(
         done: tasks.filter((t) => t.status === "Done").length,
         ready: tasks.filter((t) => t.ready_now).length,
         blocked: tasks.filter((t) => t.readiness === "blocked").length,
-        overdue: tasks.filter(
-          (t) => t.readiness !== "closed" && t.due_date && t.due_date < today,
-        ).length,
+        overdue: tasks.filter((task) => taskOverdue(task, range.timezone))
+          .length,
       },
       projects,
-      time: { minutes: time },
+      time: {
+        minutes: range.start
+          ? trends.days.reduce((sum, day) => sum + day.minutes, 0)
+          : time,
+        time_scope_granted: trends.time_scope_granted,
+      },
       files: { total: files },
       recent_activity: recent,
-      trends: await analyticsTrends(tx, tasks, input, principal),
+      trends,
+      range: {
+        timezone: range.timezone,
+        from_date: range.from_date,
+        to_date: range.to_date,
+        applies_to:
+          "activity_and_worked_time; inventory_counts_remain_current_snapshot",
+      },
     };
   }
   if (operation === "search_all") {

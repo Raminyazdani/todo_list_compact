@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { boundedSignIn } from "./bounded-signin.mjs";
 
 const [credentialsPath, origin = "http://localhost:3000"] =
   process.argv.slice(2);
@@ -20,14 +21,7 @@ check(
 );
 const publicData = await fetch(`${origin}/api/v1/query?operation=task_search`);
 check(publicData.status === 401, "Unauthenticated task data leaked");
-const login = await fetch(`${origin}/api/auth/sign-in/email`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json", Origin: origin },
-  body: JSON.stringify({
-    email: credentials.email,
-    password: credentials.password,
-  }),
-});
+const login = await boundedSignIn(origin, credentials);
 check(login.ok, `Owner sign-in failed (${login.status})`);
 const cookie = login.headers
   .getSetCookie()

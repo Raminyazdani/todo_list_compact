@@ -1,19 +1,22 @@
 {
-  "recorded_at": "2026-10-13T23:01:26Z",
-  "phase": "pre_release_verification",
+  "recorded_at": "2026-10-14T03:08:34.446Z",
+  "phase": "frozen_build14_complete_commit_and_CI",
   "production_verified": false,
   "checks": [
     {
       "command": "pnpm test:coverage",
-      "started_at": "2026-10-13T22:40:18Z",
+      "started_at": "2026-10-14T00:32:12Z",
       "status": "PASS",
-      "test_files_passed": 32,
-      "tests_passed": 233,
-      "tests_skipped": 16,
-      "duration_seconds": 58.21,
+      "test_files_passed": 42,
+      "tests_passed": 300,
+      "tests_skipped": 21,
+      "duration_seconds": 88.6,
       "skipped_reason": "Explicit real PostgreSQL and live HTTP/expiry opt-in fixtures; separate actual runs required."
     },
-    { "command": "pnpm typecheck", "status": "PASS" },
+    {
+      "command": "pnpm typecheck",
+      "status": "PASS"
+    },
     {
       "command": "pnpm audit --prod --audit-level moderate",
       "status": "PASS",
@@ -22,7 +25,7 @@
     {
       "command": "pnpm build",
       "status": "PASS",
-      "limitation": "Seventh frozen application build passed on 2026-10-13 UTC. Final full browser suite, reviewed production revision and source cutover remain separate checks."
+      "limitation": "Eleventh frozen application build passed. Exact commit CI, source import and final production tests remain required."
     },
     {
       "command": "node scripts/ops/runtime-smoke.mjs PRIVATE_STAGING_CREDENTIALS",
@@ -56,11 +59,12 @@
     },
     {
       "command": "pnpm test:e2e",
-      "status": "PASS_LOCAL_SUBSETS",
-      "tests_passed": 9,
-      "tests_skipped": 1,
-      "duration_minutes": 3.9,
-      "limitation": "All nine local browser scenarios passed across unchanged and affected reruns. Four full-page WCAG2A/AA axe checks passed. Actual production redeploy and the subsequent bounded UI additions remain separate checks."
+      "status": "AFFECTED_RERUN_RUNNING",
+      "tests_passed": 20,
+      "tests_skipped": 2,
+      "duration_minutes": 6.6,
+      "limitation": "Build10 full25 run: calendar datetime-local fixture error corrected; observed Dashboard missing-revision and Files375px overflow repaired in build11. Three affected/appearance checks and final CI remain required.",
+      "tests_failed": 3
     },
     {
       "command": "node scripts/ops/runtime-smoke.mjs PRIVATE_PRODUCTION_CREDENTIALS https://ramin-life-os.vercel.app",
@@ -97,6 +101,33 @@
       "restore": true,
       "fabricated_edges": 0,
       "fabricated_checklist_items": 0
+    },
+    {
+      "command": "TEST_POSTGRES=1 node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/domain/postgres.test.ts tests/domain/postgres-dates.test.ts",
+      "started_at": "2026-10-14T00:32:13Z",
+      "status": "PASS",
+      "tests_passed": 8,
+      "duration_seconds": 41.26,
+      "evidence": "Three actual concurrent SQL guards, four scalar parser tests and one real native-pg child-process probe across Berlin/Tokyo/Los Angeles."
+    },
+    {
+      "command": "pnpm exec vitest run tests/contracts/restore-drill.test.ts",
+      "status": "PASS",
+      "tests_passed": 7,
+      "duration_seconds": 7.49,
+      "evidence": "Includes populated older-v1 exact original fields plus known new defaults."
+    },
+    {
+      "command": "pnpm exec vitest run tests/contracts/mcp-security-metadata.test.ts",
+      "status": "PASS",
+      "tests_passed": 1,
+      "evidence": "Actual SDK in-memory wire discovery verifies notification OR scopes; not HTTP authorization proof."
+    },
+    {
+      "command": "public-safety --private-source PRIVATE_SNAPSHOT",
+      "status": "PASS",
+      "files_checked": 257,
+      "private_identifiers_checked": 120
     }
   ],
   "coverage": {
@@ -111,5 +142,100 @@
     "private_blob": "MOCK_ONLY_ACCOUNT_QUOTA_BLOCKED",
     "google_app_grant": "NOT_CONNECTED",
     "chatgpt_connection": "NOT_INSTALLED"
+  },
+  "latest_coverage": {
+    "all": {
+      "statements": 91.26,
+      "branches": 87.24,
+      "functions": 85.54,
+      "lines": 91.86
+    },
+    "domain": {
+      "statements": 94.17,
+      "branches": 90.13,
+      "functions": 88.07,
+      "lines": 94.8
+    }
+  },
+  "latest_frozen_coverage": {
+    "status": "PASS",
+    "started_at": "2026-10-14T02:55:41Z",
+    "tests_passed": 366,
+    "tests_skipped": 28,
+    "test_files_passed": 47,
+    "test_files_skipped": 9,
+    "duration_seconds": 101.64,
+    "all": {
+      "statements": 91.4,
+      "branches": 87.89,
+      "functions": 87.87,
+      "lines": 91.94
+    },
+    "domain": {
+      "statements": 94.36,
+      "branches": 90.5,
+      "functions": 90,
+      "lines": 94.89
+    }
+  },
+  "latest_frozen_native_postgres": {
+    "status": "PASS",
+    "started_at": "2026-10-14T02:11:37Z",
+    "tests_passed": 8,
+    "duration_seconds": 78.8,
+    "evidence": "Three actual concurrency tests, four DATE parser tests and one real native-pg child probe across three timezones; actual connection helper in use."
+  },
+  "latest_application_build": {
+    "number": 14,
+    "status": "PASS",
+    "production": false
+  },
+  "latest_browser": {
+    "cases": 26,
+    "status": "FAIL",
+    "passed": 18,
+    "failed": 7,
+    "skipped": 1,
+    "duration_minutes": 23.3,
+    "failed_cases": [
+      "calendar_reminder_read_before_ack",
+      "mcp_browser_mutation_parity",
+      "fresh_login_graph_beforeEach_preferences",
+      "DG36_beforeEach_preferences_no_redeploy_attempt",
+      "mobile_preview_confirmation",
+      "create_via_MCP_beforeEach_preferences",
+      "lost_create_ack_probe_transport"
+    ],
+    "limitation": "The reminder test was strengthened to await actual command200 ACK after this case had failed. No repaired PASS claimed yet. Other APIs returned intermittent errors under concurrent reads."
+  },
+  "runtime_readonly_dashboard_probe": {
+    "status": "FAIL",
+    "requests": 19,
+    "http_500": 7,
+    "http_400_invalid_probe": 1,
+    "source_or_business_written": false,
+    "longest_success_ms": 23933,
+    "limitation": "One file_list probe used an invalid defaultinput and is separately400;7 server500 are genuine runtime evidence. Narrow read contention repair active."
+  },
+  "affected_browser_build14": {
+    "status": "PASS",
+    "cases_passed": 6,
+    "duration_minutes": 4.4,
+    "scope": "six previously failing enabled workflows; final whole suite still required in exactSHA CI"
+  },
+  "runtime_readonly_dashboard_after_fix": {
+    "status": "PASS",
+    "requests": 19,
+    "http200": 19,
+    "all_returned_data": true,
+    "longest_ms": 5027,
+    "source_or_business_written": false
+  },
+  "native_read_concurrency": {
+    "status": "PASS",
+    "tests_passed": 4,
+    "duration_seconds": 33.18,
+    "no_DDL": true,
+    "synthetic_separate_namespace": true
   }
 }

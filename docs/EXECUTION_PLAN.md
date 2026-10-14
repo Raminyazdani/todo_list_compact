@@ -2,6 +2,8 @@
 
 Current status: canonical implementation and integration verification. The repository has committed foundation work on `feat/life-os`; the default branch remains `master`. Production auth/MCP verification is tracked by the orchestrator. The full UI regression pass, source cutover and provider-specific gates remain separate evidence requirements. The milestone table retains its historical initial states; use the dependency test matrix and release checkpoint for observed outcomes.
 
+The [Product scope audit](PRODUCT_SPEC.md#remaining-scope-audit) records source implementation and remaining independent proof for controllable master breadth. Core graph/checklist completion is not a substitute for those requirements. Fresh browser evidence follows coherent build barriers; a failure is fixed and rerun without weakening its assertions, and prior passing unaffected scenarios retain their exact layer/time qualification. The first attempt at the next coherent build was aborted during an in-progress backend type change; it is not recorded as a successful build. Additive schema migration and a new frozen build must precede browser execution.
+
 ## Architecture decisions to verify
 
 - Full-stack strict TypeScript with Next App Router, React, accessible CSS design tokens and pnpm lockfile.

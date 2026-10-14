@@ -17,3 +17,4 @@ This runtime provides four concurrent slots including the orchestrator. Assignme
 - Agent readiness is provisional. Supply exact changed files, commands/results, integration inputs, risks and evidence. Orchestrator verifies actual diff/tests before committing or releasing.
 - Review cycles/races/auth/prompt injection/migration preservation independently. A green build or named test file is not acceptance evidence.
 - Subagents do not independently claim overall release or background continuation after the session. Checkpoint honestly.
+- A bounded read-only UI scope reviewer may occupy a freed domain slot. It changes no files, sessions or staging data and reports concrete risks to Requirements/UI; the total active slot count remains four.

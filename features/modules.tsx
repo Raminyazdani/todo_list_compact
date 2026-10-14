@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   ArrowUpRight,
   ArrowUp,
@@ -17,7 +17,6 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
-  Upload,
 } from "lucide-react";
 import type {
   ActivityDTO,
@@ -38,14 +37,19 @@ import { query, useQuery, clearQueryCache, clearMutationIntents } from "./api";
 import { useLocale } from "./locale";
 import { TaskRow } from "./tasks";
 import { ProjectWorkspace } from "./projects";
-import { Trends } from "./trends";
+import { FullReports } from "./reports";
 import { Connections } from "./connections";
+import { FileWorkspace } from "./files";
+import { DashboardExtras, type DashboardRange } from "./dashboard-extras";
+import { ExperienceSettings } from "./experience-settings";
+import { PasswordSettings } from "./security-settings";
+import { InstallAppCard } from "@/components/pwa";
+import { AIProposalPreview, type AISimulation } from "./ai-preview";
 import {
   Button,
   Empty,
   Field,
   Modal,
-  Progress,
   QueryState,
   SectionHeading,
 } from "@/components/ui";
@@ -97,6 +101,39 @@ export function Dashboard({
     revision: number;
   }>("preferences_get");
   const [customize, setCustomize] = useState(false);
+  const [localRange, setLocalRange] = useState<DashboardRange | null>(null);
+  const [fallbackDay] = useState(() =>
+    instantToLocalDate(Date.now(), "Europe/Berlin"),
+  );
+  const fallbackRange = {
+    from_date: fallbackDay,
+    to_date: addCalendarDays(fallbackDay, 8),
+    timezone: "Europe/Berlin",
+  };
+  const savedRange = preferences.data?.settings.dashboard_range as
+    DashboardRange | undefined;
+  let persistedRange = fallbackRange;
+  try {
+    if (
+      savedRange &&
+      savedRange.from_date &&
+      savedRange.to_date &&
+      savedRange.timezone &&
+      Date.parse(
+        zonedLocalToInstant(`${savedRange.to_date}T00:00`, savedRange.timezone),
+      ) >
+        Date.parse(
+          zonedLocalToInstant(
+            `${savedRange.from_date}T00:00`,
+            savedRange.timezone,
+          ),
+        )
+    )
+      persistedRange = savedRange;
+  } catch {
+    /* Invalid imported preferences use the current local default. */
+  }
+  const range = localRange ?? persistedRange;
   const defaults = [
     { id: "focus", title: t("قدم‌های بعدی", "Next moves") },
     { id: "calendar", title: t("نمای روز", "Day preview") },
@@ -109,6 +146,11 @@ export function Dashboard({
     { id: "review", title: t("مرور هفتگی", "Weekly review") },
     { id: "files", title: t("منابع تازه", "Recent files") },
     { id: "sources", title: t("وضعیت منابع", "Source status") },
+    { id: "priority", title: t("ماتریس اولویت", "Priority matrix") },
+    { id: "overdue", title: t("مهلت‌های گذشته", "Overdue") },
+    { id: "meetings", title: t("رویدادهای بازه", "Events in range") },
+    { id: "ai", title: t("آخرین تغییرهای دستیار", "Latest AI changes") },
+    { id: "shortcuts", title: t("میان‌برها", "Shortcuts") },
   ];
   const saved = Array.isArray(preferences.data?.settings.dashboard_widgets)
     ? (preferences.data.settings.dashboard_widgets as {
@@ -116,6 +158,7 @@ export function Dashboard({
         visible: boolean;
         order: number;
         width: string;
+        height?: number | null;
       }[])
     : [];
   const widgets = defaults
@@ -124,6 +167,7 @@ export function Dashboard({
       visible: saved.find((value) => value.id === item.id)?.visible !== false,
       order: saved.find((value) => value.id === item.id)?.order ?? index,
       width: saved.find((value) => value.id === item.id)?.width ?? "normal",
+      height: saved.find((value) => value.id === item.id)?.height ?? null,
     }))
     .sort((a, b) => a.order - b.order);
   function widget(id: string) {
@@ -133,10 +177,20 @@ export function Dashboard({
     return {
       order: widget(id).order,
       gridColumn: widget(id).width === "wide" ? "1 / -1" : undefined,
+      height: widget(id).height || undefined,
+      overflow: widget(id).height ? "auto" : undefined,
+      resize:
+        preferences.data && !preferences.error && !preferences.fetching
+          ? ("vertical" as const)
+          : ("none" as const),
     };
   }
   function widgetProps(id: string) {
     return {
+      "data-widget-id": id,
+      role: "region" as const,
+      tabIndex: 0,
+      "aria-label": widget(id).title,
       hidden: !widget(id).visible,
       style: widgetStyle(id),
       draggable: true,
@@ -148,17 +202,20 @@ export function Dashboard({
     };
   }
   async function saveWidgets(next: typeof widgets) {
+    if (!preferences.data || preferences.error || preferences.fetching) return;
     await action(
       "preferences_update",
       {
         settings: {
-          ...preferences.data?.settings,
-          dashboard_widgets: next.map(({ id, visible, order, width }) => ({
-            id,
-            visible,
-            order,
-            width,
-          })),
+          dashboard_widgets: next.map(
+            ({ id, visible, order, width, height }) => ({
+              id,
+              visible,
+              order,
+              width,
+              height,
+            }),
+          ),
         },
       },
       preferences.data?.revision,
@@ -182,7 +239,38 @@ export function Dashboard({
     next.splice(to, 0, moved);
     void saveWidgets(next.map((item, index) => ({ ...item, order: index })));
   }
-  const data = useQuery<Analytics>("analytics_summary");
+  const resizeIntent = useRef<{ element: HTMLElement; before: number } | null>(
+    null,
+  );
+  function beginWidgetResize(event: React.PointerEvent<HTMLElement>) {
+    if (!preferences.data || preferences.error || preferences.fetching) return;
+    const element = (event.target as HTMLElement).closest<HTMLElement>(
+      ".dashboard-grid > section",
+    );
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    if (
+      event.clientY >= rect.bottom - 18 &&
+      (event.clientX <= rect.left + 18 || event.clientX >= rect.right - 18)
+    )
+      resizeIntent.current = { element, before: rect.height };
+  }
+  function finishWidgetResize() {
+    const active = resizeIntent.current;
+    resizeIntent.current = null;
+    if (!active) return;
+    const height = Math.round(active.element.getBoundingClientRect().height);
+    const id = active.element.dataset.widgetId;
+    if (id && Math.abs(height - active.before) > 4)
+      void saveWidgets(
+        widgets.map((item) =>
+          item.id === id
+            ? { ...item, height: Math.max(200, Math.min(1400, height)) }
+            : item,
+        ),
+      );
+  }
+  const data = useQuery<Analytics>("analytics_summary", { ...range });
   const ready = useQuery<PageDTO<TaskDTO>>("task_find_ready", { limit: 6 });
   const blocked = useQuery<PageDTO<TaskDTO>>("task_find_blocked", { limit: 4 });
   const [calendarFrom, setCalendarFrom] = useState(() =>
@@ -195,7 +283,7 @@ export function Dashboard({
     );
     return () => window.clearInterval(timer);
   }, []);
-  const calendarDay = instantToLocalDate(calendarFrom, "Europe/Berlin");
+  const calendarDay = instantToLocalDate(calendarFrom, range.timezone);
   const weekStart = addCalendarDays(
     calendarDay,
     -((new Date(`${calendarDay}T12:00:00Z`).getUTCDay() + 6) % 7),
@@ -208,8 +296,8 @@ export function Dashboard({
   const upcoming = useQuery<PageDTO<TaskDTO>>(
     "task_search",
     {
-      due_from: calendarDay,
-      due_to: addCalendarDays(calendarDay, 8),
+      due_from: range.from_date,
+      due_to: range.to_date,
       limit: 4,
     },
     widget("upcoming").visible,
@@ -231,8 +319,11 @@ export function Dashboard({
   }>(
     "time_summary",
     {
-      from: zonedLocalToInstant(`${weekStart}T00:00`),
-      to: zonedLocalToInstant(`${addCalendarDays(weekStart, 7)}T00:00`),
+      from: zonedLocalToInstant(`${weekStart}T00:00`, range.timezone),
+      to: zonedLocalToInstant(
+        `${addCalendarDays(weekStart, 7)}T00:00`,
+        range.timezone,
+      ),
     },
     widget("workload").visible,
   );
@@ -257,8 +348,11 @@ export function Dashboard({
   const events = useQuery<PageDTO<Record<string, unknown>>>(
     "calendar_events_query",
     {
-      from: zonedLocalToInstant(`${calendarDay}T00:00`),
-      to: zonedLocalToInstant(`${addCalendarDays(calendarDay, 1)}T00:00`),
+      from: zonedLocalToInstant(`${calendarDay}T00:00`, range.timezone),
+      to: zonedLocalToInstant(
+        `${addCalendarDays(calendarDay, 1)}T00:00`,
+        range.timezone,
+      ),
       limit: 5,
     },
   );
@@ -275,7 +369,7 @@ export function Dashboard({
                 weekday: "long",
                 month: "long",
                 day: "numeric",
-                timeZone: "Europe/Berlin",
+                timeZone: range.timezone,
               },
             ).format(now)}
           </div>
@@ -288,7 +382,12 @@ export function Dashboard({
           </p>
         </div>
         <div className="form-actions">
-          <Button onClick={() => setCustomize(true)}>
+          <Button
+            disabled={
+              !preferences.data || !!preferences.error || preferences.fetching
+            }
+            onClick={() => setCustomize(true)}
+          >
             {t("چیدمان داشبورد", "Customize dashboard")}
           </Button>
           <div className="private-label">
@@ -323,6 +422,110 @@ export function Dashboard({
           <ArrowUpRight size={16} />
         </Button>
       </form>
+      <form
+        className="filter-bar"
+        key={`${range.from_date}:${range.to_date}:${range.timezone}`}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!preferences.data || preferences.error || preferences.fetching)
+            return;
+          const form = new FormData(event.currentTarget);
+          const next = {
+            from_date: String(form.get("from_date")),
+            to_date: String(form.get("to_date")),
+            timezone: String(form.get("timezone")),
+          };
+          try {
+            const start = Date.parse(
+                zonedLocalToInstant(`${next.from_date}T00:00`, next.timezone),
+              ),
+              end = Date.parse(
+                zonedLocalToInstant(`${next.to_date}T00:00`, next.timezone),
+              );
+            if (end <= start || end - start > 366 * 86400000)
+              throw new Error(
+                t(
+                  "بازه باید مثبت و حداکثر یک سال باشد",
+                  "Range must be ordered and at most one year",
+                ),
+              );
+            if (
+              await action(
+                "preferences_update",
+                { settings: { dashboard_range: next } },
+                preferences.data?.revision,
+              )
+            )
+              setLocalRange(next);
+          } catch (error) {
+            window.dispatchEvent(
+              new CustomEvent("lifeos:error", {
+                detail: error instanceof Error ? error.message : String(error),
+              }),
+            );
+          }
+        }}
+      >
+        <Field label={t("شروع بازهٔ داشبورد", "Dashboard range starts")}>
+          <input
+            name="from_date"
+            disabled={
+              !preferences.data || !!preferences.error || preferences.fetching
+            }
+            type="date"
+            required
+            defaultValue={range.from_date}
+          />
+        </Field>
+        <Field
+          label={t(
+            "پایان بازهٔ داشبورد (شامل نمی‌شود)",
+            "Dashboard range ends (exclusive)",
+          )}
+        >
+          <input
+            name="to_date"
+            disabled={
+              !preferences.data || !!preferences.error || preferences.fetching
+            }
+            type="date"
+            required
+            defaultValue={range.to_date}
+          />
+        </Field>
+        <Field label={t("منطقهٔ زمانی داشبورد", "Dashboard timezone")}>
+          <select
+            disabled={
+              !preferences.data || !!preferences.error || preferences.fetching
+            }
+            name="timezone"
+            defaultValue={range.timezone}
+          >
+            <option>Europe/Berlin</option>
+            <option>Asia/Tehran</option>
+            <option>UTC</option>
+            {!["Europe/Berlin", "Asia/Tehran", "UTC"].includes(
+              range.timezone,
+            ) && <option>{range.timezone}</option>}
+          </select>
+        </Field>
+        <Button
+          disabled={
+            !preferences.data || !!preferences.error || preferences.fetching
+          }
+          type="submit"
+        >
+          {t("ثبت بازهٔ داشبورد", "Save dashboard range")}
+        </Button>
+      </form>
+      <QueryState {...preferences} retry={preferences.refresh} />
+      <p className="small muted">
+        {t(
+          "بازه برای رویدادها و روندهای فعالیت در منطقهٔ زمانی انتخابی است؛ مهلت‌های پیش‌رو بر پایهٔ روز برلین فیلتر می‌شوند. شمار کارها وضعیت فعلی فضای شماست.",
+          "Events and activity trends use the selected timezone; upcoming deadlines are filtered by Berlin calendar dates. Task counts describe the current workspace.",
+        )}{" "}
+        {range.timezone}
+      </p>
       <QueryState {...data} retry={data.refresh} />
       <div className="metric-grid">
         {[
@@ -359,10 +562,30 @@ export function Dashboard({
           </Link>
         ))}
       </div>
-      <div className="dashboard-grid">
+      <div
+        className="dashboard-grid"
+        onPointerDownCapture={beginWidgetResize}
+        onPointerUpCapture={finishWidgetResize}
+      >
+        <DashboardExtras
+          range={range}
+          action={action}
+          onOpen={onOpen}
+          settings={preferences.data?.settings ?? {}}
+          revision={
+            preferences.error || preferences.fetching
+              ? undefined
+              : preferences.data?.revision
+          }
+          widgetProps={widgetProps}
+        />
         <section
           className="panel focus-panel"
           hidden={!widget("focus").visible}
+          data-widget-id="focus"
+          role="region"
+          aria-label={widget("focus").title}
+          tabIndex={0}
           style={widgetStyle("focus")}
           draggable
           onDragStart={(event) =>
@@ -412,6 +635,10 @@ export function Dashboard({
         <section
           className="panel calendar-peek"
           hidden={!widget("calendar").visible}
+          data-widget-id="calendar"
+          role="region"
+          aria-label={widget("calendar").title}
+          tabIndex={0}
           style={widgetStyle("calendar")}
           draggable
           onDragStart={(event) =>
@@ -433,16 +660,16 @@ export function Dashboard({
             <span>
               {new Intl.DateTimeFormat(
                 language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
-                { weekday: "long", timeZone: "Europe/Berlin" },
+                { weekday: "long", timeZone: range.timezone },
               ).format(now)}
             </span>
             <strong>
               {new Intl.DateTimeFormat(
                 language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
-                { day: "numeric", timeZone: "Europe/Berlin" },
+                { day: "numeric", timeZone: range.timezone },
               ).format(now)}
             </strong>
-            <small>Europe/Berlin</small>
+            <small>{range.timezone}</small>
           </div>
           <QueryState {...events} retry={events.refresh} />
           {events.data?.items.length ? (
@@ -457,7 +684,7 @@ export function Dashboard({
                       {
                         hour: "2-digit",
                         minute: "2-digit",
-                        timeZone: "Europe/Berlin",
+                        timeZone: range.timezone,
                       },
                     )}
                   </small>
@@ -477,6 +704,10 @@ export function Dashboard({
         <section
           className="panel"
           hidden={!widget("blocked").visible}
+          data-widget-id="blocked"
+          role="region"
+          aria-label={widget("blocked").title}
+          tabIndex={0}
           style={widgetStyle("blocked")}
           draggable
           onDragStart={(event) =>
@@ -516,6 +747,10 @@ export function Dashboard({
         <section
           className="panel"
           hidden={!widget("activity").visible}
+          data-widget-id="activity"
+          role="region"
+          aria-label={widget("activity").title}
+          tabIndex={0}
           style={widgetStyle("activity")}
           draggable
           onDragStart={(event) =>
@@ -533,7 +768,10 @@ export function Dashboard({
               </Link>
             }
           />
-          <Activity events={data.data?.recent_activity.slice(0, 5) ?? []} />
+          <Activity
+            events={data.data?.recent_activity.slice(0, 5) ?? []}
+            timezone={range.timezone}
+          />
         </section>
 
         <section className="panel" {...widgetProps("projects")}>
@@ -839,6 +1077,32 @@ export function Dashboard({
               <option value="normal">{t("عادی", "Normal")}</option>
               <option value="wide">{t("تمام عرض", "Full width")}</option>
             </select>
+            <input
+              type="number"
+              min={200}
+              max={1400}
+              step={20}
+              value={item.height ?? ""}
+              placeholder={t("ارتفاع خودکار", "Auto height")}
+              aria-label={`${t("ارتفاع ویجت", "Widget height")} ${item.title}`}
+              onChange={(event) =>
+                void saveWidgets(
+                  widgets.map((value) =>
+                    value.id === item.id
+                      ? {
+                          ...value,
+                          height: event.target.value
+                            ? Math.max(
+                                200,
+                                Math.min(1400, Number(event.target.value)),
+                              )
+                            : null,
+                        }
+                      : value,
+                  ),
+                )
+              }
+            />
             <Button
               variant="quiet"
               disabled={index === 0}
@@ -870,7 +1134,13 @@ export function Dashboard({
 function ChevronIcon() {
   return <ArrowUpRight size={14} />;
 }
-function Activity({ events }: { events: ActivityDTO[] }) {
+function Activity({
+  events,
+  timezone = "Europe/Berlin",
+}: {
+  events: ActivityDTO[];
+  timezone?: string;
+}) {
   const { t } = useLocale();
   return (
     <div className="activity-list">
@@ -884,6 +1154,7 @@ function Activity({ events }: { events: ActivityDTO[] }) {
             </div>
             <time>
               {new Date(event.occurred_at).toLocaleTimeString(undefined, {
+                timeZone: timezone,
                 hour: "2-digit",
                 minute: "2-digit",
               })}
@@ -1118,6 +1389,8 @@ function ProjectKnowledge({
   action: Action;
 }) {
   const { t } = useLocale();
+  const [knowledgeCursor, setKnowledgeCursor] = useState<string | null>(null);
+  const [editingKnowledge, setEditingKnowledge] = useState<string | null>(null);
   const knowledge = useQuery<
     PageDTO<{
       knowledge_id: string;
@@ -1126,7 +1399,11 @@ function ProjectKnowledge({
       url: string | null;
       revision: number;
     }>
-  >("knowledge_search", { project_id: projectId });
+  >("knowledge_search", {
+    project_id: projectId,
+    limit: 50,
+    cursor: knowledgeCursor,
+  });
   return (
     <section className="project-knowledge">
       <SectionHeading
@@ -1137,6 +1414,52 @@ function ProjectKnowledge({
         <article key={item.knowledge_id} className="comment-card">
           <h3>{item.title}</h3>
           <p>{item.body}</p>
+          <Button
+            onClick={() =>
+              setEditingKnowledge(
+                editingKnowledge === item.knowledge_id
+                  ? null
+                  : item.knowledge_id,
+              )
+            }
+          >
+            {t("ویرایش یادداشت پروژه", "Edit project note")}
+          </Button>
+          {editingKnowledge === item.knowledge_id && (
+            <form
+              className="form-grid"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                if (
+                  await action(
+                    "knowledge_update",
+                    {
+                      knowledge_id: item.knowledge_id,
+                      title: form.get("title"),
+                      body: form.get("body"),
+                      url: form.get("url") || null,
+                    },
+                    item.revision,
+                  )
+                )
+                  setEditingKnowledge(null);
+              }}
+            >
+              <Field label={t("عنوان یادداشت ویرایش‌شده", "Edited note title")}>
+                <input name="title" required defaultValue={item.title} />
+              </Field>
+              <Field label={t("متن یادداشت ویرایش‌شده", "Edited note body")}>
+                <textarea name="body" defaultValue={item.body} />
+              </Field>
+              <Field label={t("پیوند یادداشت ویرایش‌شده", "Edited note URL")}>
+                <input name="url" type="url" defaultValue={item.url ?? ""} />
+              </Field>
+              <Button type="submit">
+                {t("ذخیرهٔ یادداشت پروژه", "Save project note")}
+              </Button>
+            </form>
+          )}
           {item.url && /^https?:\/\//.test(item.url) && (
             <a
               className="text-link"
@@ -1150,6 +1473,66 @@ function ProjectKnowledge({
           )}
         </article>
       ))}
+      <div className="form-actions">
+        {knowledgeCursor && (
+          <Button onClick={() => setKnowledgeCursor(null)}>
+            {t("ابتدای دانش پروژه", "First project notes")}
+          </Button>
+        )}
+        {knowledge.data?.next_cursor && (
+          <Button
+            onClick={() => setKnowledgeCursor(knowledge.data!.next_cursor)}
+          >
+            {t("دانش بیشتر پروژه", "More project notes")}
+          </Button>
+        )}
+      </div>
+      <form
+        className="form-grid"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          const data = new FormData(form);
+          const labels = String(data.get("people"))
+            .split(/[,،\n]/)
+            .map((item) => item.trim())
+            .filter(Boolean);
+          if (
+            await action("knowledge_create", {
+              project_id: projectId,
+              title: t("برچسب افراد پروژه", "Project people labels"),
+              body: labels.join("\n"),
+            })
+          )
+            form.reset();
+        }}
+      >
+        <Field
+          label={t(
+            "افراد پروژه (برچسب‌های ساده)",
+            "Project people (plain labels)",
+          )}
+        >
+          <textarea
+            name="people"
+            required
+            rows={2}
+            placeholder={t(
+              "نام‌ها را با ویرگول یا خط تازه جدا کن",
+              "Separate names with commas or new lines",
+            )}
+          />
+        </Field>
+        <p className="small muted">
+          {t(
+            "این نام‌ها به‌صورت یادداشت پروژه ذخیره می‌شوند و پیام یا دعوتی ارسال نمی‌شود.",
+            "Names are stored as a project note; no messages or invitations are sent.",
+          )}
+        </p>
+        <Button type="submit">
+          {t("ثبت برچسب افراد پروژه", "Save project people labels")}
+        </Button>
+      </form>
       <form
         className="form-grid"
         onSubmit={async (event) => {
@@ -1189,656 +1572,7 @@ export function Files({
   action: Action;
   onOpen: (id: string) => void;
 }) {
-  const { t } = useLocale();
-  const [search, setSearch] = useState("");
-  const [state, setState] = useState("");
-  const [external, setExternal] = useState(false);
-  const [picked, setSelected] = useState<FileDTO | null>(null);
-  const params = useSearchParams();
-  const [initialFileId, setInitialFileId] = useState<string | null>(() =>
-    params.get("file"),
-  );
-  const activeFileId = picked?.file_id ?? initialFileId;
-  const [versionCursor, setVersionCursor] = useState<string | null>(null);
-  const metadata = useQuery<FileDTO>(
-    "file_get_metadata",
-    { file_id: activeFileId ?? "" },
-    !!activeFileId,
-  );
-  const selected = metadata.data ?? picked;
-  const [taskSearch, setTaskSearch] = useState("");
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [archive, setArchive] = useState<{
-    file_id: string;
-    eligible: boolean;
-    linked_task_count: number;
-    blocked_by: string[];
-    reason: string | null;
-    revision: number;
-  } | null>(null);
-  const [pendingUpload, setPendingUpload] = useState<{
-    file: File;
-    fingerprint: string;
-    key: string;
-    file_id?: string;
-    revision?: number;
-  } | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const files = useQuery<PageDTO<FileDTO>>("file_search", {
-    search,
-    state: state || undefined,
-    limit: 100,
-    ...(cursor ? { cursor } : {}),
-  });
-  const tasks = useQuery<PageDTO<TaskDTO>>(
-    "task_search",
-    { limit: 100, search: taskSearch || undefined },
-    !!activeFileId,
-  );
-  const capabilities = useQuery<Record<string, unknown>>("system_capabilities");
-  const versions = useQuery<PageDTO<FileDTO>>(
-    "file_list_versions",
-    { file_id: selected?.file_id ?? "", limit: 100, cursor: versionCursor },
-    !!selected,
-  );
-  async function executeUpload(intent: NonNullable<typeof pendingUpload>) {
-    setUploading(true);
-    setUploadError("");
-    const form = new FormData();
-    form.set("file", intent.file);
-    if (intent.file_id) form.set("file_id", intent.file_id);
-    try {
-      const response = await fetch("/api/v1/files/upload", {
-        method: "POST",
-        body: form,
-        headers: {
-          "Idempotency-Key": intent.key,
-          ...(intent.revision !== undefined
-            ? { "If-Match": String(intent.revision) }
-            : {}),
-        },
-        credentials: "same-origin",
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        if (
-          response.status >= 400 &&
-          response.status < 500 &&
-          response.status !== 408
-        )
-          setPendingUpload(null);
-        throw new Error(result.error?.message ?? "Upload failed");
-      }
-      setPendingUpload(null);
-      clearQueryCache();
-      window.dispatchEvent(new Event("lifeos:changed"));
-      if (result.data?.data?.file_id === result.data?.entity_id)
-        setSelected(result.data.data as FileDTO);
-      else
-        setSelected(
-          await query<FileDTO>("file_get_metadata", {
-            file_id: result.data.entity_id,
-          }),
-        );
-      files.refresh();
-      versions.refresh();
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setUploading(false);
-    }
-  }
-  async function upload(
-    event: React.ChangeEvent<HTMLInputElement>,
-    target?: FileDTO,
-  ) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (
-      file.size > Number(capabilities.data?.max_upload_bytes ?? 4 * 1024 * 1024)
-    ) {
-      setUploadError(
-        t(
-          "اندازه فایل از سقف بارگذاری خصوصی بیشتر است.",
-          "This file exceeds the private upload size limit.",
-        ),
-      );
-      return;
-    }
-    setUploading(true);
-    try {
-      const hash = Array.from(
-        new Uint8Array(
-          await crypto.subtle.digest("SHA-256", await file.arrayBuffer()),
-        ),
-      )
-        .map((value) => value.toString(16).padStart(2, "0"))
-        .join("");
-      const fingerprint = `${target?.file_id ?? "new"}:${target?.revision ?? "new"}:${file.name}:${file.type}:${hash}`;
-      const intent =
-        pendingUpload?.fingerprint === fingerprint
-          ? pendingUpload
-          : {
-              file,
-              fingerprint,
-              key: crypto.randomUUID(),
-              ...(target
-                ? { file_id: target.file_id, revision: target.revision }
-                : {}),
-            };
-      setPendingUpload(intent);
-      await executeUpload(intent);
-    } catch (cause) {
-      setUploadError(cause instanceof Error ? cause.message : String(cause));
-      setUploading(false);
-    }
-  }
-  const storageConfigured =
-    capabilities.data?.storage_configured === true ||
-    capabilities.data?.private_storage === true;
-  return (
-    <>
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">
-            {t("همهٔ چیزهای مرتبط", "EVERYTHING CONNECTED")}
-          </div>
-          <h1>{t("فایل‌ها و منابع", "Files & knowledge")}</h1>
-          <p>
-            {t(
-              "نسخه‌ها و پیوندها را نگه دار؛ هیچ منبع اصلی جابه‌جا نمی‌شود.",
-              "Keep versions and relationships; original source files stay in place.",
-            )}
-          </p>
-        </div>
-        <div className="form-actions">
-          <Button onClick={() => setExternal(true)}>
-            <Link2 size={16} />
-            {t("پیوند منبع", "Link source")}
-          </Button>
-          <label
-            className={`button primary ${!storageConfigured ? "disabled" : ""}`}
-            title={
-              !storageConfigured
-                ? t(
-                    "ذخیره‌سازی خصوصی هنوز پیکربندی نشده",
-                    "Private storage is not configured",
-                  )
-                : ""
-            }
-          >
-            <Upload size={16} />
-            {uploading
-              ? t("در حال بارگذاری…", "Uploading…")
-              : t("بارگذاری فایل", "Upload file")}
-            <input
-              hidden
-              type="file"
-              disabled={!storageConfigured || uploading}
-              onChange={(event) => void upload(event)}
-            />
-          </label>
-        </div>
-      </div>
-      {!storageConfigured && (
-        <p className="connection-notice">
-          <LockKeyhole size={15} />
-          {t(
-            "بارگذاری فایل جدید به اتصال ذخیره‌سازی خصوصی نیاز دارد. منابع Google Drive در جای اصلی خود باقی می‌مانند.",
-            "New uploads require configured private storage. Google Drive references remain at their original locations.",
-          )}
-        </p>
-      )}
-      {uploadError && (
-        <p className="error" role="alert">
-          {uploadError}
-        </p>
-      )}
-      {pendingUpload && !uploading && (
-        <Button onClick={() => void executeUpload(pendingUpload)}>
-          {t(
-            "تلاش دوباره برای همان بارگذاری تأییدنشده",
-            "Retry the same unconfirmed upload",
-          )}
-        </Button>
-      )}
-      <div className="filter-bar">
-        <input
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setCursor(null);
-          }}
-          placeholder={t("جست‌وجوی فایل‌ها…", "Search files…")}
-        />
-        <div className="tabs">
-          {[
-            ["", t("همه", "All")],
-            ["Inbox", t("ورودی", "Inbox")],
-            ["Active", t("فعال", "Active")],
-            ["Old", t("بایگانی", "Archived")],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => {
-                setState(value);
-                setCursor(null);
-              }}
-              className={state === value ? "active" : ""}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="form-actions pagination">
-        <span className="small muted">
-          {files.data?.total ?? "—"}{" "}
-          {t("فایل در این محدوده", "files in this scope")}
-        </span>
-        {cursor && (
-          <Button onClick={() => setCursor(null)}>
-            {t("صفحهٔ اول", "First page")}
-          </Button>
-        )}
-        {files.data?.next_cursor && (
-          <Button onClick={() => setCursor(files.data?.next_cursor ?? null)}>
-            {t("صفحهٔ بعد", "Next page")}
-          </Button>
-        )}
-      </div>
-      <QueryState {...files} retry={files.refresh} />
-      <div className="file-grid">
-        {files.data?.items.map((file) => (
-          <button
-            className="file-card"
-            key={file.file_id}
-            onClick={() => {
-              setVersionCursor(null);
-              setSelected(file);
-            }}
-          >
-            <div className="file-art">
-              <FileText size={42} />
-              <span>
-                {file.original_filename.split(".").pop()?.toUpperCase()}
-              </span>
-            </div>
-            <div className="file-info">
-              <strong>{file.title}</strong>
-              <small>
-                {file.provider} ·{" "}
-                {file.size_bytes !== null
-                  ? `${Math.round(file.size_bytes / 1024)} KB`
-                  : t("اندازه نامشخص", "Size unavailable")}
-              </small>
-              <span className="chip">{file.state}</span>
-            </div>
-          </button>
-        ))}
-      </div>
-      {!files.loading && !files.data?.items.length && (
-        <Empty
-          title={t(
-            "منابعت اینجا کنار هم می‌مانند",
-            "Keep your references together here",
-          )}
-        />
-      )}
-      <Modal
-        title={t("پیوند یک منبع موجود", "Register an existing source")}
-        open={external}
-        onOpenChange={setExternal}
-      >
-        <form
-          className="form-grid"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            const result = await action("file_register_external_link", {
-              title: form.get("title"),
-              external_url: form.get("url"),
-              external_id: form.get("external_id"),
-              provider: "google_drive",
-              original_filename: form.get("title"),
-            });
-            if (result) setExternal(false);
-          }}
-        >
-          <Field label={t("عنوان", "Title")}>
-            <input required name="title" />
-          </Field>
-          <Field label={t("پیوند Google Drive", "Google Drive URL")}>
-            <input
-              required
-              name="url"
-              type="url"
-              dir="ltr"
-              placeholder="https://drive.google.com/…"
-            />
-          </Field>
-          <Field label={t("شناسهٔ فایل در Drive", "Drive file ID")}>
-            <input name="external_id" required dir="ltr" />
-          </Field>
-          <Button variant="primary" type="submit">
-            {t("ثبت مرجع", "Register reference")}
-          </Button>
-        </form>
-      </Modal>
-      <Modal
-        title={selected?.title ?? t("جزئیات فایل", "File details")}
-        open={!!activeFileId}
-        onOpenChange={(value) => {
-          if (!value) {
-            setSelected(null);
-            setInitialFileId(null);
-            setVersionCursor(null);
-          }
-        }}
-      >
-        <QueryState {...metadata} retry={metadata.refresh} />
-        {selected && (
-          <>
-            <div className="file-art large">
-              <FileText size={58} />
-            </div>
-            <dl className="metadata-list">
-              <dt>{t("منبع", "Provider")}</dt>
-              <dd>{selected.provider}</dd>
-              <dt>{t("نام اصلی", "Original filename")}</dt>
-              <dd>{selected.original_filename}</dd>
-              <dt>SHA-256</dt>
-              <dd className="mono">
-                {selected.sha256 ?? t("محاسبه نشده", "Not available")}
-              </dd>
-              <dt>{t("وضعیت", "State")}</dt>
-              <dd>{selected.state}</dd>
-            </dl>
-            <div className="form-actions">
-              {selected.external_url ? (
-                <a
-                  className="button"
-                  target="_blank"
-                  rel="noreferrer"
-                  href={selected.external_url}
-                >
-                  <ArrowUpRight size={15} />
-                  {t("بازکردن منبع", "Open source")}
-                </a>
-              ) : (
-                <a
-                  className="button"
-                  href={`/api/v1/files/${encodeURIComponent(selected.file_id)}/download`}
-                >
-                  <Download size={15} />
-                  {t("دریافت فایل", "Download")}
-                </a>
-              )}
-              <Button
-                onClick={async () => {
-                  if (selected.state === "Old") {
-                    const result = await action(
-                      "file_restore",
-                      { file_id: selected.file_id },
-                      selected.revision,
-                    );
-                    if (result) metadata.refresh();
-                  } else {
-                    try {
-                      const preview = await query<NonNullable<typeof archive>>(
-                        "file_archive_preview",
-                        { file_id: selected.file_id },
-                      );
-                      setArchive(preview);
-                    } catch (error) {
-                      window.dispatchEvent(
-                        new CustomEvent("lifeos:error", {
-                          detail: String(error),
-                        }),
-                      );
-                    }
-                  }
-                }}
-              >
-                {selected.state === "Old"
-                  ? t("بازیابی", "Restore")
-                  : t("بررسی امکان بایگانی", "Check archive eligibility")}
-              </Button>
-            </div>
-            <SectionHeading title={t("پیوند به یک کار", "Link to a task")} />
-            <Field label={t("جست‌وجوی کار مرتبط", "Search for a linked task")}>
-              <input
-                value={taskSearch}
-                onChange={(event) => setTaskSearch(event.target.value)}
-                placeholder={t(
-                  "جست‌وجو بین همهٔ پروژه‌ها…",
-                  "Search across all projects…",
-                )}
-              />
-            </Field>
-            <form
-              className="form-grid"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                const data = new FormData(event.currentTarget);
-                await action(
-                  "file_link_to_task",
-                  {
-                    file_id: selected.file_id,
-                    task_id: data.get("task_id"),
-                    purpose: data.get("purpose"),
-                  },
-                  selected.revision,
-                );
-              }}
-            >
-              <select
-                name="task_id"
-                required
-                aria-label={t(
-                  "انتخاب کار برای فایل",
-                  "Choose a task for this file",
-                )}
-              >
-                <option value="">{t("انتخاب کار…", "Choose a task…")}</option>
-                {tasks.data?.items.map((task) => (
-                  <option key={task.task_id} value={task.task_id}>
-                    {task.title}
-                  </option>
-                ))}
-              </select>
-              <select
-                name="purpose"
-                aria-label={t("نقش فایل در کار", "File purpose")}
-              >
-                {["Input", "Reference", "Output", "Other"].map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </select>
-              <Button type="submit">{t("پیوند", "Link")}</Button>
-            </form>
-            <SectionHeading title={t("نسخه‌ها", "Versions")} />
-            <label
-              className={`button ${!storageConfigured || selected.provider !== "private_blob" || uploading ? "disabled" : ""}`}
-            >
-              <Upload size={15} />
-              {t(
-                "بارگذاری نسخهٔ تازه با حفظ اصل",
-                "Upload a new version and preserve the original",
-              )}
-              <input
-                type="file"
-                hidden
-                disabled={
-                  !storageConfigured ||
-                  selected.provider !== "private_blob" ||
-                  uploading
-                }
-                onChange={(event) => void upload(event, selected)}
-              />
-            </label>
-            {selected.provider === "google_drive" && (
-              <p className="small muted">
-                {t(
-                  "مرجع Google Drive و نسخه‌های اصلی آن فقط خواندنی‌اند.",
-                  "The Google Drive reference and its original versions are read-only.",
-                )}
-              </p>
-            )}
-            <QueryState {...versions} retry={versions.refresh} />
-            <div className="form-actions">
-              <span className="small muted">
-                {versions.data?.items.length ?? 0}/{versions.data?.total ?? "—"}{" "}
-                {t("نسخه در این صفحه", "versions on this page")}
-              </span>
-              {versionCursor && (
-                <Button onClick={() => setVersionCursor(null)}>
-                  {t("صفحهٔ اول نسخه‌ها", "First version page")}
-                </Button>
-              )}
-              {versions.data?.next_cursor && (
-                <Button
-                  onClick={() => setVersionCursor(versions.data!.next_cursor)}
-                >
-                  {t("نسخه‌های بعدی", "Next versions")}
-                </Button>
-              )}
-            </div>
-            {versions.data?.items.map((version, index) => (
-              <div className="dependency-row" key={version.file_id ?? index}>
-                <History size={14} />
-                <span>
-                  {String(
-                    version.original_filename ?? selected.original_filename,
-                  )}
-                </span>
-                <span className="small mono" title={version.sha256 ?? ""}>
-                  {version.sha256?.slice(0, 12) ??
-                    t("هش ناموجود", "Hash unavailable")}
-                </span>
-                {version.provider === "private_blob" ? (
-                  <a
-                    className="button"
-                    href={`/api/v1/files/${encodeURIComponent(version.file_id)}/download`}
-                  >
-                    {t("دریافت همین نسخه", "Download this exact version")}
-                  </a>
-                ) : (
-                  version.external_url && (
-                    <a
-                      className="button"
-                      href={version.external_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {t("منبع اصلی", "Original source")}
-                    </a>
-                  )
-                )}
-              </div>
-            ))}
-          </>
-        )}
-      </Modal>
-      <Modal
-        title={t(
-          "بررسی و تأیید بایگانی فایل",
-          "Review and confirm file archive",
-        )}
-        open={!!archive}
-        onOpenChange={(value) => {
-          if (!value) setArchive(null);
-        }}
-      >
-        {archive && (
-          <form
-            className="form-grid"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const result = await action(
-                "file_archive",
-                { file_id: archive.file_id, explicit_user_intent: true },
-                archive.revision,
-              );
-              if (result) {
-                setArchive(null);
-                metadata.refresh();
-              }
-            }}
-          >
-            <p>
-              {archive.eligible
-                ? t(
-                    "تمام کارهای مرتبط بسته‌اند؛ بایگانی این فایل خصوصی مجاز است. محتوا و نسخه‌های آن حفظ می‌شوند.",
-                    "All linked tasks are closed. This private file can be archived; its bytes and versions are preserved.",
-                  )
-                : t(
-                    "این فایل فعلاً قابل بایگانی نیست.",
-                    "This file cannot be archived at present.",
-                  )}
-            </p>
-            <p className="small muted">
-              {archive.linked_task_count} {t("کار مرتبط", "linked tasks")}
-            </p>
-            {archive.reason && (
-              <p className="warning">
-                {(
-                  {
-                    EXTERNALLY_MANAGED: t(
-                      "منبع بیرونی فقط خواندنی است",
-                      "The external source is read-only",
-                    ),
-                    PROTECTED_SOURCE: t(
-                      "این منبع محافظت شده است",
-                      "This source is protected",
-                    ),
-                    NO_ACTIVE_LINKS: t(
-                      "فایل به کار فعالی پیوند ندارد",
-                      "The file has no active task links",
-                    ),
-                    OPEN_OR_MISSING_TASKS: t(
-                      "کار باز یا رابطهٔ نیازمند بررسی وجود دارد",
-                      "An open task or unresolved relationship remains",
-                    ),
-                  } as Record<string, string>
-                )[archive.reason] ?? archive.reason}
-              </p>
-            )}
-            {archive.blocked_by.map((id) => (
-              <Button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setArchive(null);
-                  setSelected(null);
-                  onOpen(id);
-                }}
-              >
-                {tasks.data?.items.find((task) => task.task_id === id)?.title ??
-                  t("بازکردن کار مانع", "Open the blocking task")}
-              </Button>
-            ))}
-            {archive.eligible && (
-              <>
-                <label className="check-label">
-                  <input type="checkbox" required />
-                  {t(
-                    "با تصمیم خودم بایگانی این فایل را تأیید می‌کنم",
-                    "I explicitly approve archiving this file",
-                  )}
-                </label>
-                <Button variant="danger" type="submit">
-                  {t("تأیید و بایگانی فایل", "Confirm and archive file")}
-                </Button>
-              </>
-            )}
-          </form>
-        )}
-      </Modal>
-    </>
-  );
+  return <FileWorkspace action={action} onOpen={onOpen} />;
 }
 
 interface AIPlan {
@@ -1852,6 +1586,7 @@ interface AIPlan {
   warnings: string[];
   expires_at: string;
   requires_confirmation: boolean;
+  simulation?: AISimulation;
 }
 export function Assistant() {
   const { t } = useLocale();
@@ -1865,6 +1600,7 @@ export function Assistant() {
     setBusy(true);
     setError("");
     setResult(null);
+    setPlan(null);
     try {
       const response = await fetch("/api/v1/ai/plan", {
         method: "POST",
@@ -1962,7 +1698,10 @@ export function Assistant() {
         {plan && (
           <section className="panel ai-response">
             <p>{plan.answer}</p>
-            {plan.actions.length > 0 && (
+            {plan.simulation && (
+              <AIProposalPreview simulation={plan.simulation} />
+            )}
+            {plan.actions.length > 0 && !plan.simulation && (
               <>
                 <SectionHeading
                   title={t("تغییرهای پیشنهادی", "Proposed changes")}
@@ -2042,63 +1781,7 @@ export function Assistant() {
 }
 
 export function Reports() {
-  const { t } = useLocale();
-  const data = useQuery<Analytics>("analytics_summary");
-  const activity = useQuery<PageDTO<ActivityDTO>>("get_activity", {
-    limit: 50,
-  });
-  return (
-    <>
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">
-            {t("از قدم‌هایت یاد بگیر", "LEARN FROM YOUR MOMENTUM")}
-          </div>
-          <h1>{t("گزارش و مرور", "Reports & review")}</h1>
-          <p>
-            {t(
-              "اعداد واقعی، برای انتخاب قدم بعدی.",
-              "Real numbers to guide your next step.",
-            )}
-          </p>
-        </div>
-      </div>
-      <QueryState {...data} retry={data.refresh} />
-      <div className="metric-grid">
-        <div className="metric-card">
-          <span>{t("کار تکمیل‌شده", "Completed tasks")}</span>
-          <strong>{data.data?.tasks.done ?? "—"}</strong>
-          <Progress
-            label={t("نسبت کارهای تکمیل‌شده", "Completed task progress")}
-            value={data.data?.tasks.done ?? 0}
-            max={data.data?.tasks.total ?? 0}
-          />
-        </div>
-        <div className="metric-card">
-          <span>{t("ساعت ثبت‌شده", "Recorded hours")}</span>
-          <strong>
-            {data.data
-              ? Math.round((data.data.time.minutes / 60) * 10) / 10
-              : "—"}
-          </strong>
-        </div>
-        <div className="metric-card">
-          <span>{t("منابع ثبت‌شده", "Registered files")}</span>
-          <strong>{data.data?.files.total ?? "—"}</strong>
-        </div>
-        <div className="metric-card">
-          <span>{t("پروژه‌ها", "Projects")}</span>
-          <strong>{data.data?.projects.length ?? "—"}</strong>
-        </div>
-      </div>
-      {data.data?.trends && <Trends trends={data.data.trends} />}
-      <section className="panel">
-        <SectionHeading title={t("تاریخچهٔ تغییرها", "Activity history")} />
-        <QueryState {...activity} retry={activity.refresh} />
-        <Activity events={activity.data?.items ?? []} />
-      </section>
-    </>
-  );
+  return <FullReports />;
 }
 
 export function Settings({
@@ -2135,9 +1818,10 @@ export function Settings({
   const [message, setMessage] = useState("");
   const session = authClient.useSession();
   async function saveSettings(settings: Record<string, unknown>) {
+    if (!preferences.data || preferences.error || preferences.fetching) return;
     await action(
       "preferences_update",
-      { settings: { ...preferences.data?.settings, ...settings } },
+      { settings },
       preferences.data?.revision,
     );
   }
@@ -2171,6 +1855,9 @@ export function Settings({
           <SectionHeading title={t("ظاهر و زبان", "Appearance & language")} />
           <Field label={t("زبان", "Language")}>
             <select
+              disabled={
+                !preferences.data || !!preferences.error || preferences.fetching
+              }
               value={language}
               onChange={(event) => {
                 const value = event.target.value as "fa" | "en";
@@ -2184,6 +1871,9 @@ export function Settings({
           </Field>
           <Field label={t("پوسته", "Theme")}>
             <select
+              disabled={
+                !preferences.data || !!preferences.error || preferences.fetching
+              }
               value={theme}
               onChange={(event) => {
                 setTheme(event.target.value);
@@ -2324,6 +2014,14 @@ export function Settings({
         </section>
       </div>
       <Connections />
+      <InstallAppCard fa={language === "fa"} />
+      <PasswordSettings />
+      <ExperienceSettings
+        settings={preferences.data?.settings ?? {}}
+        revision={preferences.data?.revision}
+        pending={preferences.fetching || !!preferences.error}
+        action={action}
+      />
       <section className="panel">
         <SectionHeading
           title={t("وضعیت سیستم و منابع", "System & source status")}

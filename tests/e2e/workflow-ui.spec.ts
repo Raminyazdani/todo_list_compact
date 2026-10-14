@@ -17,6 +17,9 @@ import type {
   PageDTO,
   TimeEntryDTO,
   ProjectDTO,
+  FileDTO,
+  CalendarReminderDTO,
+  ReportsDTO,
 } from "../../shared/contracts";
 import { zonedLocalToInstant, addCalendarDays } from "../../shared/datetime";
 import { moveLocalEventToDate } from "../../features/calendar-dates";
@@ -109,6 +112,771 @@ test.beforeAll(async () => {
     );
 });
 
+test("task_precise_deadline_project_reference_and_linked_intervals_share_canonical_state", async ({
+  page,
+  request,
+}) => {
+  const title = `E2E-${crypto.randomUUID().slice(0, 8)} precise task`;
+  const project = await mutate(request, "project_create", {
+    title: `${title} project`,
+    area: "Research",
+  });
+  const original = "2062-02-12T10:30:00.123Z";
+  const created = await mutate(request, "task_create", {
+    title,
+    due_date: "2062-02-12",
+    due_at: original,
+    timezone: "Europe/Berlin",
+  });
+  await page.goto(`/tasks?task=${encodeURIComponent(created.entity_id)}`);
+  const detail = page.getByRole("dialog").first();
+  await detail
+    .getByLabel("پروژهٔ کار", { exact: true })
+    .selectOption(project.entity_id);
+  await detail
+    .getByLabel("منطقهٔ زمانی کار", { exact: true })
+    .fill("Asia/Tehran");
+  await detail
+    .getByLabel("مرجع اصلی (پیوند یا شناسه)", { exact: true })
+    .fill("https://example.test/synthetic-reference");
+  await page
+    .getByRole("button", { name: "ذخیرهٔ تغییرات", exact: true })
+    .click();
+  await expect
+    .poll(async () => (await readTask(request, created.entity_id)).timezone)
+    .toBe("Asia/Tehran");
+  const task = await readTask(request, created.entity_id);
+  expect(Date.parse(task.due_at!)).toBe(Date.parse(original));
+  expect(task.due_date).toBe("2062-02-12");
+  expect(task.project_id).toBe(project.entity_id);
+  expect(task.source_reference).toBe(
+    "https://example.test/synthetic-reference",
+  );
+  await expect(
+    detail.getByRole("link", { name: "بازکردن مرجع اصلی", exact: true }),
+  ).toHaveAttribute("href", task.source_reference);
+  await detail
+    .getByRole("button", { name: "تقویم و زمان واقعی", exact: true })
+    .click();
+  const day = `${2100 + Math.floor(Math.random() * 6900)}-03-15`;
+  await detail
+    .getByRole("button", { name: "ثبت زمان واقعی برای این کار", exact: true })
+    .click();
+  const timeDialog = page.getByRole("dialog").last();
+  await timeDialog
+    .getByLabel("شروع بازهٔ مرتبط", { exact: true })
+    .fill(`${day}T09:00:05`);
+  await timeDialog
+    .getByLabel("پایان بازهٔ مرتبط", { exact: true })
+    .fill(`${day}T09:30:05`);
+  await timeDialog
+    .getByLabel("شرح بازهٔ مرتبط", { exact: true })
+    .fill("Synthetic task-linked actual time.");
+  await timeDialog
+    .getByRole("button", { name: "تأیید ثبت بازهٔ مرتبط", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  const summary = await readQuery<{ minutes: number; entries: number }>(
+    request,
+    "time_summary",
+    { task_id: created.entity_id },
+  );
+  expect(summary.minutes).toBe(30);
+  expect(summary.entries).toBe(1);
+  const times = await readQuery<PageDTO<TimeEntryDTO>>(
+    request,
+    "time_entry_list",
+    { task_id: created.entity_id },
+  );
+  expect(times.items).toHaveLength(1);
+  expect(times.items[0].task_id).toBe(created.entity_id);
+  await detail
+    .getByLabel("شروع بازهٔ تقویم این کار", { exact: true })
+    .fill(day);
+  await detail
+    .getByRole("button", { name: "ثبت رویداد محلی مرتبط", exact: true })
+    .click();
+  const eventDialog = page.getByRole("dialog").last();
+  await eventDialog
+    .getByLabel("عنوان رویداد مرتبط", { exact: true })
+    .fill(`${title} linked event`);
+  await eventDialog
+    .getByLabel("شروع بازهٔ مرتبط", { exact: true })
+    .fill(`${day}T10:00:07`);
+  await eventDialog
+    .getByLabel("پایان بازهٔ مرتبط", { exact: true })
+    .fill(`${day}T11:00:07`);
+  await eventDialog
+    .getByRole("button", { name: "تأیید ثبت بازهٔ مرتبط", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  const events = await readQuery<PageDTO<EventDTO>>(
+    request,
+    "calendar_events_query",
+    {
+      task_id: created.entity_id,
+      from: zonedLocalToInstant(`${day}T00:00`, "Asia/Tehran"),
+      to: zonedLocalToInstant(
+        `${addCalendarDays(day, 1)}T00:00`,
+        "Asia/Tehran",
+      ),
+    },
+  );
+  expect(events.items).toHaveLength(1);
+  expect(events.items[0].task_id).toBe(created.entity_id);
+  await expect(detail.locator(".task-schedule")).toContainText(
+    `${title} linked event`,
+  );
+  expect((await readTask(request, created.entity_id)).due_date).toBe(
+    "2062-02-12",
+  );
+});
+
+test("calendar_pointer_creation_resize_source_filter_and_event_reminder_are_real", async ({
+  page,
+  request,
+}) => {
+  const title = `E2E-${crypto.randomUUID().slice(0, 8)} pointer calendar`;
+  const day = "2063-06-15";
+  await page.goto("/calendar");
+  await page.getByLabel("تاریخ تقویم", { exact: true }).fill(day);
+  await page.getByRole("button", { name: "روز", exact: true }).click();
+  const start = page.getByRole("button", {
+    name: `ساخت رویداد در ${day} 09:00`,
+    exact: true,
+  });
+  const end = page.getByRole("button", {
+    name: `ساخت رویداد در ${day} 10:00`,
+    exact: true,
+  });
+  await start.scrollIntoViewIfNeeded();
+  const first = await start.boundingBox();
+  const last = await end.boundingBox();
+  expect(first).not.toBeNull();
+  expect(last).not.toBeNull();
+  await page.mouse.move(
+    first!.x + first!.width / 2,
+    first!.y + first!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(last!.x + last!.width / 2, last!.y + last!.height / 2, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  const dialog = page.getByRole("dialog").first();
+  await dialog.getByLabel("عنوان", { exact: true }).fill(title);
+  await dialog.getByLabel("دستهٔ رویداد", { exact: true }).selectOption("Work");
+  await expect(dialog.getByLabel("شروع", { exact: true })).toHaveValue(
+    `${day}T09:00`,
+  );
+  await expect(dialog.getByLabel("پایان", { exact: true })).toHaveValue(
+    `${day}T10:00`,
+  );
+  await dialog
+    .getByRole("button", { name: "ذخیرهٔ رویداد", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByLabel("جست‌وجوی تقویم", { exact: true }).fill(title);
+  await page.getByLabel("منبع تقویم", { exact: true }).selectOption("local");
+  await page.getByLabel("کار یا شخصی", { exact: true }).selectOption("Work");
+  await expect(page.locator(".week-calendar .time-block")).toHaveCount(1);
+  const input = {
+    from: zonedLocalToInstant(`${day}T00:00`),
+    to: zonedLocalToInstant(`${addCalendarDays(day, 1)}T00:00`),
+    search: title,
+    calendar_id: "local",
+  };
+  const original = (
+    await readQuery<PageDTO<EventDTO>>(request, "calendar_events_query", input)
+  ).items[0];
+  expect(original.title).toBe(title);
+  expect(original.category).toBe("Work");
+  const resize = page.getByRole("button", {
+    name: `تغییر طول رویداد ${title}`,
+    exact: true,
+  });
+  await resize.scrollIntoViewIfNeeded();
+  const box = await resize.boundingBox();
+  const ack = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/v1/commands") &&
+      response.request().postDataJSON().command ===
+        "calendar_update_local_event",
+  );
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    box!.x + box!.width / 2,
+    box!.y + box!.height / 2 + 26,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  expect((await ack).ok()).toBeTruthy();
+  await expect
+    .poll(
+      async () =>
+        Date.parse(
+          (
+            await readQuery<PageDTO<EventDTO>>(
+              request,
+              "calendar_events_query",
+              input,
+            )
+          ).items[0].ends_at,
+        ) - Date.parse(original.ends_at),
+    )
+    .toBe(30 * 60000);
+  await page.locator(".time-block-open").click();
+  await page
+    .getByLabel("زمان یادآور رویداد", { exact: true })
+    .fill(`${day}T08:00`);
+  const reminderAcknowledged = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/v1/commands") &&
+      response.request().postDataJSON()?.command === "calendar_reminder_create",
+  );
+  await page
+    .getByRole("button", { name: "ثبت یادآور رویداد", exact: true })
+    .click();
+  expect((await reminderAcknowledged).status()).toBe(200);
+  let reminders = await readQuery<PageDTO<CalendarReminderDTO>>(
+    request,
+    "calendar_reminder_list",
+    { event_id: original.event_id },
+  );
+  expect(reminders.items).toHaveLength(1);
+  const reminder = reminders.items[0];
+  try {
+    await expect(
+      page.locator(`[data-event-reminder-id="${reminder.reminder_id}"]`),
+    ).toContainText("Pending");
+    await page
+      .getByRole("button", { name: "توقف یادآور رویداد", exact: true })
+      .click();
+    await expect(
+      page.locator(`[data-event-reminder-id="${reminder.reminder_id}"]`),
+    ).toContainText("Paused");
+    await page
+      .getByRole("button", { name: "لغو یادآور رویداد", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "تأیید تغییر یادآور رویداد", exact: true })
+      .click();
+    await expect(
+      page.locator(`[data-event-reminder-id="${reminder.reminder_id}"]`),
+    ).toContainText("Cancelled");
+    reminders = await readQuery<PageDTO<CalendarReminderDTO>>(
+      request,
+      "calendar_reminder_list",
+      { event_id: original.event_id },
+    );
+    expect(reminders.items[0].state).toBe("Cancelled");
+  } finally {
+    const actual = await readQuery<CalendarReminderDTO>(
+      request,
+      "calendar_reminder_get",
+      { reminder_id: reminder.reminder_id },
+    );
+    if (actual.state === "Pending" || actual.state === "Paused")
+      await mutate(
+        request,
+        "calendar_reminder_cancel",
+        { reminder_id: actual.reminder_id },
+        actual.revision,
+      );
+  }
+});
+
+test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_and_truthful", async ({
+  page,
+  request,
+}) => {
+  const before = await readQuery<{
+    settings: Record<string, unknown>;
+    revision: number;
+  }>(request, "preferences_get");
+  const preferenceResponses: {
+    status: number;
+    code: string | null;
+    message: string | null;
+  }[] = [];
+  page.on("response", async (response) => {
+    if (
+      response.request().method() !== "POST" ||
+      !response.url().endsWith("/api/v1/commands")
+    )
+      return;
+    const payload = response.request().postDataJSON();
+    if (payload.command !== "preferences_update") return;
+    let code: string | null = null;
+    let message: string | null = null;
+    try {
+      const body = await response.json();
+      code = body.error?.code ?? null;
+      message = body.error?.message ?? null;
+    } catch {
+      /* Transport diagnostic retains status only. */
+    }
+    preferenceResponses.push({ status: response.status(), code, message });
+  });
+  try {
+    await page.goto("/");
+    await page
+      .getByLabel("شروع بازهٔ داشبورد", { exact: true })
+      .fill("2064-01-01");
+    await page
+      .getByLabel("پایان بازهٔ داشبورد (شامل نمی‌شود)", { exact: true })
+      .fill("2064-02-01");
+    await page
+      .getByLabel("منطقهٔ زمانی داشبورد", { exact: true })
+      .selectOption("Asia/Tehran");
+    await page
+      .getByRole("button", { name: "ثبت بازهٔ داشبورد", exact: true })
+      .click();
+    await expect.poll(() => preferenceResponses.length).toBeGreaterThan(0);
+    expect(
+      preferenceResponses[0].status,
+      JSON.stringify(preferenceResponses[0]),
+    ).toBe(200);
+    await expect
+      .poll(
+        async () =>
+          (
+            await readQuery<{ settings: Record<string, unknown> }>(
+              request,
+              "preferences_get",
+            )
+          ).settings.dashboard_range,
+      )
+      .toEqual({
+        from_date: "2064-01-01",
+        to_date: "2064-02-01",
+        timezone: "Asia/Tehran",
+      });
+    await page
+      .getByRole("button", { name: "چیدمان داشبورد", exact: true })
+      .click();
+    await page
+      .getByLabel("ارتفاع ویجت ماتریس اولویت", { exact: true })
+      .fill("400");
+    await expect
+      .poll(
+        async () =>
+          (
+            (
+              await readQuery<{ settings: Record<string, unknown> }>(
+                request,
+                "preferences_get",
+              )
+            ).settings.dashboard_widgets as { id: string; height: number }[]
+          ).find((item) => item.id === "priority")?.height,
+      )
+      .toBe(400);
+    await page.keyboard.press("Escape");
+    await page.reload();
+    await expect(
+      page.getByLabel("شروع بازهٔ داشبورد", { exact: true }),
+    ).toHaveValue("2064-01-01");
+    await expect(page.locator('[data-widget-id="priority"]')).toHaveCSS(
+      "height",
+      "400px",
+    );
+    const widget = page.locator('[data-widget-id="priority"]');
+    await widget.scrollIntoViewIfNeeded();
+    const rectangle = await widget.boundingBox();
+    await page.mouse.move(
+      rectangle!.x + 5,
+      rectangle!.y + rectangle!.height - 5,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      rectangle!.x + 5,
+      rectangle!.y + rectangle!.height + 55,
+      { steps: 6 },
+    );
+    await page.mouse.up();
+    await expect
+      .poll(
+        async () =>
+          (
+            (
+              await readQuery<{ settings: Record<string, unknown> }>(
+                request,
+                "preferences_get",
+              )
+            ).settings.dashboard_widgets as { id: string; height: number }[]
+          ).find((item) => item.id === "priority")?.height,
+      )
+      .toBeGreaterThan(400);
+    await page.goto("/settings");
+    await page
+      .getByLabel("تراکم نمایش", { exact: true })
+      .selectOption("compact");
+    await page.getByLabel("نوشته‌های کوچک درشت‌تر", { exact: true }).check();
+    await page.getByLabel("کنتراست بیشتر", { exact: true }).check();
+    const reducedMotion = page.getByLabel("کاهش حرکت‌های رابط", {
+      exact: true,
+    });
+    await reducedMotion.focus();
+    await expect(reducedMotion).toBeFocused();
+    if (!(await reducedMotion.isChecked())) await page.keyboard.press("Space");
+    await expect(reducedMotion).toBeChecked();
+    await page
+      .getByLabel("فاصلهٔ پیشنهادی بازبینی بایگانی (روز)", { exact: true })
+      .fill("365");
+    await page
+      .getByRole("button", {
+        name: "ثبت تنظیمات خوانایی و نگهداری",
+        exact: true,
+      })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await readQuery<{ settings: Record<string, unknown> }>(
+              request,
+              "preferences_get",
+            )
+          ).settings.retention_days,
+      )
+      .toBe(365);
+    const actual = await readQuery<{ settings: Record<string, unknown> }>(
+      request,
+      "preferences_get",
+    );
+    expect(actual.settings.display_density).toBe("compact");
+    expect(actual.settings.accessibility).toMatchObject({
+      reduced_motion: true,
+      high_contrast: true,
+      large_text: true,
+    });
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-density",
+      "compact",
+    );
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-large-text",
+      "true",
+    );
+    await safeAxe(page, "settings-persisted-accessibility-preferences");
+    await expect(
+      page
+        .getByRole("region", { name: "نصب برنامه", exact: true })
+        .or(page.locator('section[aria-label="نصب برنامه"]')),
+    ).toContainText("نسخهٔ آفلاین از اطلاعات خصوصی ذخیره نمی‌شود");
+    const manifest = await safeGet(request, "/manifest.webmanifest");
+    expect(manifest.ok()).toBeTruthy();
+    const metadata = await manifest.json();
+    expect(metadata.display).toBe("standalone");
+    expect(metadata.start_url).toBe("/");
+    for (const icon of metadata.icons as { src: string; sizes: string }[]) {
+      const response = await safeGet(request, icon.src);
+      expect(response.ok()).toBeTruthy();
+      const bytes = await response.body();
+      expect(
+        bytes
+          .subarray(0, 8)
+          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+      ).toBeTruthy();
+      expect(`${bytes.readUInt32BE(16)}x${bytes.readUInt32BE(20)}`).toBe(
+        icon.sizes,
+      );
+    }
+    await expect
+      .poll(async () =>
+        page.evaluate(async () =>
+          (await navigator.serviceWorker.getRegistrations()).some(
+            (registration) => !!registration.active,
+          ),
+        ),
+      )
+      .toBeTruthy();
+    const privateCaches = await page.evaluate(async () => {
+      const names = await caches.keys();
+      const urls: string[] = [];
+      for (const name of names) {
+        for (const key of await (await caches.open(name)).keys())
+          urls.push(key.url);
+      }
+      return urls.filter((url) =>
+        /\/api\/(?:v1|auth)|\/tasks|\/files|\/calendar/.test(url),
+      );
+    });
+    expect(privateCaches).toEqual([]);
+    await page.goto("/reports");
+    await page
+      .getByLabel("شروع بازهٔ گزارش", { exact: true })
+      .fill("2064-01-01");
+    await page
+      .getByLabel("پایان بازهٔ گزارش (شامل نمی‌شود)", { exact: true })
+      .fill("2064-02-01");
+    await page
+      .getByLabel("منطقهٔ زمانی گزارش", { exact: true })
+      .fill("Asia/Tehran");
+    await page
+      .getByRole("button", { name: "نمایش این بازه", exact: true })
+      .click();
+    const reports = await readQuery<ReportsDTO>(request, "reports_summary", {
+      from_date: "2064-01-01",
+      to_date: "2064-02-01",
+      timezone: "Asia/Tehran",
+      limit: 50,
+    });
+    expect(reports.range.timezone).toBe("Asia/Tehran");
+    await expect(
+      page.locator("section.panel").filter({
+        has: page.getByRole("heading", {
+          name: "سن مهلت‌های عقب‌افتاده",
+          exact: true,
+        }),
+      }),
+    ).toContainText(String(reports.overdue_ageing.total));
+    await expect(
+      page.locator("section.panel").filter({
+        has: page.getByRole("heading", {
+          name: "حجم فایل‌های ثبت‌شده",
+          exact: true,
+        }),
+      }),
+    ).toContainText("سهمیهٔ حساب ذخیره‌ساز را نشان نمی‌دهد");
+  } finally {
+    await test.info().attach("preferences-command-responses", {
+      body: JSON.stringify(preferenceResponses),
+      contentType: "application/json",
+    });
+    const current = await readQuery<{
+      settings: Record<string, unknown>;
+      revision: number;
+    }>(request, "preferences_get");
+    await mutate(
+      request,
+      "preferences_update",
+      {
+        settings: {
+          dashboard_range: before.settings.dashboard_range ?? null,
+          dashboard_widgets: before.settings.dashboard_widgets ?? [],
+          display_density: before.settings.display_density ?? "comfortable",
+          accessibility: before.settings.accessibility ?? {
+            reduced_motion: false,
+            high_contrast: false,
+            large_text: false,
+          },
+          retention_days: before.settings.retention_days ?? 0,
+        },
+      },
+      current.revision,
+    );
+  }
+});
+
+test("mocked_ai_atomic_preview_shows_effects_and_requires_explicit_approval", async ({
+  page,
+}) => {
+  // Presentation/approval proof only. The model and execute responses are explicitly
+  // intercepted; actual transactional AI orchestration has separate PostgreSQL tests.
+  let executions = 0;
+  const futureId = "T-synthetic-proposal-not-persisted";
+  const plan = {
+    plan_id: "synthetic-ui-atomic-plan",
+    answer: "پیشنهاد ساختگی برای بررسی رابط",
+    actions: [
+      { command: "task_create", input: { title: "کار تازهٔ پیشنهادی" } },
+      {
+        command: "task_dependency_add_commit",
+        input: {
+          task_id: futureId,
+          operator: "ALL",
+          prerequisites: [{ task_id: "T-synthetic-existing", mode: "hard" }],
+        },
+      },
+    ],
+    warnings: [],
+    expires_at: new Date(Date.now() + 300000).toISOString(),
+    requires_confirmation: true,
+    simulation: {
+      read_only: true,
+      atomic: true,
+      changes: [
+        {
+          command: "task_create",
+          entity_id: futureId,
+          input: { title: "کار تازهٔ پیشنهادی" },
+          after: { title: "کار تازهٔ پیشنهادی", task_id: futureId },
+          after_truncated: false,
+          readiness_changes: [],
+          readiness_changes_total: 0,
+          readiness_changes_truncated: false,
+        },
+        {
+          command: "task_dependency_add_commit",
+          entity_id: "EDGE-synthetic",
+          input: {
+            task_id: futureId,
+            operator: "ALL",
+            prerequisites: [
+              { task_id: "T-synthetic-existing", mode: "hard" },
+              { task_id: "T-synthetic-soft", mode: "soft" },
+            ],
+          },
+          after: {
+            prerequisites: [
+              { task_id: "T-synthetic-existing", title: "پیش‌نیاز واقعی سخت" },
+              { task_id: "T-synthetic-soft", title: "پیشنهاد نرم" },
+            ],
+          },
+          after_truncated: true,
+          readiness_changes: [
+            { task_id: futureId, before: "ready", after: "blocked" },
+          ],
+          readiness_changes_total: 1,
+          readiness_changes_truncated: false,
+        },
+      ],
+    },
+  };
+  await page.route("**/api/v1/ai/plan", (route) =>
+    route.fulfill({ json: { data: plan } }),
+  );
+  await page.route("**/api/v1/ai/execute", async (route) => {
+    executions++;
+    expect(route.request().postDataJSON()).toEqual({ plan_id: plan.plan_id });
+    await route.fulfill({ json: { data: { synthetic_mock_only: true } } });
+  });
+  await page.goto("/assistant");
+  await page
+    .getByPlaceholder("با من فارسی یا انگلیسی صحبت کن…")
+    .fill("یک پیشنهاد آزمایشی بساز");
+  await page
+    .getByRole("button", { name: "بررسی درخواست", exact: true })
+    .click();
+  const preview = page.getByRole("region", {
+    name: "پیش‌نمایش اثر تغییرها",
+    exact: true,
+  });
+  await expect(preview).toBeVisible();
+  await expect(preview).toContainText("این تغییرها هنوز ذخیره نشده‌اند");
+  await expect(preview).toContainText("همهٔ این پیش‌نیازها باید تکمیل شوند");
+  await expect(preview).toContainText("آماده → مسدود");
+  await expect(preview).toContainText("این فهرست کامل نیست");
+  await expect(preview).toContainText(
+    "این پیش‌نیازها پیشنهادی‌اند و شروع کار را مسدود نمی‌کنند",
+  );
+  await expect(preview).toContainText("پیش‌نیاز واقعی سخت");
+  await expect(preview).toContainText("پیشنهاد نرم");
+  await expect(preview.locator(`a[href*="${futureId}"]`)).toHaveCount(0);
+  expect(executions).toBe(0);
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await page
+    .getByRole("button", { name: "تأیید و اجرای این تغییرها", exact: true })
+    .click();
+  await expect(
+    page.getByText("نتیجهٔ بررسی‌شده", { exact: true }),
+  ).toBeVisible();
+  expect(executions).toBe(1);
+});
+
+test("password_mismatch_and_invalid_current_password_do_not_change_owner_credentials", async ({
+  page,
+}) => {
+  await page.goto("/settings");
+  let requests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/auth/change-password")) requests++;
+  });
+  let wrong = `E2E-invalid-current-${crypto.randomUUID()}`;
+  while (wrong === credentials.password)
+    wrong = `E2E-invalid-current-${crypto.randomUUID()}`;
+  await page.getByLabel("رمز فعلی", { exact: true }).fill(wrong);
+  const password = `E2E-unused-${crypto.randomUUID()}`;
+  await page.getByLabel("رمز تازه", { exact: true }).fill(password);
+  await page
+    .getByLabel("تکرار رمز تازه", { exact: true })
+    .fill(`${password}-mismatch`);
+  await page
+    .getByRole("button", {
+      name: "ثبت رمز تازه و لغو نشست‌های دیگر",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "تکرار رمز با رمز تازه یکسان نیست" }),
+  ).toBeVisible();
+  expect(requests).toBe(0);
+  await page.getByLabel("تکرار رمز تازه", { exact: true }).fill(password);
+  const rejected = page.waitForResponse((response) =>
+    response.url().endsWith("/api/auth/change-password"),
+  );
+  await page
+    .getByRole("button", {
+      name: "ثبت رمز تازه و لغو نشست‌های دیگر",
+      exact: true,
+    })
+    .click();
+  expect((await rejected).ok()).toBeFalsy();
+  await expect(
+    page.getByRole("button", {
+      name: "ثبت رمز تازه و لغو نشست‌های دیگر",
+      exact: true,
+    }),
+  ).toBeEnabled();
+  expect(requests).toBe(1);
+});
+
+test("external_file_annotations_are_persistent_and_preserve_original_reference", async ({
+  page,
+  request,
+}) => {
+  const title = `E2E-${crypto.randomUUID().slice(0, 8)} annotated file`;
+  const reference = `https://drive.google.com/file/d/synthetic-${crypto.randomUUID()}/view`;
+  const result = await mutate(request, "file_register_external_link", {
+    title,
+    provider: "google_drive",
+    external_id: `synthetic-${crypto.randomUUID()}`,
+    external_url: reference,
+    original_filename: `${title}.txt`,
+  });
+  await page.goto(`/files?file=${encodeURIComponent(result.entity_id)}`);
+  await page
+    .getByLabel("توضیح فایل", { exact: true })
+    .fill("Synthetic annotation <script>never executed</script>");
+  await page
+    .getByLabel("برچسب‌های فایل؛ هر برچسب یک خط", { exact: true })
+    .fill("پژوهش\nsynthetic-e2e");
+  await page
+    .getByRole("button", { name: "ذخیرهٔ توضیح و برچسب‌ها", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await readQuery<FileDTO>(request, "file_get_metadata", {
+            file_id: result.entity_id,
+          })
+        ).description,
+    )
+    .toBe("Synthetic annotation <script>never executed</script>");
+  const actual = await readQuery<FileDTO>(request, "file_get_metadata", {
+    file_id: result.entity_id,
+  });
+  expect(actual.tags).toEqual(["پژوهش", "synthetic-e2e"]);
+  expect(actual.external_url).toBe(reference);
+  expect(actual.original_filename).toBe(`${title}.txt`);
+  await page.reload();
+  await expect(page.getByLabel("توضیح فایل", { exact: true })).toHaveValue(
+    actual.description!,
+  );
+  await expect(
+    page.getByRole("link", { name: "بازکردن منبع", exact: true }),
+  ).toHaveAttribute("href", reference);
+});
+
 function screenshotPath(filename: string) {
   if (basename(filename) !== filename)
     throw new Error("Screenshot filenames cannot contain directories.");
@@ -149,8 +917,13 @@ async function readTask(
     request,
     `/api/v1/query?operation=task_get&input=${encodeURIComponent(JSON.stringify({ task_id: id }))}`,
   );
-  expect(response.ok()).toBeTruthy();
-  return (await response.json()).data;
+  const body = await response.json();
+  expect(
+    response.ok(),
+    `task_get HTTP ${response.status()} ${body.error?.code ?? ""}`,
+  ).toBeTruthy();
+  expect(body.data, "task_get must return canonical data").toBeTruthy();
+  return body.data;
 }
 
 async function readQuery<T>(
@@ -162,8 +935,13 @@ async function readQuery<T>(
     request,
     `/api/v1/query?operation=${operation}&input=${encodeURIComponent(JSON.stringify(input))}`,
   );
-  expect(response.ok(), `${operation} must return canonical data`).toBeTruthy();
-  return (await response.json()).data;
+  const body = await response.json();
+  expect(
+    response.ok(),
+    `${operation} HTTP ${response.status()} ${body.error?.code ?? ""}`,
+  ).toBeTruthy();
+  expect(body.data, `${operation} must return canonical data`).toBeTruthy();
+  return body.data;
 }
 async function mutate(
   request: APIRequestContext,
@@ -239,7 +1017,13 @@ async function openTask(page: Page, task: TaskDTO) {
   ).toBeVisible();
 }
 
-test.beforeEach(async ({ request, context, page }) => {
+test.beforeEach(async ({ request, context, page }, testInfo) => {
+  test.skip(
+    testInfo.title ===
+      "dependency_graph_works_after_redeploy_and_fresh_login" &&
+      !process.env.E2E_REDEPLOY_SCRIPT,
+    "Actual redeploy proof requires the explicitly configured coordinator script.",
+  );
   originalPreferences = undefined;
   await signIn(request);
   const captured = await readQuery<{
@@ -1498,13 +2282,29 @@ test("reminder_pause_resume_cancel_and_tool_revocation_require_real_owner_action
         ).items.find((item) => item.reminder_id === reminder.entity_id)?.state,
     )
     .toBe("Pending");
+  await expect(
+    page
+      .locator(`[data-reminder-id="${reminder.entity_id}"]`)
+      .getByRole("button", { name: "توقف یادآور", exact: true }),
+  ).toBeVisible();
   await page
     .locator(`[data-reminder-id="${reminder.entity_id}"]`)
     .getByRole("button", { name: "لغو یادآور", exact: true })
     .click();
+  const cancellationResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/v1/commands") &&
+      response.request().postDataJSON()?.command === "reminder_cancel",
+  );
   await page
     .getByRole("button", { name: "تأیید تغییر یادآور", exact: true })
     .click();
+  const cancelled = await cancellationResponse;
+  expect(
+    cancelled.ok(),
+    `Reminder cancellation must acknowledge success: HTTP ${cancelled.status()}`,
+  ).toBeTruthy();
   await expect
     .poll(
       async () =>
@@ -1599,7 +2399,61 @@ test("all_day_drag_keeps_calendar_days_across_dst_and_timed_drag_keeps_seconds",
   await page.getByLabel("تاریخ تقویم", { exact: true }).fill("2027-03-21");
   const source = page.getByRole("button", { name: title, exact: true });
   await expect(source).toBeVisible();
-  await source.dragTo(page.locator('[data-calendar-date="2027-03-28"]'));
+  const target = page.locator('[data-calendar-date="2027-03-28"]');
+  await target.scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const events: {
+      type: string;
+      day: string | null;
+      types: string[];
+      prevented: boolean;
+    }[] = [];
+    Reflect.set(window, "__syntheticDragEvents", events);
+    for (const name of [
+      "dragstart",
+      "dragenter",
+      "dragover",
+      "drop",
+      "dragend",
+    ]) {
+      document.addEventListener(name, (event) => {
+        if (events.length < 100)
+          events.push({
+            type: name,
+            day:
+              (event.target as HTMLElement)
+                .closest("[data-calendar-date]")
+                ?.getAttribute("data-calendar-date") ?? null,
+            types: [...((event as DragEvent).dataTransfer?.types ?? [])],
+            prevented: event.defaultPrevented,
+          });
+      });
+    }
+  });
+  const movementResponse = page.waitForResponse((response) => {
+    if (
+      response.request().method() !== "POST" ||
+      !response.url().endsWith("/api/v1/commands")
+    )
+      return false;
+    const body = response.request().postDataJSON();
+    return (
+      body.command === "calendar_update_local_event" &&
+      body.input.event_id === created.entity_id
+    );
+  });
+  await source.dragTo(target);
+  await test.info().attach("native-calendar-drag-events", {
+    body: JSON.stringify(
+      await page.evaluate(() => Reflect.get(window, "__syntheticDragEvents")),
+    ),
+    contentType: "application/json",
+  });
+  const movement = await movementResponse;
+  expect(
+    movement.ok(),
+    `Calendar drag must acknowledge success: HTTP ${movement.status()}`,
+  ).toBeTruthy();
   const input = {
     from: "2027-03-01T00:00:00Z",
     to: "2027-04-01T00:00:00Z",
@@ -1632,4 +2486,111 @@ test("all_day_drag_keeps_calendar_days_across_dst_and_timed_drag_keeps_seconds",
       .locator('[data-calendar-date="2027-03-29"]')
       .getByRole("button", { name: title, exact: true }),
   ).toHaveCount(0);
+});
+
+test("project_task_views_and_manual_order_persist_without_resequencing_other_tasks", async ({
+  page,
+  request,
+}) => {
+  const prefix = `E2E-${crypto.randomUUID().slice(0, 8)} project views`;
+  const project = await mutate(request, "project_create", {
+    title: prefix,
+    area: "Research",
+  });
+  const values: TaskDTO[] = [];
+  for (const [suffix, order] of [
+    ["first", 10],
+    ["second", 20],
+  ] as const) {
+    const result = await mutate(request, "task_create", {
+      title: `${prefix} ${suffix}`,
+      project_id: project.entity_id,
+      sort_key: order,
+      start_date: "2058-04-02",
+      due_date: "2058-04-05",
+      estimated_minutes: 30,
+    });
+    values.push(await readTask(request, result.entity_id));
+  }
+  const outsideResult = await mutate(request, "task_create", {
+    title: `${prefix} outside`,
+    sort_key: 15,
+  });
+  const outside = await readTask(request, outsideResult.entity_id);
+  const preview = await readQuery<{ preview_id: string }>(
+    request,
+    "task_dependency_add_preview",
+    {
+      task_id: values[0].task_id,
+      prerequisites: [{ task_id: outside.task_id, mode: "hard" }],
+      operator: "ALL",
+    },
+  );
+  await mutate(request, "task_dependency_add_commit", {
+    preview_id: preview.preview_id,
+  });
+  await page.goto(`/projects?project=${encodeURIComponent(project.entity_id)}`);
+  await expect(page.getByRole("dialog").first()).toContainText(prefix);
+  await page.getByRole("link", { name: "درخت پروژه", exact: true }).click();
+  await expect(
+    page.getByRole("combobox", { name: "فیلتر پروژه", exact: true }),
+  ).toHaveValue(project.entity_id);
+  await expect(page.locator(".tree-row")).toHaveCount(2);
+  await expect(page.locator(".task-title")).toHaveText(
+    values.map((task) => task.title),
+  );
+  await expect(
+    page
+      .locator(".main-content .task-title")
+      .filter({ hasText: outside.title }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "board", exact: true }).click();
+  await expect(page.locator(".board-card")).toHaveCount(2);
+  await page.getByRole("button", { name: "timeline", exact: true }).click();
+  await expect(page.locator(".gantt-row")).toHaveCount(2);
+  await page.getByRole("button", { name: "graph", exact: true }).click();
+  await expect(page.locator(".react-flow__node")).toHaveCount(2);
+  await expect(page.locator(".graph-boundary")).toContainText(
+    "این نما همهٔ روابط را نشان نمی‌دهد",
+  );
+  await page
+    .getByRole("combobox", { name: "کار محوری گراف", exact: true })
+    .selectOption(values[0].task_id);
+  await expect(page.locator(".react-flow__node")).toHaveCount(2);
+  await expect(
+    page.locator(".react-flow__node").filter({ hasText: outside.title }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "list", exact: true }).click();
+  await page
+    .getByRole("button", { name: values[0].title, exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole("dialog")
+    .first()
+    .getByLabel("ترتیب نمایش (عدد کمتر جلوتر)", { exact: true })
+    .fill("25");
+  await page
+    .getByRole("button", { name: "ذخیرهٔ تغییرات", exact: true })
+    .click();
+  await expect
+    .poll(async () => (await readTask(request, values[0].task_id)).sort_key)
+    .toBe(25);
+  expect((await readTask(request, values[1].task_id)).sort_key).toBe(20);
+  expect((await readTask(request, outside.task_id)).sort_key).toBe(15);
+  await page.goto(
+    `/tasks?project_id=${encodeURIComponent(project.entity_id)}&view=list`,
+  );
+  await expect(page.locator(".task-title")).toHaveText([
+    values[1].title,
+    values[0].title,
+  ]);
+  const canonical = await readQuery<PageDTO<TaskDTO>>(request, "task_search", {
+    project_id: project.entity_id,
+    limit: 100,
+  });
+  expect(canonical.items.map((task) => task.task_id)).toEqual([
+    values[1].task_id,
+    values[0].task_id,
+  ]);
 });

@@ -10,7 +10,41 @@ import {
   zonedLocalToInstant,
 } from "../../shared/datetime";
 import type { SqlClient } from "../db/database";
-import { cleanRows, timezone, type Input } from "./core";
+import { DomainError } from "../../shared/contracts";
+import { cleanRows, date as localDate, timezone, type Input } from "./core";
+
+export function analyticsRange(input: Input) {
+  const zone = timezone(input);
+  if (input.from_date === undefined && input.to_date === undefined)
+    return {
+      timezone: zone,
+      from_date: null,
+      to_date: null,
+      start: null,
+      end: null,
+    };
+  const from = localDate(input, "from_date"),
+    to = localDate(input, "to_date");
+  if (
+    !from ||
+    !to ||
+    to <= from ||
+    (Date.parse(to + "T00:00:00Z") - Date.parse(from + "T00:00:00Z")) /
+      86400000 >
+      366
+  )
+    throw new DomainError(
+      "INVALID_INPUT",
+      "Choose an ordered local date range of at most366days with an exclusive end.",
+    );
+  return {
+    timezone: zone,
+    from_date: from,
+    to_date: to,
+    start: zonedLocalToInstant(from + "T00:00", zone, "earlier"),
+    end: zonedLocalToInstant(to + "T00:00", zone, "earlier"),
+  };
+}
 
 /** Calendar weeks in the requested IANA zone, including the current partial week. */
 export async function analyticsTrends(
@@ -19,19 +53,21 @@ export async function analyticsTrends(
   input: Input,
   principal: Principal,
 ): Promise<AnalyticsTrendsDTO> {
-  const zone = timezone(input),
+  const range = analyticsRange(input),
+    zone = range.timezone,
     today = instantToLocalDate(Date.now(), zone),
     weekday = new Date(today + "T00:00:00Z").getUTCDay(),
     currentMonday = addCalendarDays(today, -(weekday + 6) % 7),
-    firstDate = addCalendarDays(currentMonday, -77),
+    firstDate = range.from_date ?? addCalendarDays(currentMonday, -77),
+    lastDate = range.to_date ? addCalendarDays(range.to_date, -1) : today,
     start = zonedLocalToInstant(firstDate + "T00:00", zone, "earlier"),
     end = zonedLocalToInstant(
-      addCalendarDays(today, 1) + "T00:00",
+      addCalendarDays(lastDate, 1) + "T00:00",
       zone,
       "earlier",
     );
   const days: AnalyticsTrendsDTO["days"] = [];
-  for (let date = firstDate; date <= today; date = addCalendarDays(date, 1))
+  for (let date = firstDate; date <= lastDate; date = addCalendarDays(date, 1))
     days.push({ date, created: 0, completed: 0, minutes: 0 });
   const byDate = new Map(days.map((day) => [day.date, day])),
     taskIds = tasks.map((task) => task.task_id),
@@ -108,18 +144,17 @@ export async function analyticsTrends(
       }
     }
   }
-  const weeks: AnalyticsTrendsDTO["weeks"] = Array.from(
-    { length: 12 },
-    (_, index) => ({
-      week_start: addCalendarDays(firstDate, index * 7),
-      created: 0,
-      completed: 0,
-      minutes: 0,
-    }),
-  );
-  for (let index = 0; index < days.length; index++) {
-    const week = weeks[Math.floor(index / 7)],
-      day = days[index];
+  const weeks: AnalyticsTrendsDTO["weeks"] = [],
+    weekByDate = new Map<string, AnalyticsTrendsDTO["weeks"][number]>();
+  for (const day of days) {
+    const dayOfWeek = new Date(day.date + "T00:00:00Z").getUTCDay(),
+      monday = addCalendarDays(day.date, -(dayOfWeek + 6) % 7);
+    let week = weekByDate.get(monday);
+    if (!week) {
+      week = { week_start: monday, created: 0, completed: 0, minutes: 0 };
+      weeks.push(week);
+      weekByDate.set(monday, week);
+    }
     week.created += day.created;
     week.completed += day.completed;
     week.minutes += day.minutes;
@@ -127,7 +162,7 @@ export async function analyticsTrends(
   return {
     timezone: zone,
     from_date: firstDate,
-    to_date: today,
+    to_date: lastDate,
     days,
     weeks,
     time_scope_granted: timeScope,

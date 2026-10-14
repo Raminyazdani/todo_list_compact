@@ -9,6 +9,7 @@ import {
   type Database,
   type SqlClient,
 } from "../../server/db/database";
+import { postgresConnectionUrl } from "../../server/db/connection-target";
 import { hash, object, type Input } from "../../server/domain/core";
 import {
   BACKUP_TABLES,
@@ -25,7 +26,7 @@ const MAX_SNAPSHOT_BYTES = 70 * 1024 * 1024;
 
 /** Normalize direct/pooler endpoints as the same database; credentials never enter the result. */
 export function databaseIdentity(value: string): string {
-  const url = new URL(value);
+  const url = postgresConnectionUrl(value);
   if (
     !["postgres:", "postgresql:"].includes(url.protocol) ||
     !url.hostname ||
@@ -112,7 +113,6 @@ export async function restoreDrill(
   if (!explicitRestoreDrill) throw new Error("DRILL_EXPLICIT_INTENT_REQUIRED");
   if (!sourceOwnerId.trim()) throw new Error("DRILL_SOURCE_OWNER_REQUIRED");
   const backup = object(backupValue);
-  const original = verifyBackupManifest(backup, sourceOwnerId);
   if (
     [
       ...Object.keys(object(backup.tables)),
@@ -120,6 +120,7 @@ export async function restoreDrill(
     ].some((name) => !(BACKUP_TABLES as readonly string[]).includes(name))
   )
     throw new Error("DRILL_UNSUPPORTED_BACKUP_TABLE");
+  const original = verifyBackupManifest(backup, sourceOwnerId);
   // Never relabel the backup to the staging application's OWNER_ID.
   const principal: Principal = {
     ownerId: sourceOwnerId,
@@ -149,7 +150,18 @@ export async function restoreDrill(
   for (const table of BACKUP_TABLES) {
     counts[table] = original[table].length;
     const hashes = new Set(restored[table].map((row) => hash(row)));
-    if (original[table].some((row) => !hashes.has(hash(row))))
+    // These registered schema-v1 additions have fixed, non-destructive defaults
+    // on old rows. Compare every original field plus ONLY those exact defaults;
+    // unknown columns/tables are rejected by canonical restoration above.
+    const defaults =
+      table === "calendar_events"
+        ? { category: "Other" }
+        : table === "notifications"
+          ? { target_type: "task", target_id: null }
+          : {};
+    if (
+      original[table].some((row) => !hashes.has(hash({ ...defaults, ...row })))
+    )
       throw new Error("DRILL_ORIGINAL_ROW_READBACK_MISMATCH");
     const added = ["activity_events", "idempotency_operations"].includes(table)
       ? 1

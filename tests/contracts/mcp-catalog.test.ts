@@ -16,6 +16,8 @@ import {
   type PreviewDTO,
   type PageDTO,
   type EventDTO,
+  type FileDTO,
+  type ReportsDTO,
 } from "../../shared/contracts";
 
 let db: Database, service: DomainService, principal: Principal;
@@ -559,6 +561,347 @@ describe("MCP advertised schemas against the real canonical PostgreSQL service",
       ((await read("file_search", { state: "External" })) as PageDTO<unknown>)
         .total,
     ).toBe(1);
+  });
+  it("edits app annotations on external references with strict bounds/revision/scopes while immutable source columns and versions stay identical", async () => {
+    const registered = await write("file_register_external_link", {
+      external_url: "https://drive.google.com/file/d/synthetic-annotated/view",
+      external_id: "synthetic-annotated",
+      title: "Synthetic original",
+      original_filename: "original.txt",
+    });
+    const original = (
+      await db.query<Record<string, unknown>>(
+        "SELECT * FROM files WHERE file_id=$1",
+        [registered.entity_id],
+      )
+    ).rows[0];
+    const originalVersions = (
+      await db.query("SELECT * FROM file_versions WHERE file_id=$1", [
+        registered.entity_id,
+      ])
+    ).rows;
+    expect(tool("file_metadata_update").scopes).toEqual(["files:write"]);
+    for (const input of [
+      { file_id: registered.entity_id },
+      { file_id: registered.entity_id, tags: null },
+      { file_id: registered.entity_id, tags: ["Tag", "tag"] },
+      { file_id: registered.entity_id, tags: ["كتاب", "کتاب"] },
+      { file_id: registered.entity_id, tags: ["hidden\t"] },
+      { file_id: registered.entity_id, description: "x\u0000" },
+      { file_id: registered.entity_id, description: "x".repeat(10001) },
+      {
+        file_id: registered.entity_id,
+        provider: "private_blob",
+        description: "x",
+      },
+    ])
+      expect(
+        tool("file_metadata_update").schema.safeParse({
+          input,
+          operation_id: randomUUID(),
+          expected_revision: registered.version,
+        }).success,
+      ).toBe(false);
+    const edited = await write(
+      "file_metadata_update",
+      {
+        file_id: registered.entity_id,
+        description: "<script>literal owner note</script>",
+        tags: [" Research ", "کتاب"],
+      },
+      registered.version,
+    );
+    const metadata = (await read("file_get_metadata", {
+      file_id: registered.entity_id,
+    })) as FileDTO;
+    expect(metadata).toMatchObject({
+      description: "<script>literal owner note</script>",
+      tags: ["Research", "کتاب"],
+      provider: "google_drive",
+      original_filename: "original.txt",
+      revision: edited.version,
+    });
+    expect(
+      (
+        (await read("file_search", {
+          search: "literal owner note",
+          tags: ["research", "كتاب"],
+          limit: 1,
+        })) as PageDTO<FileDTO>
+      ).items[0].file_id,
+    ).toBe(registered.entity_id);
+    const after = (
+      await db.query<Record<string, unknown>>(
+        "SELECT * FROM files WHERE file_id=$1",
+        [registered.entity_id],
+      )
+    ).rows[0];
+    for (const column of Object.keys(original).filter(
+      (field) => !["updated_at", "revision"].includes(field),
+    ))
+      expect(after[column]).toEqual(original[column]);
+    expect(
+      (
+        await db.query("SELECT * FROM file_versions WHERE file_id=$1", [
+          registered.entity_id,
+        ])
+      ).rows,
+    ).toEqual(originalVersions);
+    await expect(
+      write(
+        "file_metadata_update",
+        { file_id: registered.entity_id, description: "stale edit" },
+        registered.version,
+      ),
+    ).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+    await expect(
+      write(
+        "file_metadata_update",
+        { file_id: registered.entity_id, description: "denied" },
+        edited.version,
+        { ...principal, scopes: ["files:read"] },
+      ),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_PERMISSIONS" });
+    await expect(
+      write(
+        "file_metadata_update",
+        { file_id: registered.entity_id, description: "foreign" },
+        edited.version,
+        { ...principal, ownerId: "foreign-" + randomUUID() },
+      ),
+    ).rejects.toMatchObject({ code: "ENTITY_NOT_FOUND" });
+    const cleared = await write(
+      "file_metadata_update",
+      { file_id: registered.entity_id, description: "", tags: [] },
+      edited.version,
+    );
+    expect(
+      await read("file_get_metadata", { file_id: registered.entity_id }),
+    ).toMatchObject({ description: "", tags: [], revision: cleared.version });
+  });
+  it("reports honor exclusive local range and omit file statistics without files scope, distinguishing registered records from unverified cloud originals", async () => {
+    await write("task_create", {
+      title: "Synthetic aged deadline",
+      due_date: "2020-01-02",
+    });
+    await write("task_create", {
+      title: "Excluded end boundary",
+      due_date: "2020-01-03",
+    });
+    await write("file_register_external_link", {
+      external_url: "https://drive.google.com/file/d/synthetic-report/view",
+      title: "Synthetic report reference",
+      size_bytes: 7,
+    });
+    const restricted = (await read(
+      "reports_summary",
+      {
+        from_date: "2020-01-01",
+        to_date: "2020-01-03",
+        timezone: "Asia/Tehran",
+        limit: 1,
+      },
+      { ...principal, scopes: ["tasks:read"] },
+    )) as ReportsDTO;
+    expect(restricted.range).toMatchObject({
+      timezone: "Asia/Tehran",
+      from_date: "2020-01-01",
+      to_date: "2020-01-03",
+    });
+    expect(restricted.overdue_ageing.total).toBe(1);
+    expect(restricted.overdue_ageing.items.items[0].title).toBe(
+      "Synthetic aged deadline",
+    );
+    expect(restricted).toMatchObject({
+      files_scope_granted: false,
+      registered_files: null,
+      duplicate_candidates: null,
+    });
+    const complete = (await read("reports_summary", {})) as ReportsDTO;
+    expect(complete.registered_files).toMatchObject({
+      scope: "owner_registered_records",
+      total: 1,
+      known_size_bytes: "7",
+    });
+    expect(complete.duplicate_candidates).toMatchObject({
+      total_groups: 0,
+      excluded_unverified_count: 1,
+    });
+    for (const input of [
+      { from_date: "2020-01-01" },
+      { from_date: "2020-01-03", to_date: "2020-01-01" },
+      { from_date: "2020-01-01", to_date: "2022-01-01" },
+      { timezone: "invalid/zone" },
+    ])
+      expect(tool("reports_summary").schema.safeParse(input).success).toBe(
+        false,
+      );
+  });
+  it("local-event reminder schemas preserve current revisions, exact occurrences and terminal lifecycle without external messages", async () => {
+    const event = await write("calendar_create_local_event", {
+      title: "Synthetic local reminder event",
+      starts_at: "2030-03-31T08:00:00Z",
+      ends_at: "2030-03-31T09:00:00Z",
+      timezone: "Europe/Berlin",
+      category: "Work",
+    });
+    expect(
+      await read("calendar_events_query", {
+        from: "2030-03-31T00:00:00Z",
+        to: "2030-04-01T00:00:00Z",
+      }),
+    ).toMatchObject({ items: [expect.objectContaining({ category: "Work" })] });
+    const reminder = await write("calendar_reminder_create", {
+      event_id: event.entity_id,
+      remind_at: "2020-01-01T00:00:00Z",
+    });
+    const paused = await write(
+      "calendar_reminder_pause",
+      { reminder_id: reminder.entity_id },
+      reminder.version,
+    );
+    const resumed = await write(
+      "calendar_reminder_resume",
+      { reminder_id: reminder.entity_id },
+      paused.version,
+    );
+    expect(resumed.data).toMatchObject({
+      remind_at: "2020-01-01T00:00:00.000Z",
+      state: "Pending",
+      past_due: true,
+    });
+    const cancelled = await write(
+      "calendar_reminder_cancel",
+      { reminder_id: reminder.entity_id },
+      resumed.version,
+    );
+    expect(
+      await read("calendar_reminder_get", { reminder_id: reminder.entity_id }),
+    ).toMatchObject({ state: "Cancelled", revision: cancelled.version });
+    expect(
+      (
+        (await read("calendar_reminder_list", {
+          event_id: event.entity_id,
+        })) as PageDTO<unknown>
+      ).total,
+    ).toBe(1);
+    await expect(
+      write(
+        "calendar_reminder_resume",
+        { reminder_id: reminder.entity_id },
+        cancelled.version,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(
+      write("calendar_reminder_create", {
+        event_id: event.entity_id,
+        remind_at: "2030-01-01T00:00:00Z",
+        occurrence_starts_at: "2040-01-01T00:00:00Z",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(
+      tool("calendar_reminder_pause").schema.safeParse({
+        input: { reminder_id: reminder.entity_id },
+        operation_id: randomUUID(),
+      }).success,
+    ).toBe(false);
+    expect(tool("calendar_reminder_create").scopes).toEqual(["calendar:write"]);
+    await expect(
+      read(
+        "calendar_reminder_get",
+        { reminder_id: reminder.entity_id },
+        { ...principal, ownerId: "foreign-" + randomUUID() },
+      ),
+    ).rejects.toMatchObject({ code: "ENTITY_NOT_FOUND" });
+    expect(
+      (
+        await db.query<{ count: number }>(
+          "SELECT count(*)::int count FROM notifications WHERE owner_id=$1",
+          [principal.ownerId],
+        )
+      ).rows[0].count,
+    ).toBe(0);
+  });
+  it("notification OAuth alternatives are OR while actual reads and mark-read writes remain bound to the granted target type", async () => {
+    const existing = await task();
+    await write("reminder_create", {
+      task_id: existing.task_id,
+      remind_at: "2020-01-01T00:00:00Z",
+    });
+    const event = await write("calendar_create_local_event", {
+      title: "Synthetic notification event",
+      starts_at: "2030-01-01T12:00:00Z",
+      ends_at: "2030-01-01T13:00:00Z",
+    });
+    await write("calendar_reminder_create", {
+      event_id: event.entity_id,
+      remind_at: "2020-01-01T00:00:00Z",
+    });
+    await service.execute(
+      "system_daily_run",
+      {},
+      { ...principal, channel: "system" },
+      { idempotencyKey: randomUUID() },
+    );
+    expect(tool("notifications_list").scopeAlternatives).toEqual([
+      ["tasks:read"],
+      ["calendar:read"],
+    ]);
+    expect(tool("notification_mark_read").scopeAlternatives).toEqual([
+      ["tasks:write"],
+      ["calendar:write"],
+    ]);
+    type Notification = {
+      notification_id: string;
+      target_type: string;
+      revision: number;
+      read_at: string | null;
+    };
+    const tasks = (await read(
+      "notifications_list",
+      {},
+      { ...principal, scopes: ["tasks:read"] },
+    )) as PageDTO<Notification>;
+    const calendar = (await read(
+      "notifications_list",
+      {},
+      { ...principal, scopes: ["calendar:read"] },
+    )) as PageDTO<Notification>;
+    expect(tasks.total).toBe(1);
+    expect(calendar.total).toBe(1);
+    expect(tasks.items[0].target_type).toBe("task");
+    expect(calendar.items[0].target_type).toBe("calendar");
+    await expect(
+      write(
+        "notification_mark_read",
+        { notification_id: tasks.items[0].notification_id },
+        tasks.items[0].revision,
+        { ...principal, scopes: ["calendar:write"] },
+      ),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_PERMISSIONS" });
+    await expect(
+      write(
+        "notification_mark_read",
+        { notification_id: calendar.items[0].notification_id },
+        calendar.items[0].revision,
+        { ...principal, scopes: ["tasks:write"] },
+      ),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_PERMISSIONS" });
+    await write(
+      "notification_mark_read",
+      { notification_id: calendar.items[0].notification_id },
+      calendar.items[0].revision,
+      { ...principal, scopes: ["calendar:write"] },
+    );
+    expect(
+      (
+        (await read(
+          "notifications_list",
+          {},
+          { ...principal, scopes: ["calendar:read"] },
+        )) as PageDTO<Notification>
+      ).items[0].read_at,
+    ).not.toBeNull();
   });
   it("exposes exact reminder controls with revision guards and preserves scheduled timestamps through pause/resume/cancel", async () => {
     const existing = await task(),

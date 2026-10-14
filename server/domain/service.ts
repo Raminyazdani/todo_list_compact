@@ -29,6 +29,8 @@ import { resourceCommand } from "./resources";
 import { taskCommand, type Change } from "./tasks";
 import { knowledgeCommand } from "./knowledge";
 import { recurrenceCommand } from "./recurrence";
+import { reservedTaskIdentity } from "./internal-options";
+import { queryTransactionMode } from "./query-transaction-mode";
 
 function resource(command: CommandName): string {
   if (command.startsWith("project_") || command.startsWith("knowledge_"))
@@ -53,7 +55,14 @@ export function createDomainService(database: Database): DomainService {
       object(input);
       if (json(input).length > 25_000_000)
         throw new DomainError("INVALID_INPUT", "Command payload too large.");
-      requireScope(principal, resource(command), true);
+      requireScope(
+        principal,
+        command === "notification_mark_read" &&
+          principal.scopes.includes("calendar:write")
+          ? "calendar"
+          : resource(command),
+        true,
+      );
       if (
         !options?.idempotencyKey ||
         options.idempotencyKey.length < 8 ||
@@ -63,12 +72,14 @@ export function createDomainService(database: Database): DomainService {
           "INVALID_INPUT",
           "A stable 8–200 character idempotency key is required.",
         );
+      const reservedId = reservedTaskIdentity(options, principal, command);
       const inputHash = hash({
         command,
         input,
         actor: principal.actorId,
         channel: principal.channel,
         expectedRevision: options.expectedRevision ?? null,
+        ...(reservedId === undefined ? {} : { reservedTaskId: reservedId }),
       });
       return database.transaction(principal.ownerId, async (tx) => {
         await tx.query(
@@ -255,6 +266,7 @@ export function createDomainService(database: Database): DomainService {
             principal,
             options.expectedRevision,
             operationId,
+            reservedId,
           );
         else
           change = await resourceCommand(
@@ -360,6 +372,15 @@ export function createDomainService(database: Database): DomainService {
           {},
           403,
         );
+      if (
+        queryTransactionMode(operation) === "read" &&
+        database.readTransaction
+      )
+        return database.readTransaction(principal.ownerId, (tx) =>
+          domainQuery(tx, operation, input, principal),
+        );
+      // Stored previews need writes; pinned AI/PGlite adapters retain their
+      // existing transaction semantics without opening a nested read transaction.
       return database.transaction(principal.ownerId, async (tx) => {
         await tx.query(
           "INSERT INTO owners(owner_id) VALUES($1) ON CONFLICT DO NOTHING",

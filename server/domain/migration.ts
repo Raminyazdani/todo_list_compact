@@ -16,6 +16,7 @@ export const BACKUP_TABLES = [
   "task_recurrence_instance_tasks",
   "project_milestones",
   "files",
+  "file_annotations",
   "file_versions",
   "file_task_links",
   "task_comments",
@@ -23,6 +24,7 @@ export const BACKUP_TABLES = [
   "task_tags",
   "knowledge_items",
   "calendar_events",
+  "event_reminders",
   "time_entries",
   "preferences",
   "saved_views",
@@ -379,10 +381,32 @@ export async function legacyImport(
     affected: tasks.map((t) => String(t.task_id)),
   };
 }
-export async function exportBackup(tx: SqlClient, ownerId: string) {
+const ADDITIVE_BACKUP_TABLES: readonly string[] = [
+  "file_annotations",
+  "event_reminders",
+];
+export async function exportBackup(
+  tx: SqlClient,
+  ownerId: string,
+  options: { allowKnownMissingAdditions?: boolean } = {},
+) {
   const tables: Record<string, Input[]> = {};
   const checksums: Record<string, string> = {};
   for (const table of BACKUP_TABLES) {
+    // Coordinator pre-DDL snapshots may explicitly preserve the older v1 table
+    // set. Probe only these registered additions; never ALTER during export.
+    if (
+      options.allowKnownMissingAdditions === true &&
+      ADDITIVE_BACKUP_TABLES.includes(table)
+    ) {
+      const exists = (
+        await tx.query<{ relation: string | null }>(
+          "SELECT to_regclass($1) relation",
+          ["public." + table],
+        )
+      ).rows[0].relation;
+      if (exists === null) continue;
+    }
     const rows = (
       await tx.query<Input>(`SELECT * FROM ${table} WHERE owner_id=$1`, [
         ownerId,
@@ -418,6 +442,15 @@ export function verifyBackupManifest(
     );
   const tables = object(backup.tables),
     checksums = object(backup.checksums);
+  if (
+    [...Object.keys(tables), ...Object.keys(checksums)].some(
+      (table) => !(BACKUP_TABLES as readonly string[]).includes(table),
+    )
+  )
+    throw new DomainError(
+      "INVALID_INPUT",
+      "Backup contains unsupported tables or checksum keys.",
+    );
   if (hash(checksums) !== backup.manifest_hash)
     throw new DomainError(
       "INVALID_INPUT",
@@ -425,6 +458,20 @@ export function verifyBackupManifest(
     );
   const verified: Record<string, Input[]> = {};
   for (const table of BACKUP_TABLES) {
+    // Original schema-v1 snapshots lacked this registered additive table only.
+    if (
+      ADDITIVE_BACKUP_TABLES.includes(table) &&
+      !Object.hasOwn(tables, table) &&
+      !Object.hasOwn(checksums, table)
+    ) {
+      verified[table] = [];
+      continue;
+    }
+    if (!Object.hasOwn(tables, table) || !Object.hasOwn(checksums, table))
+      throw new DomainError(
+        "INVALID_INPUT",
+        `Backup table and checksum are required: ${table}.`,
+      );
     const rows = array(tables[table] ?? [], 250000);
     if (hash(rows) !== checksums[table])
       throw new DomainError(
@@ -467,9 +514,11 @@ export async function restoreBackup(
         "Restore requires a fresh isolated owner workspace.",
       );
   }
-  const counts: Record<string, number> = {};
+  const layouts = new Map<
+    string,
+    { columns: string[]; jsonColumns: Set<string> }
+  >();
   for (const table of BACKUP_TABLES) {
-    const rows = array(tables[table] ?? [], 250000);
     const columnRows = (
       await tx.query<{ column_name: string; data_type: string }>(
         "SELECT column_name,data_type FROM information_schema.columns WHERE table_name=$1 AND table_schema='public' ORDER BY ordinal_position",
@@ -482,6 +531,19 @@ export async function restoreBackup(
         .filter((r) => r.data_type === "jsonb" || r.data_type === "json")
         .map((r) => r.column_name),
     );
+    for (const row of tables[table]) {
+      if (Object.keys(row).some((column) => !columns.includes(column)))
+        throw new DomainError(
+          "INVALID_INPUT",
+          `Backup contains unsupported columns: ${table}.`,
+        );
+    }
+    layouts.set(table, { columns, jsonColumns });
+  }
+  const counts: Record<string, number> = {};
+  for (const table of BACKUP_TABLES) {
+    const rows = tables[table],
+      { columns, jsonColumns } = layouts.get(table)!;
     for (const row of rows) {
       const data: Input = { ...row, owner_id: principal.ownerId };
       const keys = columns.filter((c) => c in data);

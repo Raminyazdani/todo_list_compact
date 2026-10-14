@@ -272,8 +272,8 @@ export async function commitCalendarOccurrence(
     ],
   );
   await tx.query(
-    `INSERT INTO calendar_events(event_id,owner_id,title,starts_at,ends_at,timezone,all_day,task_id,notes,series_event_id,original_occurrence_starts_at,recurrence_id)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    `INSERT INTO calendar_events(event_id,owner_id,title,starts_at,ends_at,timezone,all_day,task_id,notes,series_event_id,original_occurrence_starts_at,recurrence_id,category)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
     [
       overrideId,
       principal.ownerId,
@@ -287,6 +287,7 @@ export async function commitCalendarOccurrence(
       master.event_id,
       change.originalStart,
       change.recurrenceId,
+      master.category ?? "Other",
     ],
   );
   await tx.query(

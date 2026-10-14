@@ -201,7 +201,7 @@ describe("Negative boundary and complete resource workflows", () => {
     ).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
     expect(update.version).toBe(2);
     const pref = await exec("preferences_update", {
-      settings: { language: "fa", density: "compact" },
+      settings: { language: "fa", display_density: "compact" },
     });
     await exec(
       "preferences_update",
@@ -209,7 +209,7 @@ describe("Negative boundary and complete resource workflows", () => {
       pref.version,
     );
     expect(await query("preferences_get")).toMatchObject({
-      settings: { language: "fa", density: "compact", theme: "dark" },
+      settings: { language: "fa", display_density: "compact", theme: "dark" },
     });
     const view = await exec("saved_view_create", {
       title: "Ready",

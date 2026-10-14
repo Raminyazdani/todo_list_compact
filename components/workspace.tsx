@@ -86,6 +86,22 @@ export default function Workspace() {
     document.documentElement.dir = language === "fa" ? "rtl" : "ltr";
   }, [language]);
   useEffect(() => {
+    const settings = preferences.data?.settings ?? {};
+    const accessibility = settings.accessibility as
+      Record<string, unknown> | undefined;
+    document.documentElement.dataset.density =
+      settings.display_density === "compact" ? "compact" : "comfortable";
+    document.documentElement.dataset.largeText = String(
+      accessibility?.large_text === true,
+    );
+    document.documentElement.dataset.highContrast = String(
+      accessibility?.high_contrast === true,
+    );
+    document.documentElement.dataset.reduceMotion = String(
+      accessibility?.reduced_motion === true,
+    );
+  }, [preferences.data?.settings]);
+  useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const update = () => {
       document.documentElement.dataset.theme =
@@ -127,7 +143,9 @@ function WorkspaceContent({
   const routeParams = useSearchParams();
   const [mobile, setMobile] = useState(false);
   const [capture, setCapture] = useState(false);
-  const [taskId, setTaskId] = useState<string | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(() =>
+    routeParams.get("task"),
+  );
   const [toast, setToast] = useState("");
   const [toastError, setToastError] = useState(false);
   const [preview, setPreview] = useState<unknown>(null);

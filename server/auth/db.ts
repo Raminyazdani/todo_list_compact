@@ -1,4 +1,5 @@
 import { Pool, types as postgresTypes, type CustomTypesConfig } from "pg";
+import { postgresConnectionUrl } from "../db/connection-target";
 
 /** Auth timestamps/counts must be numeric; never round an unsafe database int8. */
 function authInteger(value: string | Buffer): number {
@@ -28,7 +29,7 @@ const authTypes: CustomTypesConfig = {
 let pool: Pool | undefined;
 export function getAuthPool() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_UNAVAILABLE");
-  const databaseUrl = new URL(process.env.DATABASE_URL);
+  const databaseUrl = postgresConnectionUrl(process.env.DATABASE_URL);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(
     databaseUrl.hostname,
   );

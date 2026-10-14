@@ -565,9 +565,15 @@ it.skipIf(!enabled)(
             const currentReminders = await allPages<{ state: string }>(
               "reminder_list",
             );
+            const currentEventReminders = await allPages<{ state: string }>(
+              "calendar_reminder_list",
+              {},
+              "cookie",
+            );
             check(
               !currentRules.some((r) => r.enabled && !allowed.has(r.rule_id)) &&
-                !currentReminders.some((r) => r.state === "Pending"),
+                !currentReminders.some((r) => r.state === "Pending") &&
+                !currentEventReminders.some((r) => r.state === "Pending"),
               "NONFIXTURE_AUTOMATION_BLOCKS_GLOBAL_JOB",
             );
             step = "OWNER_DAILY_JOB";
@@ -622,9 +628,15 @@ it.skipIf(!enabled)(
             const reminders = await allPages<{ state: string }>(
               "reminder_list",
             );
+            const eventReminders = await allPages<{ state: string }>(
+              "calendar_reminder_list",
+              {},
+              "cookie",
+            );
             check(
               !rules.some((r) => r.enabled) &&
-                !reminders.some((r) => r.state === "Pending"),
+                !reminders.some((r) => r.state === "Pending") &&
+                !eventReminders.some((r) => r.state === "Pending"),
               "NONFIXTURE_AUTOMATION_BLOCKS_GLOBAL_JOB",
             );
             await passed("unrelated_automation_absent_before_fixture_creation");

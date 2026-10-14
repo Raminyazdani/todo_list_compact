@@ -1,0 +1,72 @@
+import type { QueryName } from "../../shared/contracts";
+
+type Mode = "read" | "exclusive";
+
+// Exhaustive by design: a new query must classify its SQL and delegated side
+// effects before runtime can route it through a SQL read-only transaction.
+const modes = {
+  system_capabilities: "read",
+  system_health: "read",
+  whoami: "read",
+  task_search: "read",
+  task_get: "read",
+  task_find_ready: "read",
+  task_find_blocked: "read",
+  task_list_overdue: "read",
+  task_graph_get: "read",
+  task_dependencies_get: "read",
+  task_checklist_get: "read",
+  subtask_list: "read",
+  task_completion_impact_preview: "read",
+  dependency_topological_plan: "read",
+  task_dependency_add_preview: "exclusive",
+  task_dependency_remove_preview: "exclusive",
+  task_dependency_waive_preview: "exclusive",
+  subtask_reparent_preview: "exclusive",
+  task_template_instantiate_preview: "exclusive",
+  task_batch_preview: "exclusive",
+  project_list: "read",
+  project_get: "read",
+  project_summary: "read",
+  project_dependency_summary: "read",
+  project_milestone_list: "read",
+  task_template_list: "read",
+  file_search: "read",
+  file_get_metadata: "read",
+  file_list_versions: "read",
+  file_archive_preview: "read",
+  // These can refresh provider credentials and record source-sync state using
+  // the auth pool; they are not pure reads despite their public query names.
+  calendar_list: "exclusive",
+  calendar_events_query: "exclusive",
+  calendar_availability: "exclusive",
+  calendar_occurrence_reschedule_preview: "exclusive",
+  calendar_reminder_list: "read",
+  calendar_reminder_get: "read",
+  time_entry_list: "read",
+  time_summary: "read",
+  time_entry_import_preview: "exclusive",
+  get_activity: "read",
+  search_all: "read",
+  analytics_summary: "read",
+  reports_summary: "read",
+  preferences_get: "read",
+  saved_view_list: "read",
+  reminder_list: "read",
+  task_recurrence_list: "read",
+  task_recurrence_instances: "read",
+  notifications_list: "read",
+  task_comment_list: "read",
+  tag_list: "read",
+  knowledge_search: "read",
+  knowledge_get: "read",
+  task_dependency_restore_preview: "exclusive",
+  sync_status: "read",
+  export_data_manifest: "read",
+  backup_export: "read",
+  import_status: "read",
+} as const satisfies Record<QueryName, Mode>;
+
+export function queryTransactionMode(operation: QueryName): Mode {
+  return modes[operation];
+}

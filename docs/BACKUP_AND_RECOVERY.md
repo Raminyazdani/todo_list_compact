@@ -24,6 +24,12 @@ pnpm exec tsx --env-file=C:/PRIVATE_LIFE_OS/production.env scripts/ops/export-ba
 
 An actual pre-import production export was observed at 2026-10-13 22:06 UTC with every business-table count zero. Its encrypted file remains outside Git; this establishes the empty pre-import rollback point and does not claim a post-import hosted restore or an object-byte backup.
 
+Before registered additive schema changes, the separate explicit intent `--export-backup-before-additive-migration` allows the read-only exporter to probe and omit only absent `file_annotations`/`event_reminders` tables from an older schema-v1 manifest. It never performs DDL. The ordinary CLI/API export remains strict. Fresh encrypted staging and production snapshots were actually exported, independently decrypted and manifest-validated at 2026-10-14 00:30 UTC before the new staging DDL; the production snapshot contained one archived synthetic task and its two audit/idempotency entries, with no source import. The new production DDL and final post-import hosted restore remain separate gates.
+
+Canonical restoration rejects unknown tables/checksums and preflights every row column before inserting any restored table. Older valid v1 snapshots may omit only the two registered additive tables. Operator read-back compares every original field plus the exact registered defaults for old calendar categories and notification targets. Seven isolated real PostgreSQL-engine operator tests pass, including populated old calendar/notification recovery without loss; this is not the final hosted drill.
+
+Three original Google files (6,698,095 bytes) have an actual private encrypted byte package and an independent decrypt-to-files SHA/size recovery proof. The source parents/hash/modified-time must be freshly rechecked before cutover. This local byte proof does not establish a live private Blob store or automated cloud backup; both the package and its separate key remain outside Git.
+
 `scripts/ops/restore-drill.ts` takes these exact flags; replace the example paths with existing absolute private files and a new private report filename:
 
 ```powershell

@@ -22,6 +22,85 @@ const originalOwner: Principal = {
 };
 
 describe("Operator restore drill admission and canonical recovery", () => {
+  it("old_populated_v1_calendar_and_notifications_restore_all_original_fields_with_only_registered_additive_defaults", async () => {
+    const source = await createTestDatabase(),
+      destination = await createTestDatabase();
+    try {
+      const service = createDomainService(source);
+      const event = await service.execute(
+        "calendar_create_local_event",
+        {
+          title: "Synthetic old-schema calendar",
+          starts_at: "2027-03-28T07:07:00.123Z",
+          ends_at: "2027-03-28T08:37:00.123Z",
+          timezone: "Europe/Berlin",
+        },
+        originalOwner,
+        { idempotencyKey: "synthetic-old-schema-calendar" },
+      );
+      await source.query(
+        "INSERT INTO notifications(notification_id,owner_id,title,body) VALUES($1,$2,$3,$4)",
+        [
+          "synthetic-old-notification",
+          originalOwner.ownerId,
+          "Synthetic old task notice",
+          "Exact historical body فارسی",
+        ],
+      );
+      const backup = structuredClone(
+        await service.query("backup_export", {}, originalOwner),
+      ) as {
+        tables: Record<string, Record<string, unknown>[]>;
+        checksums: Record<string, string>;
+        manifest_hash: string;
+      };
+      for (const name of ["file_annotations", "event_reminders"]) {
+        delete backup.tables[name];
+        delete backup.checksums[name];
+      }
+      for (const row of backup.tables.calendar_events) delete row.category;
+      for (const row of backup.tables.notifications) {
+        delete row.target_type;
+        delete row.target_id;
+      }
+      for (const [table, rows] of Object.entries(backup.tables))
+        backup.checksums[table] = hash(rows);
+      backup.manifest_hash = hash(backup.checksums);
+      expect(
+        await restoreDrill(destination, backup, originalOwner.ownerId, true),
+      ).toMatchObject({
+        status: "restored",
+        original_rows_preserved: true,
+        table_counts: { calendar_events: 1, notifications: 1 },
+      });
+      expect(
+        (
+          await destination.query(
+            "SELECT title,category,starts_at FROM calendar_events WHERE event_id=$1",
+            [event.entity_id],
+          )
+        ).rows[0],
+      ).toMatchObject({
+        title: "Synthetic old-schema calendar",
+        category: "Other",
+      });
+      expect(
+        (
+          await destination.query(
+            "SELECT body,target_type,target_id FROM notifications WHERE notification_id=$1",
+            ["synthetic-old-notification"],
+          )
+        ).rows[0],
+      ).toEqual({
+        body: "Exact historical body فارسی",
+        target_type: "task",
+        target_id: null,
+      });
+    } finally {
+      await source.close?.();
+      await destination.close?.();
+    }
+  });
   it("rejects direct/pooler aliases, credential-only changes and loopback aliases of the source database", () => {
     for (const [source, destination] of [
       [
