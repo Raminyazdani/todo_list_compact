@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T07:16:14.9032730Z",
+  "updated_at": "2026-10-14T07:35:02.3811251Z",
   "branch": "master",
-  "commit": "334ee291d9fcea0024e120423860111eaa5120c5",
-  "phase": "source_import_redeploy_restore_cleanup_verified_final_source_batch_CI_pending",
+  "commit": "9ebbe815558c86d6865044daae4741ed802d3304",
+  "phase": "final_code_CI_and_production_source_verified_external_access_remaining",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -10,7 +10,7 @@
     "id": "dpl_DYEdvoPd32LP6PhgeM5pNEwTTHuo",
     "commit": "0ff748b8415e70e14c921c2db5f18f5fc2f0393f",
     "state": "READY",
-    "limitation": "Vercel made the first repository-linked deployment production automatically. Final reviewed default-branch release, persistence drill and source migration are still required."
+    "limitation": "Historical first automatic production deployment; later reviewed release, actual DG36 recovery, source cutover, restore and cleanup are verified in subsequent fields."
   },
   "completed": [
     "empty_repository_verified_and_cloned",
@@ -43,35 +43,30 @@
     "actual_three_original_file_unauthenticated_download_denial"
   ],
   "active": [
-    "final_source_batch_CI_and_deployment_readback",
-    "external_provider_and_ChatGPT_owner_steps"
+    "available_private_storage_and_funded_configured_AI",
+    "product_Google_or_private_iCal_grant",
+    "browser_control_recovery_and_actual_ChatGPT_grant_proof"
   ],
   "tests": [
     {
-      "evidence": "artifacts/test-results.json",
-      "unit_integration_passed": 233,
-      "opt_in_skipped": 16,
-      "domain_statements_percent": 93.66,
-      "domain_branches_percent": 89,
-      "browser_passed": 9,
-      "browser_redeploy_skipped": 1,
-      "actual_postgres_passed": 3,
-      "actual_local_mcp_tools": 122,
-      "initial_production_mcp_tools": 113,
-      "latest_completed_full_browser_run": {
-        "build": 8,
-        "tests_passed": 13,
-        "tests_failed": 4,
-        "tests_skipped": 1,
-        "limitation": "Affected reruns passed reminder cancellation and native DST drag; build9 Plan DATE test passed. New full scope has not yet received a coherent browser run."
-      },
-      "original_byte_recovery": {
-        "files": 3,
-        "bytes": 6698095,
-        "local_encryption_and_independent_decrypt": "PASS",
-        "fresh_source_recheck": "PASS_hashes_and_sizes_equal_fresh_three_originals",
-        "live_cloud_backup": "EXTERNALLY_BLOCKED"
-      }
+      "actual_SDK_tools": 130,
+      "coverage_files_skipped": 9,
+      "real_expiry_passed": 1,
+      "HTTP_authorization_notification_passed": 16,
+      "OIDC_passed": 1,
+      "domain_statements_percent": 94.7,
+      "coverage_files_passed": 53,
+      "browser_failed": 0,
+      "conclusion": "PASS",
+      "run": 38527496681,
+      "coverage_passed": 410,
+      "native_postgres_passed": 12,
+      "head_sha": "9ebbe815558c86d6865044daae4741ed802d3304",
+      "browser_skipped": 3,
+      "domain_branches_percent": 91.13,
+      "coverage_optin_skipped": 28,
+      "browser_passed": 24,
+      "rate_limit_passed": 6
     }
   ],
   "task_graph_status": {
@@ -109,9 +104,9 @@
     }
   },
   "open_severity": {
-    "production_gates": "CORE_PASS_final_source_batch_CI_pending",
+    "production_gates": "CORE_PASS_external_provider_and_actual_ChatGPT_gates_open",
     "known_p0_code_defects": "none_observed_in_verified_snapshot",
-    "known_p1_checks": "No observed unresolved code defect in verified scope; final new internal cleanup/operator source batch awaits complete CI.",
+    "known_p1_checks": "No observed unresolved code defect in final complete CI and actual core-production verification; provider/access gates remain explicit.",
     "external_provider_gates": "EXTERNALLY_BLOCKED"
   },
   "blockers": [
@@ -127,7 +122,7 @@
     },
     {
       "area": "chatgpt_installation",
-      "evidence": "Actual account UI shows Pro and Add custom MCP server; connection not yet submitted",
+      "evidence": "Actual Pro and Add custom MCP capability observed previously; no client grant. Latest browser inventory, bounded retry and reset recovery failed request-header-policy loading.",
       "state": "NOT_RUN"
     },
     {
@@ -142,51 +137,56 @@
     }
   ],
   "available_agents": [
-    "root",
-    "completed_scoped_migration_and_read_concurrency_reviews"
+    "root_completed_final_source_batch_and_evidence",
+    "scoped_domain_migration_and_release_reviews_finished"
   ],
   "next_actions": [
-    "final_source_batch_CI_and_deployment_readback",
-    "external_provider_and_ChatGPT_owner_steps"
+    "available_private_storage_and_funded_configured_AI",
+    "product_Google_or_private_iCal_grant",
+    "browser_control_recovery_and_actual_ChatGPT_grant_proof"
   ],
   "release_complete": false,
   "execution_prompt": "docs/CONTINUE_PROMPT_FA.md",
   "goal_status": "active",
   "goal_token_budget": null,
   "latest_verified": {
-    "OIDC_passed": 1,
-    "coverage_files_passed": 52,
-    "native_postgres_passed": 12,
-    "coverage_files_skipped": 9,
-    "run": 38519881381,
-    "HTTP_authorization_notification_passed": 16,
-    "browser_skipped": 2,
-    "coverage_optin_skipped": 28,
-    "coverage_passed": 393,
-    "browser_failed": 0,
-    "real_expiry_passed": 1,
-    "head_sha": "334ee291d9fcea0024e120423860111eaa5120c5",
-    "browser_passed": 24,
     "actual_SDK_tools": 130,
+    "coverage_files_skipped": 9,
+    "real_expiry_passed": 1,
+    "HTTP_authorization_notification_passed": 16,
+    "OIDC_passed": 1,
+    "domain_statements_percent": 94.7,
+    "coverage_files_passed": 53,
+    "browser_failed": 0,
     "conclusion": "PASS",
+    "run": 38527496681,
+    "coverage_passed": 410,
+    "native_postgres_passed": 12,
+    "head_sha": "9ebbe815558c86d6865044daae4741ed802d3304",
+    "browser_skipped": 3,
+    "domain_branches_percent": 91.13,
+    "coverage_optin_skipped": 28,
+    "browser_passed": 24,
     "rate_limit_passed": 6
   },
   "latest_observed_CI": {
-    "OIDC_passed": 1,
-    "coverage_files_passed": 52,
-    "native_postgres_passed": 12,
-    "coverage_files_skipped": 9,
-    "run": 38519881381,
-    "HTTP_authorization_notification_passed": 16,
-    "browser_skipped": 2,
-    "coverage_optin_skipped": 28,
-    "coverage_passed": 393,
-    "browser_failed": 0,
-    "real_expiry_passed": 1,
-    "head_sha": "334ee291d9fcea0024e120423860111eaa5120c5",
-    "browser_passed": 24,
     "actual_SDK_tools": 130,
+    "coverage_files_skipped": 9,
+    "real_expiry_passed": 1,
+    "HTTP_authorization_notification_passed": 16,
+    "OIDC_passed": 1,
+    "domain_statements_percent": 94.7,
+    "coverage_files_passed": 53,
+    "browser_failed": 0,
     "conclusion": "PASS",
+    "run": 38527496681,
+    "coverage_passed": 410,
+    "native_postgres_passed": 12,
+    "head_sha": "9ebbe815558c86d6865044daae4741ed802d3304",
+    "browser_skipped": 3,
+    "domain_branches_percent": 91.13,
+    "coverage_optin_skipped": 28,
+    "browser_passed": 24,
     "rate_limit_passed": 6
   },
   "advanced_stage_rehearsal": {
@@ -231,12 +231,16 @@
     "independent_diagnosis": "CLEAR"
   },
   "current_deployment": {
-    "actual_HTTPS_MCP_tools": 130,
-    "commit": "334ee291d9fcea0024e120423860111eaa5120c5",
-    "state": "READY",
-    "id": "dpl_Dis7DTPNBMCNQBdT9vStXfpRA6up",
+    "native_and_owner_API_original_files": 3,
+    "origin": "https://ramin-life-os.vercel.app",
+    "native_and_owner_API_original_tasks": 45,
     "branch": "master",
-    "source": "cli"
+    "commit": "9ebbe815558c86d6865044daae4741ed802d3304",
+    "target": "production",
+    "app_MCP_catalog": 130,
+    "state": "READY",
+    "id": "dpl_3kaY1N3FrWU5FY8Cr169HtotNjbC",
+    "observed_readback_at": "2026-10-14T07:26:48.878Z"
   },
   "production_graph_proof": {
     "snapshots": 21,
@@ -327,12 +331,58 @@
     "status": "PASS_persisted_independent_decrypt_manifest"
   },
   "final_source_batch": {
-    "type_lint_format": "PASS_before_final_documentation",
+    "type_lint_format": "PASS_complete_CI",
     "internal_cleanup_focused_passed": 8,
     "redeploy_child_process_tests_passed": 12,
     "app_HTTP_MCP_catalog": "UNCHANGED_130",
     "independent_reviews": "CLEAR",
-    "full_CI": "PENDING"
+    "full_CI": "PASS_38527496681",
+    "private_source_scan": {
+      "findings": 0,
+      "files_checked": 299,
+      "status": "PASS",
+      "private_source_identifiers_checked": 120
+    },
+    "evidence_receipt_update": "Documentation-only metadata update after complete frozen code/tests CI; code, tests, schema and dependencies unchanged."
   },
-  "final_report": "docs/FINAL_REPORT_FA.md"
+  "final_report": "docs/FINAL_REPORT_FA.md",
+  "core_production_verified": true,
+  "historical_initial_test_metrics": [
+    {
+      "evidence": "artifacts/test-results.json",
+      "unit_integration_passed": 233,
+      "opt_in_skipped": 16,
+      "domain_statements_percent": 93.66,
+      "domain_branches_percent": 89,
+      "browser_passed": 9,
+      "browser_redeploy_skipped": 1,
+      "actual_postgres_passed": 3,
+      "actual_local_mcp_tools": 122,
+      "initial_production_mcp_tools": 113,
+      "latest_completed_full_browser_run": {
+        "build": 8,
+        "tests_passed": 13,
+        "tests_failed": 4,
+        "tests_skipped": 1,
+        "limitation": "Affected reruns passed reminder cancellation and native DST drag; build9 Plan DATE test passed. New full scope has not yet received a coherent browser run."
+      },
+      "original_byte_recovery": {
+        "files": 3,
+        "bytes": 6698095,
+        "local_encryption_and_independent_decrypt": "PASS",
+        "fresh_source_recheck": "PASS_hashes_and_sizes_equal_fresh_three_originals",
+        "live_cloud_backup": "EXTERNALLY_BLOCKED"
+      }
+    }
+  ],
+  "final_post_deployment_readback": {
+    "domain_writes": false,
+    "owner_API_original_files": 3,
+    "graph_tasks_selected": 0,
+    "owner_API_original_tasks": 45,
+    "source_written": false,
+    "status": "PASS",
+    "native_all_six_source_collections": true,
+    "earlier_read_attempts": "Two failed read-only attempts preserved privately; exact internal cause unproven; independent native diagnostic and final normal verifier passed."
+  }
 }

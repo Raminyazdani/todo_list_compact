@@ -27,3 +27,9 @@ vercel inspect <observed-deployment-url> --scope ramin-yazdanis-projects
 محدودیت‌های مشاهده‌شدهٔ حساب: ایجاد private Blob جدید به علت سقف مصرف رد شد و storeهای خصوصی موجود معلق‌اند؛ AI Gateway اعتبار صفر داشت. هیچ خرید، ارتقای پلن یا استفاده از token پروژهٔ دیگری انجام نشده است. رفع این محدودیت‌ها برای آزمون زندهٔ upload/AI لازم است؛ کد و آزمون شبیه‌سازی provider جای آن را نمی‌گیرد.
 
 Rollback کد با deployment قبلی انجام می‌شود. rollback داده فقط از backup معتبر در staging تمرین‌شده، با مالک یکسان و عملیات صریح انجام شود. حذف جدول یا reset production روش rollback نیست.
+
+## Frozen final source batch and receipt update
+
+Source/test batch **9ebbe815558c86d6865044daae4741ed802d3304** completed [CI38527496681](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38527496681) successfully: coverage410 PASS/28 opt-in SKIP,53/9 files; native PostgreSQL12; browser24 PASS/3 explicit production opt-in SKIP; SDK130; HTTP16,OIDC1,rate6,realexpiry1. Domain statement94.70%/branch91.13%. Format/lint/type/public-safety/audit/schema/build and all configured security steps passed. Final production dpl_3kaY1N3FrWU5FY8Cr169HtotNjbC is READY on that exact source SHA; independent native reconciliation and fresh owner API45Tasks/3Files passed07:26:48UTC. Two earlier read-only operator failures are retained privately; their exact internal cause is unproven. No source/domain writes were performed by verification.
+
+The following receipt commit updates documentation only. Application code, test sources, schema, dependencies and configuration remain the fully checked batch above; repeated heavy suites are unnecessary for these status/wording changes. Historical334/DG36 receipts below retain their original SHA and counts. Full release remains open for actual private storage/AI/product-calendar grants and the ChatGPT client grant. Browser control still fails loading request-header policy after a bounded reset recovery; no installation/grant was submitted.

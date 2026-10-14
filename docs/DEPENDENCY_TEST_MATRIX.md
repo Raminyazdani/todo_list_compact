@@ -1,6 +1,6 @@
 # Dependency, checklist and hierarchy — observed evidence matrix
 
-Observed final checkpoint updated 2026-10-14T07:10:55.759Z; production redeployment and its recovered result are separately recorded. Normative names from ADVANCED_TASK_GRAPH_SPEC §8 are preserved. The current reviewed SHA is **334ee291d9fcea0024e120423860111eaa5120c5**, [exact latest-SHA CI](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38519881381) FULLPASS. A PASS below names the observed layer; it does not imply that every production acceptance substep is complete. Actual production graph/owner UI and independent hosted restore now pass; recovered DG-36/fresh-login parity, final exact cleanup and encrypted export also pass.
+Observed final checkpoint updated 2026-10-14T07:10:55.759Z; production redeployment and its recovered result are separately recorded. Normative names from ADVANCED_TASK_GRAPH_SPEC §8 are preserved. The captured milestone SHA was **334ee291d9fcea0024e120423860111eaa5120c5**, [exact latest-SHA CI](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38519881381) FULLPASS. A PASS below names the observed layer; it does not imply that every production acceptance substep is complete. Actual production graph/owner UI and independent hosted restore now pass; recovered DG-36/fresh-login parity, final exact cleanup and encrypted export also pass.
 
 ## All 40 normative scenarios
 
@@ -62,7 +62,7 @@ All current results are dated 2026-10-14 UTC unless an earlier observation is ex
 
 ### E01 — Exact reviewed master and CI
 
-**PASS**, 2026-10-14 UTC. Current master 334ee291d9fcea0024e120423860111eaa5120c5; [exact CI38519881381](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38519881381) FULLPASS, including format/lint/type/public-safety/audit/build and all configured pipeline steps. Earlier two fully successful CI38516650590/38517791730 on 463f3cad0310879d23a697f0e1c5d070113fa694 are historical before-repair proofs. The accepted distinct READY production deployment and actual fresh-owner persistence recovery are E21.
+**PASS**, 2026-10-14 UTC. Captured milestone master 334ee291d9fcea0024e120423860111eaa5120c5; [exact CI38519881381](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38519881381) FULLPASS, including format/lint/type/public-safety/audit/build and all configured pipeline steps. Earlier two fully successful CI38516650590/38517791730 on 463f3cad0310879d23a697f0e1c5d070113fa694 are historical before-repair proofs. The accepted distinct READY production deployment and actual fresh-owner persistence recovery are E21.
 
 ### E02 — Coverage and isolated tests
 
@@ -180,3 +180,9 @@ Original source rows retain their content and identities; graph fixtures are sep
 ## Remaining actual scope
 
 E19/E20/E21/E23 are actual PASS at their named source/graph/restore/recovered-redeploy/cleanup/final-export scopes. The original DG-36 failure remains in its private journal; fresh-owner read-back on the exact accepted distinct READY deployment closes the requirement without inventing a new attempt. Latest exact 334 CI38519881381 is fully successful E22. All 40 normative DG scenarios now have recorded PASS at explicit scope. Live Blob/AI and owner Google/iCal/ChatGPT access remain E15–E18; final secure handoff/evidence publication belongs to the coordinator.
+
+## Frozen final source batch and receipt update
+
+Source/test batch **9ebbe815558c86d6865044daae4741ed802d3304** completed [CI38527496681](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38527496681) successfully: coverage410 PASS/28 opt-in SKIP,53/9 files; native PostgreSQL12; browser24 PASS/3 explicit production opt-in SKIP; SDK130; HTTP16,OIDC1,rate6,realexpiry1. Domain statement94.70%/branch91.13%. Format/lint/type/public-safety/audit/schema/build and all configured security steps passed. Final production dpl_3kaY1N3FrWU5FY8Cr169HtotNjbC is READY on that exact source SHA; independent native reconciliation and fresh owner API45Tasks/3Files passed07:26:48UTC. Two earlier read-only operator failures are retained privately; their exact internal cause is unproven. No source/domain writes were performed by verification.
+
+The following receipt commit updates documentation only. Application code, test sources, schema, dependencies and configuration remain the fully checked batch above; repeated heavy suites are unnecessary for these status/wording changes. Historical334/DG36 receipts below retain their original SHA and counts. Full release remains open for actual private storage/AI/product-calendar grants and the ChatGPT client grant. Browser control still fails loading request-header policy after a bounded reset recovery; no installation/grant was submitted.
