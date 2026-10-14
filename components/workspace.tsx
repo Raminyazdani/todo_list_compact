@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import type { CommandName, MutationResult, PageDTO } from "@/shared/contracts";
+import { IN_APP_AI_ENABLED } from "@/shared/product-features";
 import { command, useQuery, ApiError } from "@/features/api";
 import { LocaleContext, type Language, useLocale } from "@/features/locale";
 import { CreateTask, TaskDetail, TaskExplorer } from "@/features/tasks";
@@ -64,7 +65,7 @@ const navigation = [
     icon: TrendingUp,
   },
   { path: "/settings", fa: "تنظیمات", en: "Settings", icon: Settings2 },
-];
+].filter((item) => IN_APP_AI_ENABLED || item.path !== "/assistant");
 
 export default function Workspace() {
   const [localLanguage, setLanguage] = useState<Language | null>(null);
@@ -238,7 +239,10 @@ function WorkspaceContent({
     return () => window.removeEventListener("keydown", handler);
   }, []);
   const current =
-    navigation.find((item) => item.path === pathname) ?? navigation[0];
+    navigation.find((item) => item.path === pathname) ??
+    (pathname === "/assistant"
+      ? { fa: "دستیار داخل برنامه", en: "In-app assistant" }
+      : navigation[0]);
   return (
     <div className="workspace">
       <a href="#workspace-main" className="skip-link">

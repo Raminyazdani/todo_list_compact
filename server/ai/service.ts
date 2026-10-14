@@ -12,6 +12,7 @@ import {
 import { groundedIdentity, mergeReadContext, runGroundedReads } from "./reads";
 import { requestModel } from "./provider";
 import { requireAiActionScopes, requireAiScope } from "./authority";
+import { IN_APP_AI_ENABLED } from "@/shared/product-features";
 import {
   executeAtomicPlan,
   needsAtomicProposal,
@@ -20,6 +21,7 @@ import {
 } from "./compound";
 
 export function aiConfigured() {
+  if (!IN_APP_AI_ENABLED) return false;
   try {
     resolveAiConfiguration();
     return true;

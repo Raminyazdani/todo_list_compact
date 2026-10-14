@@ -11,6 +11,7 @@ import type {
   TaskDTO,
 } from "@/shared/contracts";
 import { zonedLocalToInstant } from "@/shared/datetime";
+import { IN_APP_AI_ENABLED } from "@/shared/product-features";
 import { useQuery } from "./api";
 import { useLocale } from "./locale";
 import { TaskRow } from "./tasks";
@@ -32,7 +33,7 @@ export interface DashboardRange {
   to_date: string;
   timezone: string;
 }
-const routes = [
+const allRoutes = [
   "/tasks",
   "/tasks?filter=ready",
   "/tasks?filter=blocked",
@@ -45,6 +46,9 @@ const routes = [
   "/assistant",
   "/settings",
 ];
+const routes = allRoutes.filter(
+  (route) => IN_APP_AI_ENABLED || route !== "/assistant",
+);
 
 export function DashboardExtras({
   range,
@@ -88,19 +92,21 @@ export function DashboardExtras({
     to: zonedLocalToInstant(`${range.to_date}T00:00`, range.timezone),
     limit: 5,
   });
-  const ai = useQuery<PageDTO<ActivityDTO>>("get_activity", {
-    channel: "AI",
-    limit: 5,
-  });
+  const ai = useQuery<PageDTO<ActivityDTO>>(
+    "get_activity",
+    { channel: "AI", limit: 5 },
+    IN_APP_AI_ENABLED,
+  );
   const [editing, setEditing] = useState(false);
-  const shortcuts = Array.isArray(settings.dashboard_shortcuts)
+  const savedShortcuts = Array.isArray(settings.dashboard_shortcuts)
     ? (settings.dashboard_shortcuts as { title: string; path: string }[])
         .filter(
           (item) =>
-            typeof item.title === "string" && routes.includes(item.path),
+            typeof item.title === "string" && allRoutes.includes(item.path),
         )
         .slice(0, 12)
     : [];
+  const shortcuts = savedShortcuts.filter((item) => routes.includes(item.path));
   return (
     <>
       <section className="panel" {...widgetProps("priority")}>
@@ -203,36 +209,38 @@ export function DashboardExtras({
           {range.timezone}
         </p>
       </section>
-      <section className="panel" {...widgetProps("ai")}>
-        <SectionHeading
-          title={t("آخرین تغییرهای دستیار", "Latest assistant changes")}
-          action={
-            <Link className="text-link" href="/assistant">
-              {t("گفت‌وگو", "Chat")}
-            </Link>
-          }
-        />
-        <QueryState {...ai} retry={ai.refresh} />
-        {ai.data?.items.map((event) => (
-          <div key={event.event_id} className="dependency-row">
-            <strong>{event.event_type}</strong>
-            <time>
-              {new Date(event.occurred_at).toLocaleString(
-                language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
-                { timeZone: range.timezone },
-              )}
-            </time>
-          </div>
-        ))}
-        {ai.data && !ai.data.items.length && (
-          <Empty
-            title={t(
-              "تغییری از دستیار ثبت نشده",
-              "No assistant changes recorded",
-            )}
+      {IN_APP_AI_ENABLED && (
+        <section className="panel" {...widgetProps("ai")}>
+          <SectionHeading
+            title={t("آخرین تغییرهای دستیار", "Latest assistant changes")}
+            action={
+              <Link className="text-link" href="/assistant">
+                {t("گفت‌وگو", "Chat")}
+              </Link>
+            }
           />
-        )}
-      </section>
+          <QueryState {...ai} retry={ai.refresh} />
+          {ai.data?.items.map((event) => (
+            <div key={event.event_id} className="dependency-row">
+              <strong>{event.event_type}</strong>
+              <time>
+                {new Date(event.occurred_at).toLocaleString(
+                  language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
+                  { timeZone: range.timezone },
+                )}
+              </time>
+            </div>
+          ))}
+          {ai.data && !ai.data.items.length && (
+            <Empty
+              title={t(
+                "تغییری از دستیار ثبت نشده",
+                "No assistant changes recorded",
+              )}
+            />
+          )}
+        </section>
+      )}
       <section className="panel" {...widgetProps("shortcuts")}>
         <SectionHeading
           title={t("میان‌برهای شخصی", "Personal shortcuts")}
@@ -270,7 +278,7 @@ export function DashboardExtras({
               const form = event.currentTarget;
               const data = new FormData(form);
               const next = [
-                ...shortcuts,
+                ...savedShortcuts,
                 {
                   title: String(data.get("title")),
                   path: String(data.get("path")),
@@ -299,7 +307,7 @@ export function DashboardExtras({
             </Field>
             <Button
               type="submit"
-              disabled={revision === undefined || shortcuts.length >= 12}
+              disabled={revision === undefined || savedShortcuts.length >= 12}
             >
               {t("ثبت میان‌بر", "Save shortcut")}
             </Button>
@@ -310,8 +318,8 @@ export function DashboardExtras({
                 disabled={revision === undefined}
                 onClick={() =>
                   void savePreferences({
-                    dashboard_shortcuts: shortcuts.filter(
-                      (_, i) => i !== index,
+                    dashboard_shortcuts: savedShortcuts.filter(
+                      (_, i) => i !== savedShortcuts.indexOf(item),
                     ),
                   })
                 }

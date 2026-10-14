@@ -92,7 +92,7 @@ export async function reports(
       known_size_bytes: string;
       unknown_size_count: string;
     }>(
-      `SELECT CASE WHEN f.provider='private_blob' THEN 'private_blob' WHEN f.state='External' THEN 'external_google_reference' ELSE 'managed_google_reference' END source, count(*)::text total, COALESCE(sum(f.size_bytes),0)::text known_size_bytes, count(*) FILTER(WHERE f.size_bytes IS NULL)::text unknown_size_count FROM files f WHERE ${filter} GROUP BY 1 ORDER BY 1`,
+      `SELECT CASE WHEN f.provider='private_blob' THEN 'private_blob' WHEN f.provider='neon_object_storage' THEN 'neon_object_storage' WHEN f.state='External' THEN 'external_google_reference' ELSE 'managed_google_reference' END source, count(*)::text total, COALESCE(sum(f.size_bytes),0)::text known_size_bytes, count(*) FILTER(WHERE f.size_bytes IS NULL)::text unknown_size_count FROM files f WHERE ${filter} GROUP BY 1 ORDER BY 1`,
       params,
     )
   ).rows;
@@ -114,7 +114,7 @@ export async function reports(
     ),
     by_source: bySource,
   };
-  const verified = `f.provider='private_blob' AND f.sha256 ~ '^[a-f0-9]{64}$' AND f.size_bytes IS NOT NULL AND f.storage_key IS NOT NULL AND EXISTS(SELECT 1 FROM file_versions v WHERE v.owner_id=f.owner_id AND v.file_id=f.file_id AND v.sha256=f.sha256 AND v.size_bytes=f.size_bytes AND v.storage_key=f.storage_key)`;
+  const verified = `f.provider IN ('private_blob','neon_object_storage') AND f.sha256 ~ '^[a-f0-9]{64}$' AND f.size_bytes IS NOT NULL AND f.storage_key IS NOT NULL AND EXISTS(SELECT 1 FROM file_versions v WHERE v.owner_id=f.owner_id AND v.file_id=f.file_id AND v.sha256=f.sha256 AND v.size_bytes=f.size_bytes AND v.storage_key=f.storage_key)`;
   const groups = (
     await tx.query<{
       sha256: string;
@@ -143,7 +143,9 @@ export async function reports(
       )
     : [];
   result.duplicate_candidates = {
-    basis: "canonical_verified_private_blob_sha256",
+    basis: bySource.some((row) => row.source === "neon_object_storage")
+      ? "canonical_verified_private_storage_sha256"
+      : "canonical_verified_private_blob_sha256",
     total_groups: Number(groups[0]?.total_groups ?? 0),
     excluded_unverified_count: Number(unverified.count),
     groups: groups.map((g) => ({

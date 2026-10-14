@@ -44,7 +44,7 @@ export function createAuth(bootstrap = false) {
     emailAndPassword: {
       enabled: true,
       disableSignUp: !bootstrap,
-      minPasswordLength: 16,
+      minPasswordLength: 8,
       maxPasswordLength: 128,
       autoSignIn: false,
     },

@@ -1,6 +1,12 @@
 # وضعیت ادامهٔ Ramin Life OS
 
-هدف کامل پروژه فعال و بدون بودجهٔ عددی است؛ فارسی گفتگو کن. تمام کار مستقل تحویل بسته شده است. از همین وضعیت ادامه بده؛ کد یا منبع سالم را دوباره بررسی نکن. Root تنها نویسندهٔ Git/schema/production است. Private source، IDs، ledger rows، credentials، backups و realPNG بیرون Git‌اند؛ digest_website نامرتبط است.
+فارسی گفتگو کن. [CURRENT_SCOPE_FA.md](CURRENT_SCOPE_FA.md) دستور مستقیم تازهٔ مالک و مرجع محدوده است: Neon برای فایل تازه، AI داخل برنامه فعلاً غیرفعال، و MCP بومی همین Codex. رمز انتخابی روی همان حساب تنظیم و ورود واقعی تأیید شد؛ رمز را چاپ نکن و تغییر را دوباره اجرا نکن. ثبت اتصال life_os و login بومی OAuth موفق بود ولی runtime چت جاری هنوز سرور تازه را نمی‌شناسد؛ همین چت باید دوباره باز و یک خواندن واقعی MCP انجام شود. admin/backup اعطا نشدند.
+
+Neon CLI نصب است ولی profile احراز‌شده ندارد؛ مالک باید neon login را محلی اجرا کند. کلید یا رمز در چت نخواه. همان پروژه/branch موجود باید تأیید شود، bucket خصوصی/credential محدود و conditional PUT واقعی بررسی و سپس env سرور و backup فعال شوند. ساخت پروژهٔ جایگزین، خرید یا تغییر DATABASE_URL اصلی مجاز نیست. وضعیت کد و CI تازه در BUILD_PROGRESS.json است؛ شواهد زیر را به نسخهٔ تازه نسبت نده. منابع اصلی فقط‌خواندنی و داده/credentials/backup/تصویر واقعی بیرون Git‌اند؛ digest_website نامرتبط است. Root تنها نویسندهٔ Git/schema/production است.
+
+هدف قبلی blocked ثبت شد و ابزار آن را خودکار resume نمی‌کند؛ درخواست تازهٔ مالک در همین چت ادامه دارد. AI زنده و نصب ChatGPT دیگر گیت فعلی نیستند. محدودیت‌ها و دستورهای روش ادامه در متن تاریخی زیر فقط با رعایت این اصلاحات کاربرد دارند.
+
+## شواهد تاریخی پیش از تغییر محدوده
 
 نسخهٔ ثابت کد/تست9ebbe815558c86d6865044daae4741ed802d3304 با CI38527496681 FULLPASS:410coverage/28opt-in،53filePASS/9skip،nativePG12،browser24/3production-opt-in،SDK130،HTTP16/OIDC1/rate6/actualexpiry1؛domain statements94.70%/branches91.13%. Format/lint/type/private-safety/audit/schema/build کامل PASS. Receiptcommit بعد از این فقطdocs/status است و code/tests/config/dependencies ثابت می‌مانند؛ برای metadata آزمون سنگین تکرار نشود. گزارش FINAL_REPORT_FA.md exactmaster§19 A–H منتشر است؛ BUILD_PROGRESS.json همهٔ شواهد مشاهده‌شده را دارد. release_complete=false به‌سبب گیت‌های بیرونی، core_production_verified=true.
 

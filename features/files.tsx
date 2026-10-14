@@ -32,6 +32,7 @@ import {
 import {
   boundedTextDiff,
   executeArchiveHttp,
+  isPrivateFileProvider,
   loadFilePreview,
   prepareBulkArchive,
   runBulkArchive,
@@ -322,8 +323,8 @@ export function FileWorkspace({
     const metadataDiff = versionMetadataDiff(left, right);
     try {
       const previews =
-        left.provider === "private_blob" &&
-        right.provider === "private_blob" &&
+        isPrivateFileProvider(left.provider) &&
+        isPrivateFileProvider(right.provider) &&
         storageConfigured &&
         left.mime_type === "text/plain" &&
         right.mime_type === "text/plain"
@@ -975,7 +976,7 @@ export function FileWorkspace({
             </form>
             <SectionHeading title={t("نسخه‌ها", "Versions")} />
             <label
-              className={`button ${!storageConfigured || selected.provider !== "private_blob" || uploading ? "disabled" : ""}`}
+              className={`button ${!storageConfigured || !isPrivateFileProvider(selected.provider) || uploading ? "disabled" : ""}`}
             >
               <Upload size={15} />
               {t(
@@ -987,7 +988,7 @@ export function FileWorkspace({
                 hidden
                 disabled={
                   !storageConfigured ||
-                  selected.provider !== "private_blob" ||
+                  !isPrivateFileProvider(selected.provider) ||
                   uploading
                 }
                 onChange={(event) => void upload(event, selected)}
@@ -1139,7 +1140,7 @@ export function FileWorkspace({
                   {version.sha256?.slice(0, 12) ??
                     t("هش ناموجود", "Hash unavailable")}
                 </span>
-                {version.provider === "private_blob" ? (
+                {isPrivateFileProvider(version.provider) ? (
                   <a
                     className="button"
                     href={`/api/v1/files/${encodeURIComponent(version.file_id)}/download`}

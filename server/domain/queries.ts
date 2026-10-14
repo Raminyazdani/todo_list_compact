@@ -7,6 +7,7 @@ import {
   type QueryName,
   type TaskDTO,
 } from "../../shared/contracts";
+import { createHash } from "node:crypto";
 import type { SqlClient } from "../db/database";
 import {
   cleanRows,
@@ -38,6 +39,7 @@ import {
   externalCalendarStatus,
 } from "../integrations/calendar-runtime";
 import { resolveAiConfiguration } from "../integrations/ai-guard";
+import { IN_APP_AI_ENABLED } from "../../shared/product-features";
 import { analyticsRange, analyticsTrends } from "./analytics";
 import { fileMetadata, fileTags } from "./annotations";
 import { reports } from "./reports";
@@ -45,6 +47,10 @@ import { taskOverdue } from "./deadline";
 import { previewCalendarOccurrence } from "./calendar";
 import { previewTimeImport } from "./time-import";
 import { instantToLocalDate } from "../../shared/datetime";
+import {
+  backupStorageCapabilities,
+  storageCapabilities,
+} from "../integrations/storage";
 
 async function calendarStatus(principal: Principal) {
   let sources: Awaited<ReturnType<typeof externalCalendarStatus>> = [];
@@ -338,12 +344,15 @@ export async function domainQuery(
       scopes: principal.scopes,
     };
   if (operation === "system_capabilities") {
+    const storage = storageCapabilities();
     let aiConfigured = false;
-    try {
-      resolveAiConfiguration();
-      aiConfigured = true;
-    } catch {
-      /* Missing/stale provider authorization remains disabled. */
+    if (IN_APP_AI_ENABLED) {
+      try {
+        resolveAiConfiguration();
+        aiConfigured = true;
+      } catch {
+        /* Missing/stale provider authorization remains disabled. */
+      }
     }
     return {
       canonical_store: "PostgreSQL",
@@ -356,40 +365,61 @@ export async function domainQuery(
       email_send: false,
       ai_configured: aiConfigured,
       AI_configured: aiConfigured,
+      in_app_ai_enabled: IN_APP_AI_ENABLED,
+      in_app_ai_status: IN_APP_AI_ENABLED
+        ? aiConfigured
+          ? "configured"
+          : "disconnected"
+        : "deferred",
       oauth_client_configured: Boolean(
         process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
       ),
-      storage_configured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      storage_configured: storage.connected,
+      storage_provider: storage.provider,
       durable_database: true,
     };
   }
   if (operation === "system_health") {
+    const storage = storageCapabilities(),
+      backup = backupStorageCapabilities(),
+      ownerHash = createHash("sha256").update(owner).digest("hex"),
+      selectedBackupKeyPattern =
+        backup.provider === "neon_object_storage"
+          ? `^owners/${ownerHash}/backups/[0-9]{4}-[0-9]{2}-[0-9]{2}\\.json$`
+          : backup.provider === "private_blob"
+            ? `^life-os-backups/${ownerHash.slice(0, 32)}/[0-9]{4}-[0-9]{2}-[0-9]{2}\\.json$`
+            : null;
     await tx.query("SELECT 1");
     const latest = cleanRows(
       (
         await tx.query<Input>(
-          "SELECT status,created_at,verified_at,errorcode FROM backup_runs WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 1",
-          [owner],
+          "SELECT status,created_at,verified_at,errorcode FROM backup_runs WHERE owner_id=$1 AND storage_key ~ $2 ORDER BY created_at DESC LIMIT 1",
+          [owner, selectedBackupKeyPattern],
         )
       ).rows,
     )[0];
     const verified = cleanRows(
       (
         await tx.query<Input>(
-          "SELECT verified_at FROM backup_runs WHERE owner_id=$1 AND status='verified' AND verified_at IS NOT NULL ORDER BY verified_at DESC LIMIT 1",
-          [owner],
+          "SELECT max(verified_at) FILTER(WHERE storage_key ~ $2) AS selected_verified_at,max(verified_at) AS historical_verified_at FROM backup_runs WHERE owner_id=$1 AND status='verified' AND verified_at IS NOT NULL",
+          [owner, selectedBackupKeyPattern],
         )
       ).rows,
     )[0];
     return {
       status: "ok",
       database: "connected",
-      latest_verified_backup_at: verified?.verified_at ?? null,
-      backup_status:
-        latest?.status ??
-        (process.env.BLOB_READ_WRITE_TOKEN ? "none" : "disconnected"),
+      latest_verified_backup_at: verified?.selected_verified_at ?? null,
+      historical_latest_verified_backup_at:
+        verified?.historical_verified_at ?? null,
+      backup_status: backup.connected
+        ? (latest?.status ?? "none")
+        : "disconnected",
       backup_error_code: latest?.errorcode ?? null,
-      private_storage_configured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      backup_storage_provider: backup.provider,
+      backup_configured: backup.connected,
+      private_storage_configured: storage.connected,
+      private_storage_provider: storage.provider,
     };
   }
   if (operation === "backup_export" || operation === "export_data_manifest") {

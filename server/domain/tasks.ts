@@ -275,7 +275,7 @@ async function updateTask(
   }
   if (before.status === "Done" && updates.status && updates.status !== "Done") {
     const archivedFiles = await tx.query<{ file_id: string }>(
-      "SELECT DISTINCT f.file_id FROM files f JOIN file_task_links l ON l.file_id=f.file_id AND l.owner_id=f.owner_id WHERE l.task_id=$1 AND l.owner_id=$2 AND l.active=true AND f.state='Old' AND f.provider='private_blob'",
+      "SELECT DISTINCT f.file_id FROM files f JOIN file_task_links l ON l.file_id=f.file_id AND l.owner_id=f.owner_id WHERE l.task_id=$1 AND l.owner_id=$2 AND l.active=true AND f.state='Old' AND f.provider IN ('private_blob','neon_object_storage')",
       [taskId, principal.ownerId],
     );
     for (const f of archivedFiles.rows)

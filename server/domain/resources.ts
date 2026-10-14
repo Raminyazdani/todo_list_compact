@@ -218,7 +218,15 @@ export async function resourceCommand(
     command === "file_register_upload"
   ) {
     const fileId = id("F"),
-      external = command === "file_register_external_link";
+      external = command === "file_register_external_link",
+      provider = external
+        ? "google_drive"
+        : choice(
+            input,
+            "provider",
+            ["private_blob", "neon_object_storage"] as const,
+            "private_blob",
+          );
     let url: string | null = null,
       externalId: string | null = null,
       storageKey: string | null = null;
@@ -256,8 +264,12 @@ export async function resourceCommand(
         input.size_bytes === undefined ? null : number(input, "size_bytes");
     if (sha && !/^[a-f0-9]{64}$/.test(sha))
       throw new DomainError("INVALID_INPUT", "Invalid SHA-256.");
-    if (!external) {
-      const verified = await verifyPrivateFileMetadata(storageKey!, principal);
+    if (provider !== "google_drive") {
+      const verified = await verifyPrivateFileMetadata(
+        storageKey!,
+        principal,
+        provider,
+      );
       if (
         (sha && sha !== verified.sha256) ||
         (size !== null && size !== verified.size_bytes)
@@ -314,7 +326,7 @@ export async function resourceCommand(
         owner,
         text(input, "title", filename),
         filename,
-        external ? "google_drive" : "private_blob",
+        provider,
         externalId,
         url,
         storageKey,

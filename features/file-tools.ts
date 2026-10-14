@@ -3,6 +3,9 @@ import type { FileDTO, MutationResult } from "../shared/contracts";
 export const MAX_TEXT_PREVIEW_BYTES = 32 * 1024;
 const MAX_IMAGE_PREVIEW_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 16_000_000;
+export function isPrivateFileProvider(provider: FileDTO["provider"]) {
+  return provider === "private_blob" || provider === "neon_object_storage";
+}
 export type SafePreview =
   | { kind: "text"; text: string; truncated: boolean }
   | {
@@ -160,7 +163,7 @@ export async function loadFilePreview(
   file: FileDTO,
   request: typeof fetch = fetch,
 ): Promise<SafePreview> {
-  if (file.provider !== "private_blob")
+  if (!isPrivateFileProvider(file.provider))
     return { kind: "unavailable", reason: "external" };
   const mime = file.mime_type.split(";")[0].trim().toLowerCase();
   if (!["text/plain", "image/png", "image/jpeg", "image/webp"].includes(mime))

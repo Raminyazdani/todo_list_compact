@@ -125,11 +125,14 @@ export interface ProjectDTO {
   ready?: number;
   blocked?: number;
 }
+export type FileProvider =
+  "google_drive" | "private_blob" | "neon_object_storage";
+export type PrivateFileProvider = Exclude<FileProvider, "google_drive">;
 export interface FileDTO {
   file_id: string;
   title: string;
   original_filename: string;
-  provider: "google_drive" | "private_blob";
+  provider: FileProvider;
   external_id: string | null;
   external_url: string | null;
   state: "Inbox" | "Active" | "Old" | "External";
@@ -176,7 +179,9 @@ export interface ReportsDTO {
     }[];
   };
   duplicate_candidates: null | {
-    basis: "canonical_verified_private_blob_sha256";
+    basis:
+      | "canonical_verified_private_blob_sha256"
+      | "canonical_verified_private_storage_sha256";
     total_groups: number;
     excluded_unverified_count: number;
     groups: {
@@ -516,7 +521,8 @@ export type ErrorCode =
   | "TIME_OVERLAP"
   | "FILE_ARCHIVE_INELIGIBLE"
   | "DATABASE_UNAVAILABLE"
-  | "UNSUPPORTED_OPERATION";
+  | "UNSUPPORTED_OPERATION"
+  | "FEATURE_DISABLED";
 export class DomainError extends Error {
   constructor(
     public readonly code: ErrorCode,

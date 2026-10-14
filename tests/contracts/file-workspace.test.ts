@@ -66,70 +66,84 @@ describe("Safe browser preview adapter with mocked HTTP only; no hosted byte-pro
         request,
       ),
     ).toEqual({ kind: "unavailable", reason: "external" });
-    for (const mime_type of ["text/html", "image/svg+xml", "application/pdf"])
-      expect(
-        await loadFilePreview(syntheticFile({ mime_type }), request),
-      ).toEqual({ kind: "unavailable", reason: "unsupported" });
+    for (const provider of ["private_blob", "neon_object_storage"] as const)
+      for (const mime_type of ["text/html", "image/svg+xml", "application/pdf"])
+        expect(
+          await loadFilePreview(
+            syntheticFile({ provider, mime_type }),
+            request,
+          ),
+        ).toEqual({ kind: "unavailable", reason: "unsupported" });
     expect(request).not.toHaveBeenCalled();
   });
-  it("32KB UTF8 prefix is explicitly truncated, stream cancelled, and only exact same-origin ACL download is requested", async () => {
-    const cancel = vi.fn();
-    const bytes = new TextEncoder().encode(
-      "x".repeat(MAX_TEXT_PREVIEW_BYTES - 1) + "فارسی",
-    );
-    const response = new Response(
-      new ReadableStream({
-        start(controller) {
-          controller.enqueue(bytes);
-        },
-        cancel,
-      }),
-      { headers: { "Content-Type": "text/plain; charset=utf-8" } },
-    );
-    const request = vi.fn(async () => response);
-    const result = await loadFilePreview(
-      syntheticFile({ file_id: "F-stable/with spaces" }),
-      request,
-    );
-    expect(result).toMatchObject({ kind: "text", truncated: true });
-    if (result.kind !== "text") throw new Error("Expected bounded text");
-    expect(new TextEncoder().encode(result.text).length).toBeLessThanOrEqual(
-      MAX_TEXT_PREVIEW_BYTES,
-    );
-    expect(cancel).toHaveBeenCalledOnce();
-    expect(request.mock.calls[0]).toMatchObject([
-      "/api/v1/files/F-stable%2Fwith%20spaces/download",
-      { credentials: "same-origin", cache: "no-store", redirect: "manual" },
-    ]);
-  });
-  it("forged MIME, checksum corruption and denied ACL never become a successful preview", async () => {
-    const wrongType = vi.fn(
-      async () =>
-        new Response("<script>active</script>", {
-          headers: { "Content-Type": "text/html" },
+  it.each(["private_blob", "neon_object_storage"] as const)(
+    "%s 32KB UTF8 prefix is explicitly truncated, stream cancelled, and only exact same-origin ACL download is requested",
+    async (provider) => {
+      const cancel = vi.fn();
+      const bytes = new TextEncoder().encode(
+        "x".repeat(MAX_TEXT_PREVIEW_BYTES - 1) + "فارسی",
+      );
+      const response = new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(bytes);
+          },
+          cancel,
         }),
-    );
-    expect(await loadFilePreview(syntheticFile(), wrongType)).toMatchObject({
-      kind: "unavailable",
-      reason: "invalid_bytes",
-    });
-    const corrupted = vi.fn(
-      async () =>
-        new Response("corrupt", { headers: { "Content-Type": "text/plain" } }),
-    );
-    expect(
-      await loadFilePreview(
-        syntheticFile({ sha256: "a".repeat(64) }),
-        corrupted,
-      ),
-    ).toMatchObject({ kind: "unavailable", reason: "invalid_bytes" });
-    const denied = vi.fn(
-      async () => new Response("private denial", { status: 403 }),
-    );
-    await expect(loadFilePreview(syntheticFile(), denied)).rejects.toThrow(
-      "FILE_PREVIEW_REQUEST_DENIED_403",
-    );
-  });
+        { headers: { "Content-Type": "text/plain; charset=utf-8" } },
+      );
+      const request = vi.fn(async () => response);
+      const result = await loadFilePreview(
+        syntheticFile({ provider, file_id: "F-stable/with spaces" }),
+        request,
+      );
+      expect(result).toMatchObject({ kind: "text", truncated: true });
+      if (result.kind !== "text") throw new Error("Expected bounded text");
+      expect(new TextEncoder().encode(result.text).length).toBeLessThanOrEqual(
+        MAX_TEXT_PREVIEW_BYTES,
+      );
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(request.mock.calls[0]).toMatchObject([
+        "/api/v1/files/F-stable%2Fwith%20spaces/download",
+        { credentials: "same-origin", cache: "no-store", redirect: "manual" },
+      ]);
+    },
+  );
+  it.each(["private_blob", "neon_object_storage"] as const)(
+    "%s forged MIME, checksum corruption and denied ACL never become a successful preview",
+    async (provider) => {
+      const wrongType = vi.fn(
+        async () =>
+          new Response("<script>active</script>", {
+            headers: { "Content-Type": "text/html" },
+          }),
+      );
+      expect(
+        await loadFilePreview(syntheticFile({ provider }), wrongType),
+      ).toMatchObject({
+        kind: "unavailable",
+        reason: "invalid_bytes",
+      });
+      const corrupted = vi.fn(
+        async () =>
+          new Response("corrupt", {
+            headers: { "Content-Type": "text/plain" },
+          }),
+      );
+      expect(
+        await loadFilePreview(
+          syntheticFile({ provider, sha256: "a".repeat(64) }),
+          corrupted,
+        ),
+      ).toMatchObject({ kind: "unavailable", reason: "invalid_bytes" });
+      const denied = vi.fn(
+        async () => new Response("private denial", { status: 403 }),
+      );
+      await expect(
+        loadFilePreview(syntheticFile({ provider }), denied),
+      ).rejects.toThrow("FILE_PREVIEW_REQUEST_DENIED_403");
+    },
+  );
   it("raster magic and dimensions are bounded; SVG masquerading as PNG and oversized images fail", () => {
     const png = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jpL0AAAAASUVORK5CYII=",

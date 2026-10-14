@@ -27,6 +27,7 @@ import type {
   ProjectDTO,
   TaskDTO,
 } from "@/shared/contracts";
+import { IN_APP_AI_ENABLED } from "@/shared/product-features";
 import { authClient } from "@/server/auth/client";
 import {
   addCalendarDays,
@@ -158,7 +159,7 @@ export function Dashboard({
     { id: "meetings", title: t("رویدادهای بازه", "Events in range") },
     { id: "ai", title: t("آخرین تغییرهای دستیار", "Latest AI changes") },
     { id: "shortcuts", title: t("میان‌برها", "Shortcuts") },
-  ];
+  ].filter((item) => IN_APP_AI_ENABLED || item.id !== "ai");
   const saved = Array.isArray(preferences.data?.settings.dashboard_widgets)
     ? (preferences.data.settings.dashboard_widgets as {
         id: string;
@@ -233,13 +234,16 @@ export function Dashboard({
   }
   async function saveWidgets(next: typeof widgets) {
     return saveDashboardPreferences({
-      dashboard_widgets: next.map(({ id, visible, order, width, height }) => ({
-        id,
-        visible,
-        order,
-        width,
-        height,
-      })),
+      dashboard_widgets: [
+        ...next.map(({ id, visible, order, width, height }) => ({
+          id,
+          visible,
+          order,
+          width,
+          height,
+        })),
+        ...(!IN_APP_AI_ENABLED ? saved.filter((item) => item.id === "ai") : []),
+      ],
     });
   }
   function moveWidget(id: string, delta: number) {
@@ -1571,6 +1575,26 @@ interface AIPlan {
 }
 export function Assistant() {
   const { t } = useLocale();
+  if (IN_APP_AI_ENABLED) return <InAppAssistant />;
+  return (
+    <section className="panel">
+      <h1>
+        {t("دستیار داخل برنامه غیرفعال است", "In-app assistant is disabled")}
+      </h1>
+      <p>
+        {t(
+          "برای مدیریت این فضا، Codex را از طریق MCP متصل کن.",
+          "Connect Codex through MCP to manage this workspace.",
+        )}
+      </p>
+      <Link href="/settings#mcp-connection" className="button">
+        {t("تنظیمات اتصال MCP", "MCP connection settings")}
+      </Link>
+    </section>
+  );
+}
+function InAppAssistant() {
+  const { t } = useLocale();
   const [message, setMessage] = useState("");
   const [plan, setPlan] = useState<AIPlan | null>(null);
   const [error, setError] = useState("");
@@ -1929,12 +1953,14 @@ export function Settings({
             )}
           </p>
         </section>
-        <section className="panel">
-          <SectionHeading title={t("اتصال AI و MCP", "AI & MCP connections")} />
+        <section className="panel" id="mcp-connection">
+          <SectionHeading
+            title={t("اتصال Codex از طریق MCP", "Connect Codex through MCP")}
+          />
           <p>
             {t(
-              "اتصال ابزار سفارشی ChatGPT به مجوز واقعی پلن وابسته است.",
-              "Custom ChatGPT tool access depends on actual account eligibility.",
+              "Codex می‌تواند از طریق MCP به کارها، پروژه‌ها و فایل‌های این فضا دسترسی داشته باشد. دسترسی‌ها را هنگام اتصال تأیید و هر زمان لغو کن.",
+              "Codex can access this workspace's tasks, projects and files through MCP. Approve its permissions when connecting and revoke them at any time.",
             )}
           </p>
           <div className="endpoint-box" dir="ltr">
@@ -1946,10 +1972,12 @@ export function Settings({
               "Streamable HTTP · OAuth · scoped, revocable access",
             )}
           </p>
-          <Link href="/assistant" className="button">
-            <BrainCircuit size={16} />
-            {t("همراه داخل برنامه", "In-app assistant")}
-          </Link>
+          {IN_APP_AI_ENABLED && (
+            <Link href="/assistant" className="button">
+              <BrainCircuit size={16} />
+              {t("همراه داخل برنامه", "In-app assistant")}
+            </Link>
+          )}
         </section>
         <section className="panel">
           <SectionHeading

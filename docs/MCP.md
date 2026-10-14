@@ -1,5 +1,7 @@
 # API و MCP
 
+اتصال فعلی موردنظر مالک، Codex بومی است. سرور `life_os` با URL تولید در تنظیمات محلی ثبت شده و OAuth login واقعی موفق بوده است. runtime چت جاری سرور تازه را هنوز نمی‌شناسد؛ بازکردن دوبارهٔ همین چت و یک خواندن واقعی ابزار لازم است. admin و backup در grant نیستند. AI داخل برنامه و نصب ChatGPT فعلاً شرط تحویل نیستند؛ [محدودهٔ فعلی](CURRENT_SCOPE_FA.md) بر توضیح تاریخی ChatGPT در ادامه مقدم است.
+
 Endpoint برنامه `/api/mcp` از SDK رسمی MCP و Streamable HTTP استفاده می‌کند. POST درخواست‌های پروتکل را می‌پذیرد؛ احراز هویت Bearer OAuth لازم است. discovery در `/.well-known/oauth-protected-resource/api/mcp` و `/.well-known/oauth-authorization-server/api/auth` است. نشانی کامل باید از deployment واقعی مشاهده‌شده گرفته شود.
 
 REST با `GET /api/v1/query` برای ورودی کوتاه و `POST /api/v1/query` برای JSON بزرگ، از جمله preview واردسازی ساعات کاری، روی همان دامنه اجرا می‌شود. client رسمی طول URL کدگذاری‌شده را برای انتخاب POST بررسی می‌کند تا متن فارسی به سقف URI برخورد نکند.

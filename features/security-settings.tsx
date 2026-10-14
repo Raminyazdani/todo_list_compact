@@ -69,7 +69,7 @@ export function PasswordSettings() {
             type="password"
             name="new_password"
             autoComplete="new-password"
-            minLength={12}
+            minLength={8}
             maxLength={128}
             required
           />
@@ -79,7 +79,7 @@ export function PasswordSettings() {
             type="password"
             name="confirm_password"
             autoComplete="new-password"
-            minLength={12}
+            minLength={8}
             maxLength={128}
             required
           />

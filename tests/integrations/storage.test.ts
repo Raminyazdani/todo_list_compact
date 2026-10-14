@@ -25,6 +25,7 @@ beforeEach(() => {
   mock.get.mockReset();
   mock.put.mockReset();
   vi.stubEnv("BLOB_READ_WRITE_TOKEN", "synthetic-test-token");
+  vi.stubEnv("PRIVATE_STORAGE_PROVIDER", "");
   mock.get.mockImplementation(async (key: string) => {
     const bytes = mock.bytes.get(key);
     return bytes

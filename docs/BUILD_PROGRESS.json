@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T07:35:02.3811251Z",
+  "updated_at": "2026-10-14T13:35:39.5634304Z",
   "branch": "master",
   "commit": "9ebbe815558c86d6865044daae4741ed802d3304",
-  "phase": "final_code_CI_and_production_source_verified_external_access_remaining",
+  "phase": "owner_requested_Neon_native_Codex_MCP_and_deferred_in_app_AI",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -43,9 +43,9 @@
     "actual_three_original_file_unauthenticated_download_denial"
   ],
   "active": [
-    "available_private_storage_and_funded_configured_AI",
-    "product_Google_or_private_iCal_grant",
-    "browser_control_recovery_and_actual_ChatGPT_grant_proof"
+    "Neon_private_storage_implementation_and_actual_activation",
+    "native_Codex_MCP_runtime_loading",
+    "deferred_AI_UI_and_password_settings_release"
   ],
   "tests": [
     {
@@ -111,29 +111,14 @@
   },
   "blockers": [
     {
-      "area": "private_object_storage",
-      "evidence": "Blob creation rejected by account usage threshold; all existing private stores suspended",
-      "state": "EXTERNALLY_BLOCKED"
+      "evidence": "Existing Neon PostgreSQL retained; official CLI installed but authenticated account profile absent; no bucket or credential created",
+      "area": "Neon_private_object_storage",
+      "state": "AWAITING_OWNER_ACCOUNT_LOGIN"
     },
     {
-      "area": "live_ai_provider",
-      "evidence": "AI Gateway authenticated credits probe returned balance 0",
-      "state": "EXTERNALLY_BLOCKED"
-    },
-    {
-      "area": "chatgpt_installation",
-      "evidence": "Actual Pro and Add custom MCP capability observed previously; no client grant. Latest browser inventory, bounded retry and reset recovery failed request-header-policy loading.",
-      "state": "NOT_RUN"
-    },
-    {
-      "area": "product_Google_OAuth_or_private_iCal",
-      "evidence": "Product-specific app credentials/grant or private feed absent; build-chat connector grant is independent",
-      "state": "EXTERNALLY_BLOCKED"
-    },
-    {
-      "area": "browser_control",
-      "evidence": "Latest browser inventory and one bounded retry failed loading request-header policy; prepared ChatGPT form cannot be reached currently",
-      "state": "EXTERNALLY_BLOCKED"
+      "evidence": "Native life_os OAuth login successful and CLI reports o_auth; current tool runtime says unknown MCP server",
+      "area": "native_Codex_MCP_tool_loading",
+      "state": "AWAITING_CURRENT_CHAT_RELOAD"
     }
   ],
   "available_agents": [
@@ -141,13 +126,13 @@
     "scoped_domain_migration_and_release_reviews_finished"
   ],
   "next_actions": [
-    "available_private_storage_and_funded_configured_AI",
-    "product_Google_or_private_iCal_grant",
-    "browser_control_recovery_and_actual_ChatGPT_grant_proof"
+    "owner_neon_login_existing_account",
+    "verified_private_bucket_and_conditional_PUT_activation",
+    "reload_same_Codex_chat_then_actual_MCP_read"
   ],
   "release_complete": false,
   "execution_prompt": "docs/CONTINUE_PROMPT_FA.md",
-  "goal_status": "active",
+  "goal_status": "blocked_prior_scope_new_human_request_in_progress",
   "goal_token_budget": null,
   "latest_verified": {
     "actual_SDK_tools": 130,
@@ -384,5 +369,85 @@
     "status": "PASS",
     "native_all_six_source_collections": true,
     "earlier_read_attempts": "Two failed read-only attempts preserved privately; exact internal cause unproven; independent native diagnostic and final normal verifier passed."
+  },
+  "historical_external_gates": [
+    {
+      "area": "private_object_storage",
+      "evidence": "Blob creation rejected by account usage threshold; all existing private stores suspended",
+      "state": "EXTERNALLY_BLOCKED"
+    },
+    {
+      "area": "live_ai_provider",
+      "evidence": "AI Gateway authenticated credits probe returned balance 0",
+      "state": "EXTERNALLY_BLOCKED"
+    },
+    {
+      "area": "chatgpt_installation",
+      "evidence": "Actual Pro and Add custom MCP capability observed previously; no client grant. Latest browser inventory, bounded retry and reset recovery failed request-header-policy loading.",
+      "state": "NOT_RUN"
+    },
+    {
+      "area": "product_Google_OAuth_or_private_iCal",
+      "evidence": "Product-specific app credentials/grant or private feed absent; build-chat connector grant is independent",
+      "state": "EXTERNALLY_BLOCKED"
+    },
+    {
+      "area": "browser_control",
+      "evidence": "Latest browser inventory and one bounded retry failed loading request-header policy; prepared ChatGPT form cannot be reached currently",
+      "state": "EXTERNALLY_BLOCKED"
+    }
+  ],
+  "current_scope": {
+    "authority": "direct_human_request",
+    "database": "EXISTING_NEON_POSTGRESQL",
+    "native_Codex_MCP": {
+      "current_chat_tool_read": "NOT_RUN_runtime_unknown_server",
+      "OAuth_login": "PASS",
+      "scopes": "normal_business_operations_no_admin_or_backup",
+      "configuration": "PASS"
+    },
+    "storage_live": "NOT_RUN_AWAITING_OWNER_NEON_LOGIN",
+    "ChatGPT_installation": "NOT_REQUIRED_CURRENT_SCOPE",
+    "application_release": "FROZEN_BATCH_READY_FOR_REQUIRED_CI",
+    "new_file_provider": "neon_object_storage",
+    "owner_password_rotation": {
+      "old_sessions_revoked": true,
+      "secret_values": "outside_public_Git",
+      "existing_owner_preserved": true,
+      "status": "PASS_actual_HTTPS_signin"
+    },
+    "document": "docs/CURRENT_SCOPE_FA.md",
+    "in_app_AI": "DEFERRED_DISABLED",
+    "requested_at": "2026-10-14",
+    "targeted_verification": {
+      "format": "PASS_Windows_end_of_line_auto",
+      "backup_failure_provenance": 2,
+      "public_safety": "PASS_310_files",
+      "domain_provider_health_subset": 25,
+      "AI_disabled_HTTP": 4,
+      "file_UI_and_preview": 15,
+      "storage_backup_mock_transport": 37,
+      "live_Neon_storage": "NOT_RUN",
+      "typecheck": "PASS",
+      "password_rotation": 4,
+      "independent_reviews": "CLEAR",
+      "lint": "PASS",
+      "file_download_provider_HTTP": 4,
+      "dependency_audit": "PASS_no_known_vulnerabilities"
+    },
+    "additive_provider_CHECK": {
+      "production": "PASS_after_staging",
+      "pre_backup_encrypted_decrypt_manifest": "PASS_staging_and_production",
+      "new_file_row_created": false,
+      "staging": "PASS",
+      "repeated_migration": "PASS",
+      "existing_files_versions_links_unchanged": true
+    },
+    "production_provider_selection": {
+      "writes_enabled": false,
+      "immutable_put_verified": false,
+      "credentials_provisioned": false,
+      "provider": "neon_object_storage"
+    }
   }
 }

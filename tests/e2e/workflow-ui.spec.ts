@@ -761,113 +761,105 @@ test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_an
   }
 });
 
-test("mocked_ai_atomic_preview_shows_effects_and_requires_explicit_approval", async ({
+test("deferred_in_app_ai_has_no_ui_entry_or_requests_and_mcp_remains_available", async ({
   page,
 }) => {
-  // Presentation/approval proof only. The model and execute responses are explicitly
-  // intercepted; actual transactional AI orchestration has separate PostgreSQL tests.
-  let executions = 0;
-  const futureId = "T-synthetic-proposal-not-persisted";
-  const plan = {
-    plan_id: "synthetic-ui-atomic-plan",
-    answer: "پیشنهاد ساختگی برای بررسی رابط",
-    actions: [
-      { command: "task_create", input: { title: "کار تازهٔ پیشنهادی" } },
-      {
-        command: "task_dependency_add_commit",
-        input: {
-          task_id: futureId,
-          operator: "ALL",
-          prerequisites: [{ task_id: "T-synthetic-existing", mode: "hard" }],
-        },
-      },
-    ],
-    warnings: [],
-    expires_at: new Date(Date.now() + 300000).toISOString(),
-    requires_confirmation: true,
-    simulation: {
-      read_only: true,
-      atomic: true,
-      changes: [
-        {
-          command: "task_create",
-          entity_id: futureId,
-          input: { title: "کار تازهٔ پیشنهادی" },
-          after: { title: "کار تازهٔ پیشنهادی", task_id: futureId },
-          after_truncated: false,
-          readiness_changes: [],
-          readiness_changes_total: 0,
-          readiness_changes_truncated: false,
-        },
-        {
-          command: "task_dependency_add_commit",
-          entity_id: "EDGE-synthetic",
-          input: {
-            task_id: futureId,
-            operator: "ALL",
-            prerequisites: [
-              { task_id: "T-synthetic-existing", mode: "hard" },
-              { task_id: "T-synthetic-soft", mode: "soft" },
-            ],
-          },
-          after: {
-            prerequisites: [
-              { task_id: "T-synthetic-existing", title: "پیش‌نیاز واقعی سخت" },
-              { task_id: "T-synthetic-soft", title: "پیشنهاد نرم" },
-            ],
-          },
-          after_truncated: true,
-          readiness_changes: [
-            { task_id: futureId, before: "ready", after: "blocked" },
-          ],
-          readiness_changes_total: 1,
-          readiness_changes_truncated: false,
-        },
-      ],
-    },
-  };
-  await page.route("**/api/v1/ai/plan", (route) =>
-    route.fulfill({ json: { data: plan } }),
-  );
-  await page.route("**/api/v1/ai/execute", async (route) => {
-    executions++;
-    expect(route.request().postDataJSON()).toEqual({ plan_id: plan.plan_id });
-    await route.fulfill({ json: { data: { synthetic_mock_only: true } } });
+  // Only the imported preference presentation is synthetic; this exercises actual
+  // navigation and the deferred route without invoking an AI provider or write.
+  const aiRequests: string[] = [];
+  const aiActivityRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/v1/ai/")) aiRequests.push(url.pathname);
+    if (
+      url.pathname === "/api/v1/query" &&
+      url.searchParams.get("operation") === "get_activity" &&
+      JSON.parse(url.searchParams.get("input") ?? "{}").channel === "AI"
+    )
+      aiActivityRequests.push(url.pathname);
   });
-  await page.goto("/assistant");
-  await page
-    .getByPlaceholder("با من فارسی یا انگلیسی صحبت کن…")
-    .fill("یک پیشنهاد آزمایشی بساز");
-  await page
-    .getByRole("button", { name: "بررسی درخواست", exact: true })
-    .click();
-  const preview = page.getByRole("region", {
-    name: "پیش‌نمایش اثر تغییرها",
-    exact: true,
+  await page.route("**/api/v1/query?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("operation") !== "preferences_get") {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    const body = await response.json();
+    body.data.settings.dashboard_widgets = [
+      ...(body.data.settings.dashboard_widgets ?? []).filter(
+        (item: { id: string }) => item.id !== "ai",
+      ),
+      { id: "ai", visible: true, order: 0, width: "wide", height: 400 },
+    ];
+    body.data.settings.dashboard_shortcuts = [
+      { title: "Synthetic saved assistant shortcut", path: "/assistant" },
+      { title: "Synthetic tasks shortcut", path: "/tasks" },
+    ];
+    await route.fulfill({ response, json: body });
   });
-  await expect(preview).toBeVisible();
-  await expect(preview).toContainText("این تغییرها هنوز ذخیره نشده‌اند");
-  await expect(preview).toContainText("همهٔ این پیش‌نیازها باید تکمیل شوند");
-  await expect(preview).toContainText("آماده → مسدود");
-  await expect(preview).toContainText("این فهرست کامل نیست");
-  await expect(preview).toContainText(
-    "این پیش‌نیازها پیشنهادی‌اند و شروع کار را مسدود نمی‌کنند",
-  );
-  await expect(preview).toContainText("پیش‌نیاز واقعی سخت");
-  await expect(preview).toContainText("پیشنهاد نرم");
-  await expect(preview.locator(`a[href*="${futureId}"]`)).toHaveCount(0);
-  expect(executions).toBe(0);
-  const accessibility = await new AxeBuilder({ page }).analyze();
-  expect(accessibility.violations).toEqual([]);
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "امروز را روشن شروع کن.", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("main .loading-state")).toHaveCount(0);
+  await expect(page.locator('a[href="/assistant"]')).toHaveCount(0);
+  await expect(page.locator('[data-widget-id="ai"]')).toHaveCount(0);
+  await expect(
+    page.getByText("Synthetic saved assistant shortcut", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Synthetic tasks shortcut", exact: true }),
+  ).toBeVisible();
   await page
-    .getByRole("button", { name: "تأیید و اجرای این تغییرها", exact: true })
+    .getByRole("button", { name: "ویرایش میان‌برها", exact: true })
     .click();
   await expect(
-    page.getByText("نتیجهٔ بررسی‌شده", { exact: true }),
+    page
+      .getByLabel("مقصد میان‌بر", { exact: true })
+      .locator('option[value="/assistant"]'),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "چیدمان داشبورد", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByText("آخرین تغییرهای دستیار", { exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+k");
+  await expect(
+    page.getByRole("dialog", { name: "جست‌وجو و فرمان‌ها", exact: true }),
   ).toBeVisible();
-  expect(executions).toBe(1);
+  await expect(
+    page.getByRole("dialog").locator('a[href="/assistant"]'),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.goto("/assistant");
+  await expect(
+    page.getByRole("heading", {
+      name: "دستیار داخل برنامه غیرفعال است",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByPlaceholder("با من فارسی یا انگلیسی صحبت کن…"),
+  ).toHaveCount(0);
+  await expect(page.locator("main form")).toHaveCount(0);
+  await page
+    .getByRole("link", { name: "تنظیمات اتصال MCP", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/settings#mcp-connection$/);
+  await expect(
+    page.getByRole("heading", { name: "اتصال Codex از طریق MCP", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("#mcp-connection")).toContainText("/api/mcp");
+  await expect(page.locator('a[href="/assistant"]')).toHaveCount(0);
+  expect(aiRequests).toEqual([]);
+  expect(aiActivityRequests).toEqual([]);
+  await safeAxe(page, "deferred-ai-mcp-settings");
 });
-
 test("password_mismatch_and_invalid_current_password_do_not_change_owner_credentials", async ({
   page,
 }) => {
@@ -2044,7 +2036,6 @@ test("all_main_views_have_synthetic_desktop_mobile_and_tablet_evidence", async (
     ["files", "فایل‌ها و منابع"],
     ["reports", "گزارش و مرور"],
     ["settings", "تنظیمات و اتصال‌ها"],
-    ["assistant", "همراه هوشمند"],
   ];
   for (const viewport of [
     { width: 1440, height: 1000, label: "desktop" },

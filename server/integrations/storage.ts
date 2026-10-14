@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 import { get, put } from "@vercel/blob";
 import { DomainError, type Principal } from "../../shared/contracts";
+import {
+  neonStorageCapabilities,
+  putNeonObject,
+  readNeonObject,
+} from "./neon-storage";
+
+export type PrivateStorageProvider = "private_blob" | "neon_object_storage";
 
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 const allowedMime = new Set([
@@ -55,15 +62,83 @@ function storageToken() {
     );
   return process.env.BLOB_READ_WRITE_TOKEN;
 }
+export function selectedPrivateStorageProvider(): PrivateStorageProvider {
+  const provider = process.env.PRIVATE_STORAGE_PROVIDER || "private_blob";
+  if (provider !== "private_blob" && provider !== "neon_object_storage")
+    throw new DomainError(
+      "UNSUPPORTED_OPERATION",
+      "The selected private storage provider is unsupported.",
+      {},
+      503,
+    );
+  return provider;
+}
+function requireProvider(provider: PrivateStorageProvider) {
+  if (provider !== "private_blob" && provider !== "neon_object_storage")
+    throw new DomainError(
+      "UNSUPPORTED_OPERATION",
+      "Unsupported private storage provider.",
+      {},
+      503,
+    );
+}
 export function storageCapabilities() {
+  const provider = process.env.PRIVATE_STORAGE_PROVIDER || "private_blob";
+  const readiness =
+    provider === "neon_object_storage"
+      ? neonStorageCapabilities()
+      : {
+          configured:
+            provider === "private_blob" && !!process.env.BLOB_READ_WRITE_TOKEN,
+          immutable_put_verified: provider === "private_blob",
+          connected:
+            provider === "private_blob" && !!process.env.BLOB_READ_WRITE_TOKEN,
+        };
   return {
-    provider: "private_blob",
-    connected: !!process.env.BLOB_READ_WRITE_TOKEN,
+    provider,
+    ...readiness,
     max_upload_bytes: MAX_UPLOAD_BYTES,
     scanning:
       "Signature validation and attachment-only delivery; antivirus scanning is not configured.",
     public_listing: false,
   };
+}
+/** Backup readiness additionally requires authenticated encryption, independently of file health. */
+export function backupStorageCapabilities() {
+  const storage = storageCapabilities();
+  const encryption_configured = !!process.env.BACKUP_ENCRYPTION_KEY;
+  return {
+    provider: storage.provider,
+    configured: storage.configured,
+    immutable_put_verified: storage.immutable_put_verified,
+    encryption_configured,
+    connected: storage.connected && encryption_configured,
+    public_listing: false,
+  };
+}
+
+async function boundedFileBytes(stream: ReadableStream<Uint8Array>) {
+  const chunks: Uint8Array[] = [];
+  const reader = stream.getReader();
+  let size = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > MAX_UPLOAD_BYTES) {
+        await reader.cancel();
+        throw new DomainError(
+          "INVALID_INPUT",
+          "Private upload exceeds size policy.",
+        );
+      }
+      chunks.push(part.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, size);
 }
 export function validateUpload(
   bytes: Uint8Array,
@@ -134,7 +209,7 @@ export interface UploadedPrivateFile {
   size_bytes: number;
   sha256: string;
   storage_key: string;
-  provider: "private_blob";
+  provider: PrivateStorageProvider;
 }
 /** Distinct operation/version keys preserve originals. Blob and SQL are separate steps. */
 export async function uploadPrivateFile(
@@ -152,12 +227,63 @@ export async function uploadPrivateFile(
     );
   const metadata = validateUpload(bytes, filename, mimeType);
   const storage_key = `${ownerStoragePrefix(principal.ownerId)}${digest(idempotencyKey)}/original`;
+  const provider = selectedPrivateStorageProvider();
+  if (provider === "neon_object_storage") {
+    if (!neonStorageCapabilities().connected)
+      throw new DomainError(
+        "UNSUPPORTED_OPERATION",
+        "Private Neon storage writes are disconnected or unverified.",
+        {},
+        503,
+      );
+    const existing = await readNeonObject(
+      storage_key,
+      principal.ownerId,
+      "files",
+      MAX_UPLOAD_BYTES,
+    );
+    if (existing) {
+      if (
+        digest(existing) !== metadata.sha256 ||
+        existing.length !== metadata.size_bytes
+      )
+        throw new DomainError(
+          "IDEMPOTENCY_CONFLICT",
+          "Stored upload bytes conflict with this operation.",
+        );
+      return { ...metadata, storage_key, provider };
+    }
+    await putNeonObject(
+      storage_key,
+      principal.ownerId,
+      "files",
+      bytes,
+      mimeType,
+      MAX_UPLOAD_BYTES,
+    );
+    const readback = await readNeonObject(
+      storage_key,
+      principal.ownerId,
+      "files",
+      MAX_UPLOAD_BYTES,
+    );
+    if (
+      !readback ||
+      readback.length !== metadata.size_bytes ||
+      digest(readback) !== metadata.sha256
+    )
+      throw new DomainError(
+        "UNSUPPORTED_OPERATION",
+        "Upload read-back checksum verification failed.",
+        {},
+        503,
+      );
+    return { ...metadata, storage_key, provider };
+  }
   const token = storageToken();
   const existing = await get(storage_key, { access: "private", token });
   if (existing?.statusCode === 200 && existing.stream) {
-    const restored = Buffer.from(
-      await new Response(existing.stream).arrayBuffer(),
-    );
+    const restored = await boundedFileBytes(existing.stream);
     if (
       digest(restored) !== metadata.sha256 ||
       restored.length !== metadata.size_bytes
@@ -168,6 +294,13 @@ export async function uploadPrivateFile(
       );
     return { ...metadata, storage_key, provider: "private_blob" };
   }
+  if (existing)
+    throw new DomainError(
+      "UNSUPPORTED_OPERATION",
+      "Private upload lookup failed.",
+      {},
+      503,
+    );
   await put(storage_key, Buffer.from(bytes), {
     access: "private",
     token,
@@ -183,9 +316,7 @@ export async function uploadPrivateFile(
       {},
       503,
     );
-  const readback = Buffer.from(
-    await new Response(verified.stream).arrayBuffer(),
-  );
+  const readback = await boundedFileBytes(verified.stream);
   if (
     readback.length !== metadata.size_bytes ||
     digest(readback) !== metadata.sha256
@@ -201,6 +332,7 @@ export async function uploadPrivateFile(
 export async function readPrivateFile(
   storageKey: string,
   principal: Principal,
+  provider: PrivateStorageProvider = "private_blob",
 ) {
   requireScope(principal, false);
   if (!isOwnerStorageKey(storageKey, principal.ownerId))
@@ -210,6 +342,23 @@ export async function readPrivateFile(
       {},
       403,
     );
+  requireProvider(provider);
+  if (provider === "neon_object_storage") {
+    const bytes = await readNeonObject(
+      storageKey,
+      principal.ownerId,
+      "files",
+      MAX_UPLOAD_BYTES,
+    );
+    if (!bytes)
+      throw new DomainError(
+        "ENTITY_NOT_FOUND",
+        "Private file bytes were not found.",
+        {},
+        404,
+      );
+    return new Response(new Uint8Array(bytes)).body!;
+  }
   const result = await get(storageKey, {
     access: "private",
     token: storageToken(),
@@ -227,6 +376,7 @@ export async function readPrivateFile(
 export async function verifyPrivateFileMetadata(
   storageKey: string,
   principal: Principal,
+  provider: PrivateStorageProvider = "private_blob",
 ): Promise<{ sha256: string; size_bytes: number }> {
   requireScope(principal, true);
   if (!isOwnerStorageKey(storageKey, principal.ownerId))
@@ -236,6 +386,25 @@ export async function verifyPrivateFileMetadata(
       {},
       403,
     );
+  requireProvider(provider);
+  if (provider === "neon_object_storage") {
+    const bytes = await readNeonObject(
+      storageKey,
+      principal.ownerId,
+      "files",
+      MAX_UPLOAD_BYTES,
+    );
+    if (!bytes)
+      throw new DomainError(
+        "ENTITY_NOT_FOUND",
+        "Verified private upload bytes were not found.",
+        {},
+        404,
+      );
+    if (!bytes.length)
+      throw new DomainError("INVALID_INPUT", "Private upload is empty.");
+    return { sha256: digest(bytes), size_bytes: bytes.length };
+  }
   const result = await get(storageKey, {
     access: "private",
     token: storageToken(),

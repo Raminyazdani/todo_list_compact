@@ -5,7 +5,7 @@ import {
   readPrivateFile,
   attachmentHeaders,
 } from "@/server/integrations/storage";
-import { DomainError } from "@/shared/contracts";
+import { DomainError, type FileProvider } from "@/shared/contracts";
 import { failure, rateLimit } from "@/server/http";
 export async function GET(
   request: Request,
@@ -21,7 +21,7 @@ export async function GET(
       principal,
     );
     const rows = await getDatabase().query<{
-      provider: string;
+      provider: FileProvider;
       external_url: string;
       storage_key: string;
       original_filename: string;
@@ -50,9 +50,12 @@ export async function GET(
         },
       });
     }
-    return new Response(await readPrivateFile(file.storage_key, principal), {
-      headers: attachmentHeaders(file.original_filename, file.mime_type),
-    });
+    return new Response(
+      await readPrivateFile(file.storage_key, principal, file.provider),
+      {
+        headers: attachmentHeaders(file.original_filename, file.mime_type),
+      },
+    );
   } catch (error) {
     return failure(error);
   }

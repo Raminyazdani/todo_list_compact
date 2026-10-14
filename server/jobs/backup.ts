@@ -4,6 +4,12 @@ import { getDatabase } from "../db/database";
 import { getDomainService } from "../domain/service";
 import { verifyBackupManifest } from "../domain/migration";
 import { encryptBackup, decryptBackup } from "../integrations/backup";
+import { backupStorageCapabilities } from "../integrations/storage";
+import {
+  ownerNeonBackupKey,
+  putNeonObject,
+  readNeonObject,
+} from "../integrations/neon-storage";
 import { DomainError, type Principal } from "../../shared/contracts";
 
 const MAX_BYTES = 70 * 1024 * 1024;
@@ -32,14 +38,28 @@ export async function runEncryptedBackup(
   ownerId: string,
   day = new Date().toISOString().slice(0, 10),
 ) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day))
+  if (!ownerId || !/^\d{4}-\d{2}-\d{2}$/.test(day))
     throw new DomainError("INVALID_INPUT", "Invalid backup day");
-  const configured =
-    !!process.env.BLOB_READ_WRITE_TOKEN && !!process.env.BACKUP_ENCRYPTION_KEY;
+  const capabilities = backupStorageCapabilities();
+  const provider = capabilities.provider;
+  const configured = capabilities.connected;
+  const storageKey =
+    provider === "neon_object_storage"
+      ? ownerNeonBackupKey(ownerId, day)
+      : "life-os-backups/" +
+        createHash("sha256").update(ownerId).digest("hex").slice(0, 32) +
+        "/" +
+        day +
+        ".json";
   const backupId =
     "BACKUP_" +
     createHash("sha256")
-      .update(ownerId + ":" + day)
+      .update(
+        ownerId +
+          ":" +
+          day +
+          (provider === "private_blob" ? "" : ":" + provider),
+      )
       .digest("hex")
       .slice(0, 40);
   const database = getDatabase();
@@ -51,24 +71,34 @@ export async function runEncryptedBackup(
     return { backup_id: backupId, status: "verified", replayed: true };
   if (!configured) {
     await database.query(
-      `INSERT INTO backup_runs(backup_id,owner_id,status,errorcode) VALUES($1,$2,'disconnected','PRIVATE_BACKUP_NOT_CONFIGURED')
-      ON CONFLICT(backup_id) DO UPDATE SET status='disconnected',errorcode='PRIVATE_BACKUP_NOT_CONFIGURED'`,
-      [backupId, ownerId],
+      `INSERT INTO backup_runs(backup_id,owner_id,status,storage_key,errorcode) VALUES($1,$2,'disconnected',$3,'PRIVATE_BACKUP_NOT_CONFIGURED')
+      ON CONFLICT(backup_id) DO UPDATE SET status='disconnected',storage_key=$3,errorcode='PRIVATE_BACKUP_NOT_CONFIGURED'`,
+      [backupId, ownerId, storageKey],
     );
     return { backup_id: backupId, status: "disconnected", verified: false };
   }
-  const storageKey =
-    "life-os-backups/" +
-    createHash("sha256").update(ownerId).digest("hex").slice(0, 32) +
-    "/" +
-    day +
-    ".json";
   const token = process.env.BLOB_READ_WRITE_TOKEN!;
+  const readStored = async () => {
+    if (provider === "neon_object_storage") {
+      const bytes = await readNeonObject(
+        storageKey,
+        ownerId,
+        "backups",
+        MAX_BYTES,
+      );
+      return bytes
+        ? { statusCode: 200, stream: new Response(new Uint8Array(bytes)).body! }
+        : null;
+    }
+    return get(storageKey, { access: "private", token });
+  };
   try {
     // An uncertain previous put must be reconciled before another attempt; immutable keys prevent overwrite.
-    let stored = await get(storageKey, { access: "private", token });
+    let stored = await readStored();
     let expectedManifest: string | null = null;
-    if (!stored?.stream || stored.statusCode !== 200) {
+    if (stored && (!stored.stream || stored.statusCode !== 200))
+      throw new Error("BACKUP_LOOKUP_FAILED");
+    if (!stored) {
       const principal: Principal = {
         ownerId,
         actorId: "approved-backup-scheduler",
@@ -87,14 +117,24 @@ export async function runEncryptedBackup(
       );
       const bytes = Buffer.from(JSON.stringify(encrypted));
       if (bytes.length > MAX_BYTES) throw new Error("BACKUP_TOO_LARGE");
-      await put(storageKey, bytes, {
-        access: "private",
-        token,
-        addRandomSuffix: false,
-        allowOverwrite: false,
-        contentType: "application/json",
-      });
-      stored = await get(storageKey, { access: "private", token });
+      if (provider === "neon_object_storage")
+        await putNeonObject(
+          storageKey,
+          ownerId,
+          "backups",
+          bytes,
+          "application/json",
+          MAX_BYTES,
+        );
+      else
+        await put(storageKey, bytes, {
+          access: "private",
+          token,
+          addRandomSuffix: false,
+          allowOverwrite: false,
+          contentType: "application/json",
+        });
+      stored = await readStored();
     }
     if (!stored?.stream || stored.statusCode !== 200)
       throw new Error("BACKUP_READBACK_FAILED");
@@ -124,9 +164,9 @@ export async function runEncryptedBackup(
     };
   } catch {
     await database.query(
-      `INSERT INTO backup_runs(backup_id,owner_id,status,errorcode) VALUES($1,$2,'failed','PRIVATE_BACKUP_FAILED')
-      ON CONFLICT(backup_id) DO UPDATE SET status='failed',errorcode='PRIVATE_BACKUP_FAILED'`,
-      [backupId, ownerId],
+      `INSERT INTO backup_runs(backup_id,owner_id,status,storage_key,errorcode) VALUES($1,$2,'failed',$3,'PRIVATE_BACKUP_FAILED')
+      ON CONFLICT(backup_id) DO UPDATE SET status='failed',storage_key=$3,errorcode='PRIVATE_BACKUP_FAILED'`,
+      [backupId, ownerId, storageKey],
     );
     return {
       backup_id: backupId,
