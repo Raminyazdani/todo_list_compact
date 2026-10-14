@@ -1,100 +1,168 @@
-# RAMIN LIFE OS — DELIVERY ACCEPTANCE CHECKLIST (initial statuses: NOT RUN)
+# Ramin Life OS — observed delivery acceptance
 
-> Agents must replace `NOT RUN` only after **observed** evidence, and maintain the real checklist in repository `docs/` alongside tests. The ZIP is the initial contract, not a finished build report.
+Observed final checkpoint updated 2026-10-14T07:10:55.759Z; this checkpoint distinguishes completed evidence from remaining release work. This document preserves all 28 normative AC gates and all 40 DG scenarios. PASS applies only to the explicitly proved layer; a provider mock, successful build or staged rehearsal does not establish live production acceptance. Full delivery remains open while a required production/operator gate is NOT_RUN or a required provider is EXTERNALLY_BLOCKED.
 
-## Mandatory evidence syntax
+Reviewed source: [https://github.com/Raminyazdani/todo_list_compact](https://github.com/Raminyazdani/todo_list_compact), branch **master**, commit **334ee291d9fcea0024e120423860111eaa5120c5**, [merged PR 1](https://github.com/Raminyazdani/todo_list_compact/pull/1). [Exact latest-SHA CI](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38519881381) is FULLPASS. Production [ramin-life-os.vercel.app](https://ramin-life-os.vercel.app) is READY at the latest SHA, accepted distinct deployment `dpl_Dis7DTPNBMCNQBdT9vStXfpRA6up`, new project `ramin-life-os` / `prj_wfYC3rSJccmvT6hZ21QbGtRqdkfs`. Independent production source verification, real graph/owner UI and hosted restore now pass (E19/E20); recovered actual DG-36/fresh-login parity, canonical synthetic-only cleanup and final encrypted export also pass E21/E23.
 
-For each item record `PASS`, `FAIL`, or `EXTERNALLY_BLOCKED` and an evidence link/path, exact test command and timestamp. No status should be marked PASS merely because code exists.
+## Current gate matrix
 
-| ID    | Acceptance gate                                                     | Initial | Minimum evidence                                                         |
-| ----- | ------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------ |
-| AC-01 | Exact GitHub repo, reproducible commits/lockfile, clean public repo | NOT RUN | Repo URL, SHA, CI, secret scan                                           |
-| AC-02 | New Vercel project, production site, durable server state           | NOT RUN | Observed project/deployment URL, persistence-after-redeploy test         |
-| AC-03 | Owner-only login and secure private endpoints                       | NOT RUN | Login smoke + negative unauthenticated API/file test                     |
-| AC-04 | Beautiful real responsive dashboard, customizable widgets           | NOT RUN | Interactive E2E + desktop/mobile screenshots                             |
-| AC-05 | Full task CRUD, status/reopen, search, views, bulk actions          | NOT RUN | Playwright E2E + unit edge cases                                         |
-| AC-06 | Projects, relations, milestones, notes, progress                    | NOT RUN | Integration + UI E2E                                                     |
-| AC-07 | Calendar day/week/month/agenda and correct local events             | NOT RUN | DST/recurrence tests + UI interactions                                   |
-| AC-08 | Work Planner timeline/work hours/Excel Jena & Seewiesen             | NOT RUN | XLSX file content assertions + E2E                                       |
-| AC-09 | Secure files, metadata, versions, archive/restore relations         | NOT RUN | Byte/checksum + archive-rule integration tests                           |
-| AC-10 | Google source migration no loss/no moves, idempotent replay         | NOT RUN | Private reconciliation report + dry-run proof                            |
-| AC-11 | Activity audit history append-only/operation provenance             | NOT RUN | Integration test + rendered UI history                                   |
-| AC-12 | Remote Streamable HTTP MCP tools listed with secure discovery       | NOT RUN | Inspector captured tool list, unauthorized rejection                     |
-| AC-13 | Authenticated MCP mutations share DB with browser                   | NOT RUN | Remote client write then UI read-after-write                             |
-| AC-14 | Real ChatGPT plan/access researched; actual connection if eligible  | NOT RUN | Eligible client demo OR explicit verified eligibility blocker + fallback |
-| AC-15 | In-app AI preview, approval, execute and verify                     | NOT RUN | Model/tool simulation + real configured AI test if authorized            |
-| AC-16 | Export, backup, staging restore with integrity                      | NOT RUN | Restore drill, counts, links and file hashes                             |
-| AC-17 | Accessibility/mobile/RTL/dark theme                                 | NOT RUN | axe/keyboard/mobile visual tests                                         |
-| AC-18 | Unit, integration, contract, E2E, threat/security, migration CI     | NOT RUN | CI run/test report with actual counts                                    |
-| AC-19 | Monitoring, sync status, fallback, backup age and runbook           | NOT RUN | Owner view + failure injection                                           |
-| AC-20 | Complete Persian documentation and secure owner handoff             | NOT RUN | Verified files, operation guide, auth setup steps                        |
+| ID    | Normative gate                                                                                                | Current status     | Observed evidence / scope                                                                                                                                                                                                                  | Remaining limit or action                                                                                                                           |
+| ----- | ------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC-01 | Exact GitHub repo, reproducible commits/lockfile, clean public repo                                           | PASS               | E01,E21,E22: Current master 334ee291d9fcea0024e120423860111eaa5120c5, exact successful CI38519881381, actual READY distinct production deployment and public-safety checks verified.                                                       | Final documentation-only handoff publication should name its own later SHA if changed; do not silently relabel tested application/operator commits. |
+| AC-02 | New Vercel project, production site, durable server state                                                     | PASS               | E01,E07,E10,E19,E20,E21: Accepted distinct READY production deployment recovered with fresh owner/UI and all 45/3/21 exact canonical read-back PASS.                                                                                       | Original failed DG-36 invocation remains in history; recovery is its own observed PASS.                                                             |
+| AC-03 | Owner-only login and secure private endpoints                                                                 | PASS               | E03,E05,E06,E07: Owner authentication, unauthenticated/IDOR/scope/CSRF denial, OIDC and immediate revocation proved at CI/HTTPS scope.                                                                                                     | Passkey enrollment/owner actions should be described only if actually completed.                                                                    |
+| AC-04 | Beautiful real responsive dashboard, customizable widgets                                                     | PASS               | E04,E09,E12: Real dashboard range, keyboard/native resize, saved layout, preferences and responsive views pass.                                                                                                                            | Synthetic design evidence does not expose live source data or establish full WCAG conformance.                                                      |
+| AC-05 | Full task CRUD, status/reopen, search, views, bulk actions                                                    | PASS               | E02,E04,E09,E19,E21: Task CRUD/search/views/batch/order/retry and canonical original-field parity pass; exact 25 production / 21 Stage QA task cleanup completed.                                                                          | Archived synthetic records remain retained for provenance; only 45 original tasks are active after cleanup.                                         |
+| AC-06 | Projects, relations, milestones, notes, progress                                                              | PASS               | E02,E04: Project state/progress/milestones/knowledge/decision notes and independent archive behavior tested.                                                                                                                               | People labels are stored notes; no contact outreach is implied.                                                                                     |
+| AC-07 | Calendar day/week/month/agenda and correct local events                                                       | PASS               | E02,E04,E12,E17: Local day/week/month/agenda, timed/all-day DST drag, accessible create/resize, master preservation and occurrence override pass.                                                                                          | Live Google/iCal app grants remain NOT_RUN; no external write claim.                                                                                |
+| AC-08 | Work Planner timeline/work hours/Excel Jena & Seewiesen                                                       | PASS               | E02,E04: Worklog grid, clipped actual summaries, exact interval edits, validated JSON preview/import/export and XLSX content tested.                                                                                                       | Original reference planner remains read-only.                                                                                                       |
+| AC-09 | Secure files, metadata, versions, archive/restore relations                                                   | EXTERNALLY_BLOCKED | E02,E04,E14,E15: Private authorization/metadata/source-reference/version/archive contracts and original-byte recovery pass.                                                                                                                | Live Blob account suspension blocks real new upload/version/private-byte runtime proof.                                                             |
+| AC-10 | Google source migration no loss/no moves, idempotent replay                                                   | PASS               | E11,E14,E19,E21: Fresh source/import/replay, exact nativeSQL/HTTPS original mappings/fields, after-redeploy 45/3/21 and after-cleanup source-only45/3 checks PASS.                                                                         | Original source/three file bytes and locations remain unchanged; no fabricated imported graph/parent/checklist relation.                            |
+| AC-11 | Activity audit history append-only/operation provenance                                                       | PASS               | E02,E03,E19,E20: Append-only history/provenance, all 53 original Activity entries, final graph 42 receipts and hosted restore 114 Activity/48 accepted receipts pass.                                                                      | No provider communication is implied by an audit entry.                                                                                             |
+| AC-12 | Remote Streamable HTTP MCP tools listed with secure discovery                                                 | PASS               | E05,E06,E07: Production HTTPS Streamable HTTP OAuth/PKCE SDK discovery exposes 130 tools with authority tests.                                                                                                                             | Actual ChatGPT client installation remains distinct E18.                                                                                            |
+| AC-13 | Authenticated MCP mutations share DB with browser                                                             | PASS               | E04,E07,E08,E20: Actual production OAuth MCP21 graph, canonical SQL/API21 snapshots and six fresh-login owner UI steps agree.                                                                                                              | ChatGPT-specific client grant remains E18; generic SDK/UI parity does not complete that installation.                                               |
+| AC-14 | Real ChatGPT plan/access researched; actual connection if eligible                                            | NOT_RUN            | E18: Actual Pro/account capability checked and installation instructions/endpoint prepared.                                                                                                                                                | Complete actual ChatGPT connection and scope grant, then client-specific tool/read/write proof.                                                     |
+| AC-15 | In-app AI preview, approval, execute and verify                                                               | EXTERNALLY_BLOCKED | E02,E04,E16: Mock-model planning/real-PostgreSQL atomic simulation, approval, execution, receipt recovery, retrieval and security pass.                                                                                                    | Zero credits/absent provider prevent bounded real configured AI runtime test.                                                                       |
+| AC-16 | Export, backup, staging restore with integrity                                                                | PASS               | E02,E11,E14,E20,E23: Hosted restore preserves originals/graph/checklists/accepted results; final persisted encrypted export after cleanup independently decrypts and verifies its manifest.                                                | Automatic live Blob/cloud backup remains externally blocked; final private export is not described as a live Blob backup.                           |
+| AC-17 | Accessibility/mobile/RTL/dark theme                                                                           | PASS               | E04,E12: Thirty responsive page checks, four appearance cases, native keyboard/dependency/checklist alternatives and persisted settings pass.                                                                                              | Automated axe plus inspected synthetic captures do not establish universal accessibility conformance.                                               |
+| AC-18 | Unit, integration, contract, E2E, threat/security, migration CI                                               | PASS               | E01,E02,E03,E04,E05,E06,E22: Latest 334 exact CI 393/28 coverage, 52/9 files, native 12, browser 24/2, SDK 130, HTTP 16 / OIDC 1 / rate 6 / expiry 1; actual production recovery proof separate E21.                                       | Explicit CI opt-in skips are not reclassified; actual manual production evidence closes their named requirement only.                               |
+| AC-19 | Monitoring, sync status, fallback, backup age and runbook                                                     | EXTERNALLY_BLOCKED | E02,E04,E10,E15,E17: Health/source warnings, owner jobs, fallback/backup configuration and recovery runbooks implemented/tested.                                                                                                           | Real automated private cloud backup and external sync need available provider/grants; actual backup age must remain truthful.                       |
+| AC-20 | Complete Persian documentation and secure owner handoff                                                       | PASS               | E01/E21/E23 and docs/FINAL_REPORT_FA.md: Persian A–H report, owner/operator/connection docs, source counts and actual recovery/cleanup evidence are published in this final handoff batch; private credentials/reports remain outside Git. | Full product acceptance still requires the explicitly listed provider/grant actions; handing over documents does not close those gates.             |
+| AC-21 | Hard task dependency DAG; all-of and user-defined any-of prerequisite groups                                  | PASS               | E02,E03,E04,E08,E20: Production real OAuth ALL/ANY A(B,C),B(D), Done-only/reopen readiness and 21 exact canonical snapshots plus fresh owner UI PASS.                                                                                      | Recovered actual DG-36 redeploy PASS E21; no inferred legacy prerequisite was created.                                                              |
+| AC-22 | Transactional cycle/retry/reopen/waiver safety and at-risk impact                                             | PASS               | E02,E03,E05,E06,E20: Native cycle races/rollback/retry, human-intent waiver/override denial and actual production reopen/at-risk effects plus42 audited graph receipts pass.                                                               | Actual recovered production redeploy also PASS E21.                                                                                                 |
+| AC-23 | Multiple named checklists with atomic toggle, editing, order, progress and audit                              | PASS               | E02,E04,E20: Multiple named checklists, keyboard/order/progress/audit and production owner UI canonical checked state pass; hosted restore preserves6 lists/9 items.                                                                       | Independence from parent completion is retained; no live model inference claim.                                                                     |
+| AC-24 | Nested subtask hierarchy, accurate progress and promotion/reparenting                                         | PASS               | E02,E04,E20: Independent nested hierarchy/promotion/template identities match production 21 snapshots/owner UI; hosted restore preserves5 lineage entries.                                                                                 | Never infer source parent/child relations from narrative.                                                                                           |
+| AC-25 | Graph/Gantt/tree/blocked views + accessible text alternative and consistent summaries                         | PASS               | E02,E04,E12,E13: Graph/text equivalence, board/tree/timeline, focused cross-project context, paging boundary disclosure and accessible alternatives pass.                                                                                  | Critical path is omitted when estimates or selected-plan prerequisites are incomplete.                                                              |
+| AC-26 | Graph/Checklist API, MCP and in-app AI share domain, auth and idempotency                                     | PASS               | E02,E04,E05,E07,E16: Browser/REST/MCP/AI simulation use canonical scope/revision/idempotency/audit transactions; injection and authority denial tested.                                                                                    | AI here is an explicitly mocked-provider domain/approval proof; live provider is blocked E16.                                                       |
+| AC-27 | Recurrence and task-template clone remaps internal edges; scheduling preview doesn't silently shift deadlines | PASS               | E02,E04,E20: Template/recurrence internal remap and original deadlines are preserved in actual production proof; hosted restore retains1 template/1 rule/1 instance.                                                                       | External provider events remain read-only; recurrence was explicitly configured for the synthetic fixture.                                          |
+| AC-28 | Source migration zero fabricated edges, large graph, backup/restore graph state                               | PASS               | E11,E13,E19,E20: Independent production source SQL/API has zero fabricated source graph/parent/checklist relationships; 10k/30k local load measured; final hosted restore preserves graph and accepted receipts.                           | Local load latency is not production/browser performance; DG-36 recovery PASS E21.                                                                  |
 
-## V2 additional P0 release gates (NO deferral)
+## Evidence register
 
-| ID    | Acceptance gate                                                                                               | Initial | Minimum evidence                                                                                              |
-| ----- | ------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
-| AC-21 | Hard task dependency DAG; all-of and user-defined any-of prerequisite groups                                  | NOT RUN | UI+SQL+API/MCP E2E demonstrating A requires B & C, B requires D and OR group; real readiness changes          |
-| AC-22 | Transactional cycle/retry/reopen/waiver safety and at-risk impact                                             | NOT RUN | Self/cross-project/deep/concurrent cycle tests; no partial writes; audit on waivers; downstream recalculation |
-| AC-23 | Multiple named checklists with atomic toggle, editing, order, progress and audit                              | NOT RUN | UI + DB + MCP read-after-write; reload, keyboard/mobile and concurrency tests                                 |
-| AC-24 | Nested subtask hierarchy, accurate progress and promotion/reparenting                                         | NOT RUN | Parent-cycle rejection, parent-independent status, promotion once, identity retained                          |
-| AC-25 | Graph/Gantt/tree/blocked views + accessible text alternative and consistent summaries                         | NOT RUN | Visual mobile/desktop screenshots + keyboard axe + actual linked DB content                                   |
-| AC-26 | Graph/Checklist API, MCP and in-app AI share domain, auth and idempotency                                     | NOT RUN | Authorized MCP mutation appears in UI; unauthorized and AI injection tests fail closed                        |
-| AC-27 | Recurrence and task-template clone remaps internal edges; scheduling preview doesn't silently shift deadlines | NOT RUN | Synthetic nested template fixture/recurrence/DST/preview tests                                                |
-| AC-28 | Source migration zero fabricated edges, large graph, backup/restore graph state                               | NOT RUN | Source reconciliation, 10k/30k load test, verified private restore graph invariants                           |
+All current results are dated 2026-10-14 UTC unless an earlier observation is explicitly labeled. Commands below retain their executable/flags; private environment, credential, source and report values are intentionally replaced by placeholders. Evidence counts supplied by the coordinator override the older checkpoint files still committed before final release.
 
-All 40 named scenarios in `ADVANCED_TASK_GRAPH_SPEC.md` §8 are part of these gates. These are separate from, and in addition to, AC-01..AC-20. Record observed evidence only.
+### E01 — Exact reviewed master and CI
 
-## Migration-specific checklist
+**PASS**, 2026-10-14 UTC. Current master 334ee291d9fcea0024e120423860111eaa5120c5; [exact CI38519881381](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38519881381) FULLPASS, including format/lint/type/public-safety/audit/build and all configured pipeline steps. Earlier two fully successful CI38516650590/38517791730 on 463f3cad0310879d23a697f0e1c5d070113fa694 are historical before-repair proofs. The accepted distinct READY production deployment and actual fresh-owner persistence recovery are E21.
 
-- [ ] Live Google account/Sheet/folder access validated before migration.
-- [ ] All six actual Sheet tabs read fully and independently counted; blank/template rows excluded.
-- [ ] Actual `ledger-schema.json`, `hub-config.json`, `workflow-rules.md` fetched from System and compared to ZIP references.
-- [ ] Private source snapshot stored outside public repo with access controls.
-- [ ] Source task IDs, title/body/next_action, nullable due dates/times, priorities, statuses, timestamps and revisions preserved.
-- [ ] Every original Files record and Drive ID/URL/parent/version verified; original Drive bytes/location unchanged.
-- [ ] Every active/inactive task-file Link preserved and referentially validated.
-- [ ] All historical Activity entries preserved with source actor/op id and source JSON fields; append-only behavior tested.
-- [ ] Legacy Settings/Guide retained and unmapped fields accounted for.
-- [ ] Dry-run passed without side effects; real import idempotent across reruns/interruption.
-- [ ] Source-vs-destination reconciled to live counts, row hashes/field diffs, relationships, status distribution and source-revision checkpoint.
-- [ ] Source Sheet remains protected/read-only reference after cutover; legacy write split-brain addressed safely without unauthorized edit.
-- [ ] Migration problems presented for resolution rather than silently dropped.
+### E02 — Coverage and isolated tests
 
-## MCP-specific checklist
+**PASS**, 2026-10-14 UTC. pnpm test:coverage — 393 PASS / 28 explicit opt-in SKIP; 52 test files PASS / 9 opt-in files SKIP in exact latest CI38519881381. This contains synthetic fixtures and explicitly mocked provider tests, not live-provider acceptance.
 
-- [ ] Endpoint deployed and has correct HTTPS URL, SDK protocol, content negotiation and Streamable HTTP transport.
-- [ ] Protected-resource and OAuth discovery metadata work as required by actual client.
-- [ ] Token/scopes are server-validated, owner-bound, revocable, not logged.
-- [ ] All tool schemas match implementation with bounded cursor pagination and typed errors.
-- [ ] Create/update/complete/reopen task works through remote client and UI read-back.
-- [ ] Idempotency and conflict detection verified.
-- [ ] File/Calendar write policies deny unsafe operations without extra authorization.
-- [ ] Security negatives: no auth, expired token, read-only scope, IDOR, prompt injection.
-- [ ] ChatGPT eligibility/installation explicitly distinguished from generic remote MCP success.
-- [ ] In-app AI fallback and local generic MCP client setup work where ChatGPT write is unavailable.
+### E03 — Native PostgreSQL / DATE / read concurrency
 
-## UX-specific checklist
+**PASS**, 2026-10-14 UTC. TEST_POSTGRES=1 node --env-file=<PRIVATE_ENV> node_modules/vitest/vitest.mjs run tests/domain/postgres.test.ts tests/domain/postgres-dates.test.ts tests/domain/postgres-read-concurrency.test.ts — 12 PASS in exact-SHA CI.
 
-- [ ] No fake buttons, placeholder stats, fake calendar events, or mock tasks in production.
-- [ ] Persian RTL typography/mixed-script rendering accurate.
-- [ ] English LTR fully functional.
-- [ ] Mobile navigation/keyboard/touch workable without horizontal overflow.
-- [ ] Dark/light/system theme durable across reload.
-- [ ] Drag/drop calendar/tasks have accessible alternatives.
-- [ ] Time zones Europe/Berlin/Asia/Tehran are correct across DST.
-- [ ] Search/filter/query tied to live DB, with loading/error/empty/retry states.
-- [ ] No private content in public screenshots, analytics, unauthenticated responses or Git history.
+### E04 — Authenticated browser workflows
+
+**PASS**, 2026-10-14 UTC. pnpm test:e2e — 24 PASS / 2 explicit production opt-in SKIP in exact-SHA CI. tests/e2e/workflow-ui.spec.ts plus separately gated production-proof-readback.spec.ts. No skipped production drill is counted as PASS.
+
+### E05 — Real HTTP authority / revocation / notification scopes
+
+**PASS**, 2026-10-14 UTC. node --env-file=<PRIVATE_ENV> node_modules/vitest/vitest.mjs run tests/security/http-auth.test.ts tests/security/http-auth-human-authority.test.ts tests/security/http-auth-revocation.test.ts tests/security/http-notification-scopes.test.ts — 16 PASS in exact-SHA CI.
+
+### E06 — OIDC, rate policy and real JWT expiry
+
+**PASS**, 2026-10-14 UTC. tests/security/http-auth-oidc.test.ts — 1 PASS; RUN_AUTH_RATE_LIMIT_TEST=1 tests/security/http-auth-rate-limit.test.ts — 6 PASS; RUN_TOKEN_EXPIRY_TEST=1 tests/security/http-auth-expiry.test.ts — 1 real expiry PASS. Executed with native PostgreSQL and first-party HTTP in exact-SHA CI.
+
+### E07 — Production HTTPS OAuth MCP smoke
+
+**PASS**, 2026-10-14 UTC. node scripts/ops/runtime-smoke.mjs <PRIVATE_PRODUCTION_CREDENTIALS> https://ramin-life-os.vercel.app — 130 SDK tools; actual owner authentication, CSRF checks, write/read, stable-key replay and archive of its own synthetic fixture; 7.1 seconds. Generic SDK proof does not establish ChatGPT installation.
+
+### E08 — Retained staging graph / owner UI
+
+**PASS**, 2026-10-14 UTC. RUN_PRODUCTION_GRAPH_REHEARSAL=1: tests/contracts/production-graph-demo.test.ts; 12 completed steps, 21 retained tasks, 21 matching snapshots, 42 audited native receipts, zero pending operations. RUN_GRAPH_UI_READBACK=1: tests/e2e/production-proof-readback.spec.ts; six owner UI steps, fresh login, 1.3 minutes. Private journals retain exact identities outside Git.
+
+### E09 — Affected task interval acknowledgment/read-back
+
+**PASS**, 2026-10-14 UTC. pnpm exec playwright test --grep task_precise_deadline_project_reference_and_linked_intervals_share_canonical_state --reporter=list — targeted PASS 1.4 minutes; real accepted interval summarized as 30 minutes / exactly one record. This is an interval duration, not an invented 30-minute transport delay.
+
+### E10 — Production additive schema admission
+
+**PASS**, 2026-10-14 UTC. Coordinator ran additive DDL only after a fresh private AES snapshot and independent recovery check; pre-existing table hashes remained unchanged. This does not prove later source import, hosted restore or redeploy persistence.
+
+### E11 — Source rehearsal / canonical reconciliation / recovery
+
+**PASS**, 2026-10-13–14 UTC. scripts/migration/cli.ts with --staging-dry-run; tests/migration/staging.test.ts, canonical-reconciliation.test.ts, operator-cutover.test.ts and tests/contracts/restore-drill.test.ts. Known source snapshot: 45 Tasks / 3 Files / 3 Links / 53 Activity / 36 Settings / 18 Guide; replay/isolated restore and no fabricated graph relationships. Fresh production import/replay and independent source verification now pass as E19.
+
+### E12 — Visual/keyboard evidence at specified scope
+
+**PASS**, 2026-10-14 UTC. tests/e2e/workflow-ui.spec.ts: all_main_views_have_synthetic_desktop_mobile_and_tablet_evidence and synthetic_desktop_dark_rtl_and_light_ltr_are_accessible. All 30 main-view captures at 1440/375/768, page axe and document-overflow checks; four Dashboard/Graph dark RTL/light LTR checks. Build-11 captures were manually inspected, and current exact-SHA CI passes the automated cases. Saved-preference Settings keyboard/axe/PWA case passed separately in build 12 (52.6s) and again in the complete CI. Full WCAG conformance and actual OS installation are not claimed.
+
+### E13 — Local graph load measurement
+
+**PASS**, 2026-10-14T02:56:05.283Z. tests/domain/performance.test.ts / artifacts/domain-performance.json: isolated PGlite PostgreSQL engine, 10,000 tasks / 30,000 edges / 20 projects. Graph first/second page 1119.43/1288.84ms, blocked page 1271.82ms, topological plan 1196.89ms. Local domain query latency only; no production network/browser performance claim.
+
+### E14 — Independent original-byte recovery
+
+**PASS**, 2026-10-13–14 UTC. Three original files, 6,698,095 bytes, encrypted local recovery and independent decrypt/checksum verification recorded privately. Original Drive locations/bytes were not modified. Fresh source checkpoint and cloud backup are separate.
+
+### E15 — Live private Blob
+
+**EXTERNALLY_BLOCKED**, 2026-10-14 UTC. Actual account creation request returned usage-threshold HTTP400 and existing private stores are suspended. Local API/UI/ACL/archive/version/preview contracts pass; byte-provider tests use explicit mocks. Required owner action: restore account storage availability or authorize an available private store, then actual upload/download/version/checksum/restore read-back.
+
+### E16 — Live AI model execution
+
+**EXTERNALLY_BLOCKED**, 2026-10-14 UTC. Authenticated AI Gateway credits probe returned zero and app provider configuration is absent. Atomic planning/approval/rollback/retry/retrieval/budget/injection tests use an explicitly mocked model with real isolated PostgreSQL. Required owner action: authorize and configure funded provider/model, then a bounded real inference/approved-action/read-back test. No live inference was purchased or claimed.
+
+### E17 — Product Google/iCal grants
+
+**NOT_RUN**, 2026-10-14 UTC. Product Google OAuth grant and private iCal feeds are not configured. Connected desktop Google tools do not grant the application access. Local calendar/recurrence/DST/read-only adapter/failure-isolation tests pass. Required owner action: grant the app read-only Google Calendar access or provide private feed configuration, followed by actual application read/sync freshness proof; external event writes remain disabled.
+
+### E18 — Actual ChatGPT custom MCP connection
+
+**NOT_RUN**, 2026-10-14 UTC. Actual account UI showed Pro and the custom MCP installation flow is prepared; final connection/authorization has not been granted. Required owner action: complete custom MCP URL/OAuth approval and scope selection, then actual ChatGPT tool listing and authorized write/browser read-back. No universal Pro read-only limitation is asserted.
+
+### E19 — Production source import / independent canonical state
+
+**PASS**, 2026-10-14 UTC. Fresh checkpoint verified_at 05:45:12.840487Z; full read 245.869 seconds, all six tabs matched native XLSX, three System semantic records matched, seven source metadata targets were unchanged. Three original files/byte/hash/size matched exactly (6,698,095 bytes); deadlines are one exact DATE and 44 nulls. Actual import accepted 05:48:26.798Z, canonical six-table reconciliation45/3/3/53/36/18, followed by SAME batch/key/report replay around 05:49 with replayed=true/samecounts/source_written=false. Independent native PostgreSQL plus first-party HTTPS verifier then passed all six source counts, all 45 original task/all 3 original file API exact canonical fields and all 21 retained graph snapshots, with zero fabricated source dependency/parent/checklist relationships. Existing original three file-task Links remain preserved. No business/source write is performed by the independent verifier. Private evidence: production-source-cutover-20261014.json and production-canonical-verification-before-redeploy-20261014.json, held outside public Git.
+
+Command shapes with private argument values withheld:
+
+- `node --env-file=<PRIVATE_PRODUCTION_ENV> --import tsx scripts/migration/commit.ts <PRIVATE_SOURCE> <PRIVATE_FRESH_CHECKPOINT> <PRIVATE_CUTOVER_REPORT> --commit` (same arguments/key/report for observed replay).
+- `node --env-file=<PRIVATE_PRODUCTION_ENV> --import tsx scripts/ops/verify-production-state.ts --verify-production-state --source <PRIVATE_SOURCE> --cutover-report <PRIVATE_CUTOVER_REPORT> --credentials <PRIVATE_CREDENTIALS> --report <NEW_PRIVATE_REPORT> --graph-proof <PRIVATE_PASSED_PRODUCTION_GRAPH_REPORT>`.
+
+### E20 — Production retained graph / owner UI / independent hosted restore
+
+**PASS**, 2026-10-14 UTC. Production real OAuth graph proof completed in 48.55 seconds:12 steps,21 exact canonical task snapshots,42 audit receipts,zero pending operations. Production owner UI completed one actual case in 14.5 seconds:6 UI steps,21 canonical read-backs and6 private PNG captures. Journals production-graph-proof-463f3ca-20261014.json and production-graph-ui-463f3ca-20261014.json remain outside public Git; no actual source screenshots are published.
+
+A fresh full AES backup passed independent decrypt/manifest verification, and a distinct hosted PostgreSQL restore passed with original_rows_preserved=true and accepted_results_preserved=true. Actual restored totals:68 tasks (45 source + 21 graph + 2 archived smoke fixtures),29 projects (28 source + 1 fixture),3 files / 3 file-task Links / 3 versions,6 dependency groups / 8 edges,6 checklists / 9 items,1 template / 1 recurrence rule / 1 instance / 5 lineage entries,114 Activity / 104 source mappings / 48 accepted receipts. Original-byte AES package fresh hashes still match6,698,095 bytes. Private journals production-hosted-restore-20261014.json and production-full-before-restore-20261014.json record this proof. Cloud Blob availability is not inferred from this hosted database/local encrypted-byte restore.
+
+Command shapes with private argument values withheld:
+
+- `RUN_PRODUCTION_GRAPH_DEMO=1 HTTP_TEST_ORIGIN=https://ramin-life-os.vercel.app node --env-file=<PRIVATE_ENV> node_modules/vitest/vitest.mjs run tests/contracts/production-graph-demo.test.ts` with admitted private credential/report paths.
+- `RUN_GRAPH_UI_READBACK=1 E2E_BASE_URL=https://ramin-life-os.vercel.app pnpm exec playwright test tests/e2e/production-proof-readback.spec.ts --reporter=list` with admitted private journal/credential/result/screenshot paths.
+- `node --import tsx scripts/ops/restore-drill.ts --restore-drill --source-env <PRIVATE_PRODUCTION_ENV> --destination-env <PRIVATE_SEPARATE_HOSTED_ENV> --snapshot <PRIVATE_DECRYPTED_SNAPSHOT> --report <NEW_PRIVATE_RESTORE_REPORT>`.
+
+### E21 — Accepted distinct deployment, recovered DG-36, final cleanup and security
+
+**PASS**, 2026-10-14 UTC. The original DG-36 attempt failed after the actual deployment intent had been accepted; its failure/private report is preserved. The coordinator recovered the EXACT accepted distinct CLI production deployment dpl_Dis7DTPNBMCNQBdT9vStXfpRA6up, READY at master SHA 334ee291d9fcea0024e120423860111eaa5120c5, rather than silently creating a replacement attempt. Initial reviewed deployment was dpl_FWbhA9YfryQxvkeuVsnr5KM1SWW4 at 463f3cad0310879d23a697f0e1c5d070113fa694. Fresh-owner/UI recovery then passed one actual case in 38.4 seconds, with canonical native SQL/HTTPS verification of all 45 original tasks, all 3 original files and all 21 retained graph snapshots after redeployment. The recovery report DG36-recovered-readback-334ee29-20261014.json remains private. This closes DG-36's actual persistence/fresh-login requirement; it does not relabel the originally failed invocation as PASS.
+
+Exact recorded synthetic cleanup has also passed: 25 production QA tasks and their recorded fixture project were archived, and synthetic template/recurrence metadata (1 template, 1 paused rule, 1 instance and 5 membership entries) was removed through the canonical internal service. The retained Stage 21 tasks were archived. Ten Stage QA OAuth clients and four production QA clients (two graph/two smoke) were revoked and verified; no unrelated client/provider grant was changed. Native source-only canonical verification after cleanup passed 45 original tasks / 3 files, preserving original mappings/relationships/source values.
+
+Final cleanup/security proof at 07:07:26Z: 72 persisted tasks, 45 active originals and 27 archived synthetic fixtures; 104 source mappings; zero template/rule/instance/membership records. All 3 original download endpoints rejected unauthenticated requests with HTTP401 and no redirect. The private production-final-cleanup-security-proof-20261014.json records the observed state. Source content/Drive bytes/location and provider configuration remain unchanged.
+
+Executable paths: scripts/ops/redeploy-proof.mjs plus the production-gated browser/read-back verifier and scripts/ops/verify-production-state.ts. Cleanup uses exact journal identities, owner-bound canonical commands/revisions/idempotency/audit; credential/token/source IDs are omitted from this public-suitable evidence summary.
+
+### E22 — Operator-only repair and exact latest CI
+
+**PASS**, 2026-10-14 UTC. The narrow three-file hosted-pooler operator repair received 32 targeted PASS, global TypeScript/scoped lint/format PASS and independent clear review; no application-source change was made. It is included in current master SHA 334ee291d9fcea0024e120423860111eaa5120c5. [Exact latest CI38519881381](https://github.com/Raminyazdani/todo_list_compact/actions/runs/38519881381) is fully SUCCESS: 393 coverage cases PASS / 28 explicit opt-in SKIP; 52 files PASS / 9 opt-in files SKIP; 12 native PostgreSQL cases PASS; browser 24 PASS / 2 explicit production opt-in SKIP; SDK 130; HTTP 16, OIDC 1, rate 6 and real expiry 1 PASS. The independent actual production DG-36 recovery is E21, separate from those two CI skips. Earlier CI38516650590/38517791730 remain successful historical proofs for app SHA 463f3cad0310879d23a697f0e1c5d070113fa694; their 382/51 totals are not substituted for the latest 393/52.
+
+### E23 — Final persisted encrypted export after cleanup
+
+**PASS**, 2026-10-14T07:06:43Z. The actual final private encrypted export was persisted, independently decrypted and manifest-verified after synthetic cleanup. Private report production-final-after-cleanup-20261014.json records 72 tasks, 29 projects, 3 files, 3 versions, 3 file-task Links, 84 accepted operations, 150 Activity rows and 104 source mappings. Earlier hosted restore E20 is a distinct completed recovery drill; these are the later final-backup counts, not fabricated restore totals. Original three-file encrypted byte package remains verified at 6,698,095 bytes. Live Blob/cloud byte storage and automatic cloud backup remain blocked, and no private backup/key/credential/row is published to Git.
+
+## Remaining actual acceptance work
+
+- **Controllable execution checks completed:** source import/replay, independent nativeSQL/API parity, production21graph/owner UI, hosted restore, recovered exact distinct-deployment/fresh-login DG-36, final canonical synthetic-only task/metadata/client cleanup, source-only post-cleanup verification and final persisted AES export all have actual PASS. Final evidence/handoff publication remains the coordinator’s documentation step.
+- **EXTERNALLY_BLOCKED:** live private Blob availability (HTTP400/account suspension) and live configured AI (zero credits/config absent). Complete independent code/tests and truthful disabled states; owner authorization/account availability precedes runtime proof.
+- **Pending owner grants, NOT_RUN:** product Google read-only OAuth/private iCal configuration and actual ChatGPT custom MCP connection. The observed Pro account does not by itself grant this application access. Generic HTTPS SDK success is not ChatGPT success.
+- **Final handoff:** update this matrix and BUILD_PROGRESS only with the coordinator's new observed facts; record any final documentation-only SHA separately from the tested application SHA.
+
+## Migration and source safety
+
+The fresh complete checkpoint at 05:45:12.840487Z and accepted production import at 05:48:26.798Z have matching 45 Tasks, 3 Files, 3 Links, 53 Activity, 36 Settings and 18 Guide rows. Import-side reconciliation verifies canonical fields, source mappings, original date labels, file IDs/URLs/parents/versions, links/history/preferences/guide and legacy metadata; same-key replay preserves them. The independent final native SQL/HTTPS check has passed every original task/file field and all 21retained graph snapshots, including zero fabricated source dependency/parent/checklist relationships. After-redeploy45/3/21 and after-cleanup source-only45/3 checks have passed; exact recorded synthetic task/metadata/OAuth-client cleanup has completed. Original Drive content/location stays read-only. Private snapshots, source IDs/content, cookies/tokens/credentials, backups and real screenshots remain outside public Git.
 
 ## Final gate
 
-**Do not claim production ready if any P0/P1 blocker remains.** An external OAuth/billing restriction can be `EXTERNALLY_BLOCKED` only after completing independent code/tests and recording exact permission, UI step and test still missing. If the environment cannot run true parallel agents, report honest sequential implementation rather than fabricated teams.
-
-## Observed UI checkpoint
-
-The tables above preserve initial states; final release decisions belong to the orchestrator's observed checkpoint. Local production-bundle browser evidence proves graph/text equivalence, keyboard checklists/dependency editing, genuine OAuth MCP/browser parity, session persistence and exact-once recovery after a lost response. The build-8 full regression recorded 13 PASS / 4 FAIL / 1 production-redeploy SKIP; subsequent bounded reminder and native-drag tests passed, and build-9 scheduling passed with date-only preservation. Calendar contrast was repaired, but build-9 all-view evidence found an unfocusable Work log scroll region. The native focus fix and project-view/manual-order test await fresh execution. All-view screenshots, actual production redeployment, remaining master breadth and provider runtime gates must be checked before final acceptance. See the current [scope audit](PRODUCT_SPEC.md#remaining-scope-audit) and [visual evidence](UX_DESIGN_SYSTEM.md#visual-acceptance-evidence).
-
-Build-10 execution subsequently recorded 20 PASS / 3 FAIL / 2 gated SKIP in 6.6 minutes. Project-view/manual-order and hourly keyboard-focus fixes passed their actual flows. Calendar's remaining failure was a test datetime-format issue; Dashboard premature preference submission and Files mobile card overflow were concrete app defects. Their bounded repairs are source-frozen and require fresh affected verification. All-view completion, remaining settings/PWA/native-resize assertions, actual production proofs and provider-specific gates remain separate requirements.
-
-Build-11 affected execution recorded 2 PASS / 1 FAIL in 2.7 minutes. All 30 main-view desktop/mobile/tablet axe/overflow/capture checks passed (57 seconds) and all four Dashboard/Graph appearance checks passed (37.4 seconds); the resulting images were inspected. Dashboard range HTTP200, reload/read-back, keyboard height and native mouse widget resize persisted correctly. Retention read-back failed after a background settings refresh discarded an uncontrolled draft. Its controlled, revision-pinned repair is source-ready with type/lint checks passing; the Settings/PWA/report tail awaits build-12 execution. These observed local results neither mark production/provider gates complete nor close the separate AI scope review.
-
-Build-12 targeted verification passed 1/1 in 52.6 seconds: the complete Dashboard/Settings/PWA/Reports case proved exact retention/accessibility/density persistence, native keyboard operation, saved-preference Settings whole-page axe, range HTTP200/reload, both widget-resize paths, real manifest/icons/worker and no private cache entries. Earlier build-11 failures are retained as historical evidence; the repaired local Settings flow is now PASS. Actual OS installation, independent AI scope work and production/provider acceptance remain separate.
+Do not claim production-ready until the remaining required production proofs have observed outcomes and no known P0/P1 code defect remains. A provider block must retain its actual observed condition, completed independent checks and minimal owner step. Skipped opt-ins remain explicit. Historical failed runs are retained in private journals; current repaired exact-SHA evidence supersedes them only at the scopes it actually exercises.

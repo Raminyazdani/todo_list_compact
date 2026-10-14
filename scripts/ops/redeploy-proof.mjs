@@ -7,31 +7,27 @@ const REPOSITORY = fileURLToPath(new URL("../../", import.meta.url));
 const PROJECT = "ramin-life-os";
 const TEAM = "ramin-yazdanis-projects";
 const GITHUB_REPOSITORY = "Raminyazdani/todo_list_compact";
+let failureStage = "admission";
 
 function reject(code) {
   throw new Error(code);
 }
 
 /** Pure admission checks are exported for synthetic tests; no provider is invoked here. */
-export function validateReleaseContext({
-  env,
-  head,
-  dirty,
-  origin,
-  link,
-  remoteProject,
-  remoteTeam,
-}) {
+export function validateReleaseContext(
+  { env, head, dirty, origin, link, remoteProject, remoteTeam },
+  { readOnlyResume = false } = {},
+) {
   if (remoteProject === null || remoteTeam === null)
     reject("REDEPLOY_REMOTE_IDENTITY_UNAVAILABLE");
   if (env.E2E_REDEPLOY_ALLOWED !== "1")
     reject("REDEPLOY_EXPLICIT_PERMISSION_REQUIRED");
   if (
     !/^[a-f0-9]{40}$/.test(env.E2E_REDEPLOY_EXPECTED_SHA ?? "") ||
-    head !== env.E2E_REDEPLOY_EXPECTED_SHA
+    (!readOnlyResume && head !== env.E2E_REDEPLOY_EXPECTED_SHA)
   )
     reject("REDEPLOY_SHA_MISMATCH");
-  if (dirty.trim()) reject("REDEPLOY_DIRTY_CHECKOUT");
+  if (!readOnlyResume && dirty.trim()) reject("REDEPLOY_DIRTY_CHECKOUT");
   const remote = origin.trim().replace(/\.git$/, "");
   if (
     ![
@@ -75,12 +71,76 @@ export function validateDeploymentProof(deployment, env) {
     deployment.target !== "production" ||
     deployment.projectId !== env.E2E_REDEPLOY_EXPECTED_PROJECT_ID ||
     deployment.ownerId !== env.E2E_REDEPLOY_EXPECTED_TEAM_ID ||
-    deployment.name !== PROJECT
+    deployment.name !== PROJECT ||
+    deployment.error ||
+    deployment.aliasError ||
+    deployment.checksConclusion === "failed" ||
+    deployment.checks?.["deployment-alias"]?.state === "failed"
   )
     reject("REDEPLOY_READY_PRODUCTION_NOT_VERIFIED");
 }
 
-function run(executable, args, cwd, env, timeoutMs = 60_000) {
+/** CLI output identifies the accepted operation; a fresh GET supplies terminal proof. */
+export function acceptedDeploymentId(output) {
+  let payload;
+  try {
+    payload = JSON.parse(output);
+  } catch {
+    reject("REDEPLOY_CLI_OUTPUT_INVALID");
+  }
+  const deployment = payload?.deployment ?? payload;
+  if (!/^dpl_[A-Za-z0-9]+$/.test(deployment?.id ?? ""))
+    reject("REDEPLOY_ACCEPTED_ID_UNAVAILABLE");
+  return deployment.id;
+}
+
+export function validateRedeploymentProof(
+  deployment,
+  initial,
+  env,
+  expectedId,
+) {
+  validateDeploymentProof(deployment, env);
+  if (
+    deployment.id !== expectedId ||
+    deployment.id === initial.id ||
+    !Number.isSafeInteger(deployment.createdAt) ||
+    !Number.isSafeInteger(initial.createdAt) ||
+    deployment.createdAt <= initial.createdAt ||
+    deployment.meta?.githubCommitSha !== env.E2E_REDEPLOY_EXPECTED_SHA
+  )
+    reject("REDEPLOY_NEW_COMMIT_PROOF_MISMATCH");
+}
+
+export async function readAcceptedDeployment(
+  cli,
+  acceptedId,
+  initial,
+  env,
+  link,
+) {
+  if (!/^dpl_[A-Za-z0-9]+$/.test(acceptedId))
+    reject("REDEPLOY_RESUME_ID_INVALID");
+  const observed = JSON.parse(
+    await cli([
+      "api",
+      `/v13/deployments/${acceptedId}?teamId=${link.orgId}`,
+      "--raw",
+    ]),
+  );
+  validateRedeploymentProof(observed, initial, env, acceptedId);
+  return observed;
+}
+
+export function run(
+  executable,
+  args,
+  cwd,
+  env,
+  timeoutMs = 60_000,
+  acceptedOperation = false,
+  observer = {},
+) {
   return new Promise((resolveResult, rejectResult) => {
     const child = spawn(executable, args, {
       cwd,
@@ -95,17 +155,20 @@ function run(executable, args, cwd, env, timeoutMs = 60_000) {
     const fail = (code) => {
       if (stopped) return;
       stopped = true;
+      clearTimeout(timer);
       child.kill();
       rejectResult(new Error(code));
     };
     const timer = setTimeout(() => fail("REDEPLOY_COMMAND_TIMEOUT"), timeoutMs);
     child.stdout.on("data", (chunk) => {
+      if (stopped) return;
       totalBytes += chunk.length;
       if (totalBytes > 2 * 1024 * 1024) fail("REDEPLOY_OUTPUT_LIMIT");
       else stdout += chunk.toString();
     });
     // Provider stderr can contain paths, credentials or private build details. Never relay it.
     child.stderr.on("data", (chunk) => {
+      if (stopped) return;
       totalBytes += chunk.length;
       if (totalBytes > 2 * 1024 * 1024) fail("REDEPLOY_OUTPUT_LIMIT");
     });
@@ -116,9 +179,17 @@ function run(executable, args, cwd, env, timeoutMs = 60_000) {
     child.once("close", (code) => {
       clearTimeout(timer);
       if (stopped) return;
+      stopped = true;
+      if (acceptedOperation)
+        return resolveResult({ stdout: stdout.trim(), exitCode: code });
       if (code !== 0) return rejectResult(new Error("REDEPLOY_COMMAND_FAILED"));
       resolveResult(stdout.trim());
     });
+    try {
+      observer.onSpawn?.(child);
+    } catch {
+      fail("REDEPLOY_OBSERVER_FAILED");
+    }
   });
 }
 
@@ -154,9 +225,13 @@ async function resolveVercelEntry(env) {
 }
 
 export async function main(env = process.env) {
+  failureStage = "admission";
   if (env.E2E_REDEPLOY_ALLOWED !== "1")
     reject("REDEPLOY_EXPLICIT_PERMISSION_REQUIRED");
   if (process.argv.slice(2).length) reject("REDEPLOY_ARGUMENTS_NOT_ALLOWED");
+  const resumeId = env.E2E_REDEPLOY_RESUME_DEPLOYMENT_ID;
+  if (resumeId && !/^dpl_[A-Za-z0-9]+$/.test(resumeId))
+    reject("REDEPLOY_RESUME_ID_INVALID");
   const head = await run("git", ["rev-parse", "HEAD"], REPOSITORY, env);
   const dirty = await run(
     "git",
@@ -174,15 +249,17 @@ export async function main(env = process.env) {
     await readFile(join(REPOSITORY, ".vercel", "project.json"), "utf8"),
   );
   const context = { env, head, dirty, origin, link };
-  validateReleaseContext(context);
+  const mode = { readOnlyResume: !!resumeId };
+  validateReleaseContext(context, mode);
   const cliEntry = await resolveVercelEntry(env);
-  const cli = (args, timeout) =>
+  const cli = (args, timeout, acceptedOperation) =>
     run(
       process.execPath,
       [cliEntry, ...args, "--non-interactive", "--scope", TEAM],
       REPOSITORY,
       env,
       timeout,
+      acceptedOperation,
     );
   // First-class inspect proves the installed CLI can resolve this exact existing project.
   await cli(["project", "inspect", link.projectId]);
@@ -197,7 +274,7 @@ export async function main(env = process.env) {
   const remoteTeam = JSON.parse(
     await cli(["api", `/v2/teams/${link.orgId}`, "--raw"]),
   );
-  validateReleaseContext({ ...context, remoteProject, remoteTeam });
+  validateReleaseContext({ ...context, remoteProject, remoteTeam }, mode);
   const initial = JSON.parse(
     await cli([
       "api",
@@ -206,6 +283,19 @@ export async function main(env = process.env) {
     ]),
   );
   validateDeploymentProof(initial, env);
+  if (resumeId) {
+    failureStage = "accepted_deployment_readback";
+    await readAcceptedDeployment(cli, resumeId, initial, env, link);
+    console.log(
+      JSON.stringify({
+        status: "READY",
+        target: "production",
+        commit: env.E2E_REDEPLOY_EXPECTED_SHA,
+        resumed: true,
+      }),
+    );
+    return;
+  }
   // Close the guard-to-upload window for ordinary local edits.
   validateReleaseContext({
     ...context,
@@ -219,7 +309,8 @@ export async function main(env = process.env) {
     remoteProject,
     remoteTeam,
   });
-  const output = await cli(
+  failureStage = "deploy_command";
+  const outcome = await cli(
     [
       "deploy",
       "--prod",
@@ -230,23 +321,11 @@ export async function main(env = process.env) {
       "json",
     ],
     20 * 60_000,
+    true,
   );
-  const payload = JSON.parse(output);
-  const deployed = payload.deployment ?? payload;
-  if (
-    !/^dpl_[A-Za-z0-9]+$/.test(deployed.id ?? "") ||
-    deployed.readyState !== "READY" ||
-    deployed.target !== "production"
-  )
-    reject("REDEPLOY_READY_PRODUCTION_NOT_VERIFIED");
-  const observed = JSON.parse(
-    await cli([
-      "api",
-      `/v13/deployments/${deployed.id}?teamId=${link.orgId}`,
-      "--raw",
-    ]),
-  );
-  validateDeploymentProof(observed, env);
+  const acceptedId = acceptedDeploymentId(outcome.stdout);
+  failureStage = "accepted_deployment_readback";
+  await readAcceptedDeployment(cli, acceptedId, initial, env, link);
   console.log(
     JSON.stringify({ status: "READY", target: "production", commit: head }),
   );
@@ -262,6 +341,8 @@ if (
       error instanceof Error && /^REDEPLOY_[A-Z_]+$/.test(error.message)
         ? error.message
         : "REDEPLOY_PROOF_FAILED";
-    console.error(`${code}; inspect the existing deployment before any retry`);
+    console.error(
+      `${code}; stage=${failureStage}; inspect the existing deployment before any retry`,
+    );
     process.exitCode = 1;
   });

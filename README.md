@@ -1,6 +1,6 @@
 # Ramin Life OS
 
-سامانهٔ شخصی فارسی/انگلیسی برای کارها، پروژه‌ها، وابستگی‌ها، چک‌لیست‌ها، تقویم، ساعت کار و فایل‌ها. وضعیت انتشار و نتیجهٔ واقعی آزمون‌ها در [گزارش کیفیت](docs/QUALITY_REPORT.md)، [چک‌لیست پذیرش](docs/ACCEPTANCE_CHECKLIST.md) و [پیشرفت ساخت](docs/BUILD_PROGRESS.json) ثبت می‌شود. وجود کد به معنی تأیید انتشار نیست.
+سامانهٔ شخصی فارسی/انگلیسی برای کارها، پروژه‌ها، وابستگی‌ها، چک‌لیست‌ها، تقویم، ساعت کار و فایل‌ها. [گزارش نهایی فارسی](docs/FINAL_REPORT_FA.md) نتیجهٔ اجرا و محدودیت‌های باقی‌مانده را توضیح می‌دهد. وضعیت انتشار و نتیجهٔ واقعی آزمون‌ها در [گزارش کیفیت](docs/QUALITY_REPORT.md)، [چک‌لیست پذیرش](docs/ACCEPTANCE_CHECKLIST.md) و [پیشرفت ساخت](docs/BUILD_PROGRESS.json) ثبت می‌شود. وجود کد به معنی تأیید انتشار نیست.
 
 The application uses Next.js, PostgreSQL, Better Auth and the official MCP TypeScript SDK. Browser, REST, MCP and approved AI actions call one transactional domain service. Task workflow status and derived readiness are separate. Hard dependencies form a directed acyclic graph with ALL/ANY groups; only Done satisfies a prerequisite.
 
