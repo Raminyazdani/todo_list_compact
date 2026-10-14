@@ -180,7 +180,7 @@ describe.skipIf(!httpEnabled)(
       expect(response.status).toBeLessThan(500);
       expect(response.ok).toBe(false);
     });
-    it("AI lacks a real provider and cannot return a fabricated successful plan", async () => {
+    it("deferred in-app AI rejects an authenticated request without a successful plan", async () => {
       const response = await fetch(origin + "/api/v1/ai/plan", {
         method: "POST",
         headers: {
@@ -193,7 +193,7 @@ describe.skipIf(!httpEnabled)(
       expect(response.status).toBe(503);
       const data = await response.json();
       expect(data.data).toBeUndefined();
-      expect(data.error?.code).toBe("UNSUPPORTED_OPERATION");
+      expect(data.error?.code).toBe("FEATURE_DISABLED");
     });
     it("POST queries authenticate before parsing and enforce browser Origin while preserving read-only bearer scope", async () => {
       const endpoint = origin + "/api/v1/query";
