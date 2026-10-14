@@ -256,5 +256,27 @@
     "review": "CLEAR",
     "pool_timeout_lock_limits": "UNCHANGED",
     "full_exactSHA_CI": "PENDING"
+  },
+  "observed_CI_fb2c7ef": {
+    "run": 38510579036,
+    "conclusion": "FAIL",
+    "unit_coverage_passed": 373,
+    "optin_skipped": 28,
+    "native_postgres_passed": 12,
+    "complete_browser_passed": 24,
+    "complete_browser_optin_skipped": 2,
+    "actual_local_MCP_tools": 130,
+    "HTTP_security_passed": 13,
+    "notification_setup": "FAIL: real DCR rate exhausted by test requests",
+    "notification_cases_executed": 0,
+    "OIDC_rate_expiry": "NOT_RUN"
+  },
+  "scoped_OAuth_operator_correction": {
+    "focused_cases": 9,
+    "status": "PASS",
+    "type_lint_format": "PASS",
+    "review": "CLEAR",
+    "live_final_CI": "PENDING",
+    "server_rate_scopes": "UNCHANGED"
   }
 }

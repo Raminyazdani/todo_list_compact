@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T04:15:16.1401006Z",
+  "updated_at": "2026-10-14T05:00:57.0591071Z",
   "branch": "feat/life-os",
-  "commit": "a4a372f4f7464292ee12552120e4396cf8dee0b2",
-  "phase": "frozen_build17_complete_commit_exactSHA_CI_and_stage_graph",
+  "commit": "fb2c7ef9c783385f2836044fb3e544d9ac707aa1",
+  "phase": "frozen_app17_bounded_DCR_singleflight_and_retained_proof_resume",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -159,23 +159,34 @@
     "runtime_concurrent_read_max_ms": 5027
   },
   "latest_observed_CI": {
-    "run": 38505529716,
-    "head_sha": "a4a372f4f7464292ee12552120e4396cf8dee0b2",
+    "run": 38510579036,
+    "head_sha": "fb2c7ef9c783385f2836044fb3e544d9ac707aa1",
     "conclusion": "FAIL",
-    "browser_passed": 23,
-    "browser_failed": 1,
+    "coverage_passed": 373,
+    "coverage_optin_skipped": 28,
+    "native_postgres_passed": 12,
+    "browser_passed": 24,
     "browser_skipped": 2,
-    "failed_case": "dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_and_truthful",
-    "cause": "Probe read dashboard_widgets before accepted save ACK; UI layout controls also allowed edits while canonical preferences refetched. Targeted repair in progress.",
-    "security_and_runtime_smoke_after_browser": "NOT_RUN"
+    "browser_minutes": 2.4,
+    "actual_local_SDK_tools": 130,
+    "HTTP_security_passed": 13,
+    "failed_suite": "http-notification-scopes",
+    "cause": "DCR5/60 exhausted by preceding positive/negative test registrations, before4 target-scope grants",
+    "OIDC_rate_expiry_after_suite": "NOT_RUN"
   },
   "advanced_stage_rehearsal": {
     "status": "FAIL",
-    "completed_steps": 5,
-    "created_tasks": 7,
-    "failed_check": "ANY_ALTERNATIVE_DONE_MUST_QUALIFY",
-    "actual_native_and_canonical": "ANY dependent ready_now=true, reopened prerequisite Next, other prerequisite Done; author assertion expected Inbox incorrectly",
-    "cleanup": "PASS: exact7 tasks and1 project archived,2 recorded OAuth clients revoked,0 pending cleanup intents; original source mappings0"
+    "completed_core_steps": 9,
+    "created_tasks": 21,
+    "accepted_records": 48,
+    "unique_native_receipts_verified": 42,
+    "failure": "concurrent_expired_token_renewals_exhaust_DCR5_per60",
+    "recorded_clients": 8,
+    "orphan_clients_at_primary_failure": 0,
+    "remaining_scope_and_UI": "NOT_PASS",
+    "resume": "exactsamejournal; no positive mutation/job replay",
+    "last_resume": "TimeoutError after3 retained reads;101.49s",
+    "current_native_wait_probe": "SELECT1 PASS3.7s; no observed otherTX/ownerlock"
   },
   "build17_targeted_verification": {
     "build": "PASS",
@@ -188,5 +199,13 @@
     "private_failure_diagnostics": "No row values/owner/SQL/URL/error message or stack logged",
     "full_final_CI": "PENDING",
     "stage_21_task_graph": "RUNNING"
+  },
+  "OAuth_test_operator_fix": {
+    "status": "focused_tests_and_independent_review_PASS",
+    "focused_cases": 9,
+    "server_scope_and_rate_policy": "UNCHANGED",
+    "DCR_retry": "only explicit429 withvalidheader;2retries/65s",
+    "renewal": "singleflight perrole onlyexpired401; stickyuncertainfailure",
+    "full_final_CI": "PENDING"
   }
 }

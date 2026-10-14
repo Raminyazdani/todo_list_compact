@@ -4,6 +4,7 @@ import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { admitPrivatePath } from "../../scripts/ops/private-paths.mjs";
 import { fileURLToPath } from "node:url";
 import { boundedSignIn } from "../../scripts/ops/bounded-signin.mjs";
+import { boundedRegistration } from "./bounded-registration";
 export const httpEnabled = !!process.env.TEST_CREDENTIALS_PATH;
 export const origin = process.env.HTTP_TEST_ORIGIN || "http://localhost:3000";
 function check(value: unknown, message: string): asserts value {
@@ -60,20 +61,15 @@ export async function scopedToken(
   );
   const requestedScope = [...new Set(scopes)].join(" ");
   const callback = "http://127.0.0.1:39875/callback";
-  const registration = await fetch(origin + "/api/auth/oauth2/register", {
-    method: "POST",
-    redirect: "manual",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_name: "Synthetic independent security QA",
-      application_type: "native",
-      redirect_uris: [callback],
-      token_endpoint_auth_method: "none",
-      grant_types: ["authorization_code"],
-      response_types: ["code"],
-      scope: requestedScope,
-      resources: [origin + "/api/mcp"],
-    }),
+  const registration = await boundedRegistration(origin, {
+    client_name: "Synthetic independent security QA",
+    application_type: "native",
+    redirect_uris: [callback],
+    token_endpoint_auth_method: "none",
+    grant_types: ["authorization_code"],
+    response_types: ["code"],
+    scope: requestedScope,
+    resources: [origin + "/api/mcp"],
   });
   const info = await registration.json();
   check(

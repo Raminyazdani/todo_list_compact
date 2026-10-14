@@ -14,6 +14,7 @@ import {
 } from "../../scripts/ops/private-paths.mjs";
 import { ownerCookie, origin, scopedToken } from "./http-fixture";
 import { TOOL_CATALOG } from "../../server/mcp/catalog";
+import { singleFlightRenewal } from "./single-flight-renewal";
 import type {
   ChecklistDTO,
   ActivityDTO,
@@ -29,6 +30,7 @@ import type {
 const production = process.env.RUN_PRODUCTION_GRAPH_DEMO === "1";
 const rehearsal = process.env.RUN_PRODUCTION_GRAPH_REHEARSAL === "1";
 const enabled = production || rehearsal;
+const resume = process.env.RUN_PRODUCTION_GRAPH_RESUME === "1";
 const proofMode = production ? "production" : "staging_rehearsal";
 const target = production
   ? "https://ramin-life-os.vercel.app"
@@ -55,6 +57,8 @@ type Report = {
   completed_at?: string;
   failed_step?: string;
   failed_check?: string;
+  failed_kind?: string;
+  resume_tasks_verified?: number;
   cleanup: "retain_until_coordinator_restore_and_redeploy_proof";
   operations: RecordedOperation[];
   oauth_clients: { client_id: string; scopes: string[] }[];
@@ -63,6 +67,11 @@ type Report = {
   steps: string[];
   snapshots: Record<string, TaskDTO>;
   verified_audit_receipts?: number;
+  resume_attempts?: {
+    started_at: string;
+    failed_step?: string;
+    failed_check?: string;
+  }[];
 };
 
 function check(value: unknown, code: string): asserts value {
@@ -206,26 +215,56 @@ it.skipIf(!enabled)(
         repositoryRoot,
         mustExist: true,
       });
-      const report: Report = {
-        format: "ramin-life-os-production-graph-proof/1",
-        status: "pending",
-        proof_mode: proofMode,
-        origin,
-        run_id: randomUUID(),
-        started_at: new Date().toISOString(),
-        cleanup: "retain_until_coordinator_restore_and_redeploy_proof",
-        operations: [],
-        oauth_clients: [],
-        created: {},
-        roles: {},
-        steps: [],
-        snapshots: {},
-      };
-      const reportPath = await writeExclusivePrivateJson(
-        process.env.PRODUCTION_GRAPH_REPORT_PATH,
-        report,
-        { repositoryRoot },
-      );
+      const report: Report = resume
+        ? await withPrivateFile(
+            process.env.PRODUCTION_GRAPH_REPORT_PATH,
+            async (file) => JSON.parse(await file.readFile("utf8")),
+            { repositoryRoot },
+          )
+        : {
+            format: "ramin-life-os-production-graph-proof/1",
+            status: "pending",
+            proof_mode: proofMode,
+            origin,
+            run_id: randomUUID(),
+            started_at: new Date().toISOString(),
+            cleanup: "retain_until_coordinator_restore_and_redeploy_proof",
+            operations: [],
+            oauth_clients: [],
+            created: {},
+            roles: {},
+            steps: [],
+            snapshots: {},
+          };
+      if (resume) {
+        check(
+          report.format === "ramin-life-os-production-graph-proof/1" &&
+            report.status === "failed" &&
+            [
+              "OAUTH_SCOPED_CONNECTION",
+              "RETAINED_SCOPE_PHASE_RESUME_READBACK",
+            ].includes(report.failed_step ?? "") &&
+            report.proof_mode === proofMode &&
+            report.origin === target &&
+            report.created.tasks.length === 21 &&
+            new Set(report.created.tasks).size === 21 &&
+            report.operations.every((op) => op.status !== "pending") &&
+            report.steps.length === 9 &&
+            report.steps.at(-1) ===
+              "configured_finite_recurrence_runs_once_with_isolated_nested_instance",
+          "EXACT_RETAINED_SCOPE_PHASE_RESUME_REQUIRED",
+        );
+      }
+      const reportPath = resume
+        ? await admitPrivatePath(process.env.PRODUCTION_GRAPH_REPORT_PATH, {
+            repositoryRoot,
+            mustExist: true,
+          })
+        : await writeExclusivePrivateJson(
+            process.env.PRODUCTION_GRAPH_REPORT_PATH,
+            report,
+            { repositoryRoot },
+          );
       await withPrivateFile(
         reportPath,
         async (file) => {
@@ -233,6 +272,8 @@ it.skipIf(!enabled)(
             cookie = "";
           let writer: { token: Token; client: Client } | undefined;
           let reader: { token: Token; client: Client } | undefined;
+          const resumedTasks = new Map<string, TaskDTO>();
+          type Connection = NonNullable<typeof writer>;
           const persist = () =>
             replacePinnedContents(file, JSON.stringify(report, null, 2) + "\n");
           const remember = (kind: string, ids: string[]) => {
@@ -275,6 +316,22 @@ it.skipIf(!enabled)(
             );
             return { token, client };
           }
+          const renewWriter = singleFlightRenewal<Connection>(
+            () => writer,
+            (value) => Date.now() < value.token.expiresAt,
+            async (previous) => {
+              await previous.client.close().catch(() => undefined);
+              return (writer = await connection(scopes));
+            },
+          );
+          const renewReader = singleFlightRenewal<Connection>(
+            () => reader,
+            (value) => Date.now() < value.token.expiresAt,
+            async (previous) => {
+              await previous.client.close().catch(() => undefined);
+              return (reader = await connection(["tasks:read", "files:read"]));
+            },
+          );
           async function tool(
             name: QueryName | CommandName,
             args: Input,
@@ -309,12 +366,7 @@ it.skipIf(!enabled)(
                 throw new Error(
                   "MCP_TRANSPORT_FAILED_INSPECT_PRIVATE_PENDING_OPERATION",
                 );
-              await conn.client.close().catch(() => undefined);
-              conn = await connection(
-                readonly ? ["tasks:read", "files:read"] : scopes,
-              );
-              if (readonly) reader = conn;
-              else writer = conn;
+              conn = await (readonly ? renewReader(conn) : renewWriter(conn));
               return conn.client.callTool(
                 { name, arguments: args },
                 undefined,
@@ -351,12 +403,9 @@ it.skipIf(!enabled)(
               conn &&
               Date.now() >= conn.token.expiresAt
             ) {
-              await conn.client.close().catch(() => undefined);
-              const renewed = await connection(
-                mode === "reader" ? ["tasks:read", "files:read"] : scopes,
-              );
-              if (mode === "reader") reader = renewed;
-              else writer = renewed;
+              const renewed = await (mode === "reader"
+                ? renewReader(conn)
+                : renewWriter(conn));
               headers.set(
                 "Authorization",
                 "Bearer " + renewed.token.accessToken,
@@ -615,508 +664,590 @@ it.skipIf(!enabled)(
             return data;
           }
           try {
+            if (resume) {
+              report.resume_attempts = [
+                ...(report.resume_attempts ?? []),
+                {
+                  started_at: new Date().toISOString(),
+                  failed_step: report.failed_step,
+                  failed_check: report.failed_check,
+                },
+              ];
+              report.status = "pending";
+            }
             await persist();
             cookie = await ownerCookie(
               production ? { productionGraphDemo: true } : {},
             );
             writer = await connection(scopes);
-            // Only automation state is read here, never legacy tasks/files. The owner job is
-            // global, so it is refused if any unrelated configured work could be delivered.
-            step = "GLOBAL_JOB_SAFETY_PREFLIGHT";
-            const rules = await allPages<{ enabled: boolean }>(
-              "task_recurrence_list",
-            );
-            const reminders = await allPages<{ state: string }>(
-              "reminder_list",
-            );
-            const eventReminders = await allPages<{ state: string }>(
-              "calendar_reminder_list",
-              {},
-              "cookie",
-            );
-            check(
-              !rules.some((r) => r.enabled) &&
-                !reminders.some((r) => r.state === "Pending") &&
-                !eventReminders.some((r) => r.state === "Pending"),
-              "NONFIXTURE_AUTOMATION_BLOCKS_GLOBAL_JOB",
-            );
-            await passed("unrelated_automation_absent_before_fixture_creation");
+            async function createFixture() {
+              // Only automation state is read here, never legacy tasks/files. The owner job is
+              // global, so it is refused if any unrelated configured work could be delivered.
+              step = "GLOBAL_JOB_SAFETY_PREFLIGHT";
+              const rules = await allPages<{ enabled: boolean }>(
+                "task_recurrence_list",
+              );
+              const reminders = await allPages<{ state: string }>(
+                "reminder_list",
+              );
+              const eventReminders = await allPages<{ state: string }>(
+                "calendar_reminder_list",
+                {},
+                "cookie",
+              );
+              check(
+                !rules.some((r) => r.enabled) &&
+                  !reminders.some((r) => r.state === "Pending") &&
+                  !eventReminders.some((r) => r.state === "Pending"),
+                "NONFIXTURE_AUTOMATION_BLOCKS_GLOBAL_JOB",
+              );
+              await passed(
+                "unrelated_automation_absent_before_fixture_creation",
+              );
 
-            const prefix =
-              "SYNTHETIC GRAPH PROOF " + report.run_id.slice(0, 8) + " ";
-            const project = await write("project_create", {
-              title: prefix + "project",
-              notes:
-                "Coordinator synthetic fixture; retain for hosted restore proof.",
-            });
-            report.roles.project = project.entity_id;
-            async function create(role: string, parent?: string) {
-              const result = await write(
-                parent ? "subtask_create" : "task_create",
+              const prefix =
+                "SYNTHETIC GRAPH PROOF " + report.run_id.slice(0, 8) + " ";
+              const project = await write("project_create", {
+                title: prefix + "project",
+                notes:
+                  "Coordinator synthetic fixture; retain for hosted restore proof.",
+              });
+              report.roles.project = project.entity_id;
+              async function create(role: string, parent?: string) {
+                const result = await write(
+                  parent ? "subtask_create" : "task_create",
+                  {
+                    title: prefix + role,
+                    project_id: project.entity_id,
+                    source_reference:
+                      "synthetic-production-graph-proof:" + report.run_id,
+                    ...(parent ? { parent_task_id: parent } : {}),
+                  },
+                );
+                report.roles[role] = result.entity_id;
+                const read = await task(result.entity_id);
+                check(
+                  read.title === prefix + role &&
+                    read.status === "Inbox" &&
+                    read.due_date === null &&
+                    read.due_at === null &&
+                    read.archived_at === null,
+                  "SYNTHETIC_TASK_READBACK_FAILED",
+                );
+                await persist();
+                return result.entity_id;
+              }
+              const A = await create("A ALL root"),
+                B = await create("B chain"),
+                C = await create("C checklist template root"),
+                D = await create("D leaf");
+              const X = await create("X ANY root"),
+                E = await create("E ANY option"),
+                F = await create("F ANY option");
+              await dependencies(A, [B, C], "ALL");
+              await dependencies(B, [D], "ALL");
+              await dependencies(X, [E, F], "ANY");
+              check(
+                (await task(A)).readiness === "blocked" &&
+                  (await task(B)).readiness === "blocked" &&
+                  (await task(C)).ready_now &&
+                  (await task(D)).ready_now,
+                "INITIAL_ALL_CHAIN_READINESS_WRONG",
+              );
+              check(
+                (await task(X)).readiness === "blocked",
+                "INITIAL_ANY_READINESS_WRONG",
+              );
+              await passed(
+                "MCP_graph_commit_REST_read_and_exact_idempotent_edge_replay",
+              );
+
+              step = "ATOMIC_CYCLE_DENIAL";
+              const beforeCycle = graphState(
+                await Promise.all([A, B, C, D].map(task)),
+              );
+              const rejected = await tool("task_dependency_add_preview", {
+                task_id: D,
+                prerequisites: [{ task_id: A }],
+                operator: "ALL",
+              });
+              check(
+                rejected.isError === true &&
+                  envelope(rejected).error?.code === "DEPENDENCY_CYCLE",
+                "TYPED_CYCLE_DENIAL_REQUIRED",
+              );
+              check(
+                JSON.stringify(
+                  graphState(await Promise.all([A, B, C, D].map(task))),
+                ) === JSON.stringify(beforeCycle),
+                "CYCLE_DENIAL_CHANGED_GRAPH_OR_REVISION",
+              );
+              await passed(
+                "typed_cycle_denial_preserves_known_graph_atomically",
+              );
+
+              await transition(D, "task_complete");
+              check(
+                (await task(B)).ready_now &&
+                  (await task(A)).readiness === "blocked",
+                "CHAIN_D_COMPLETION_WRONG",
+              );
+              await transition(B, "task_complete");
+              check(
+                (await task(A)).readiness === "blocked" &&
+                  (await task(A)).blocked_by.some((b) => b.task_id === C),
+                "ALL_REQUIRES_EACH_DONE_PREREQUISITE",
+              );
+
+              const first = await write("task_checklist_create", {
+                task_id: C,
+                title: prefix + "Preparation",
+              });
+              const second = await write("task_checklist_create", {
+                task_id: C,
+                title: prefix + "Submission",
+              });
+              const lists = () =>
+                query<ChecklistDTO[]>("task_checklist_get", { task_id: C });
+              async function addItem(checklist: string, title: string) {
+                const list = (await lists()).find(
+                  (c) => c.checklist_id === checklist,
+                );
+                check(list, "CHECKLIST_READBACK_REQUIRED");
+                return (
+                  await write(
+                    "task_checklist_item_add",
+                    { checklist_id: checklist, title: prefix + title },
+                    list.revision,
+                  )
+                ).entity_id;
+              }
+              const I1 = await addItem(first.entity_id, "prepare document"),
+                I2 = await addItem(first.entity_id, "verify document"),
+                I3 = await addItem(second.entity_id, "independent follow-up");
+              async function toggle(
+                item: string,
+                command:
+                  "task_checklist_item_check" | "task_checklist_item_uncheck",
+              ) {
+                const existing = (await lists())
+                  .flatMap((c) => c.items)
+                  .find((i) => i.item_id === item);
+                check(existing, "CHECKLIST_ITEM_READBACK_REQUIRED");
+                await write(command, { item_id: item }, existing.revision);
+              }
+              await toggle(I1, "task_checklist_item_check");
+              await toggle(I2, "task_checklist_item_check");
+              await toggle(I3, "task_checklist_item_check");
+              await toggle(I1, "task_checklist_item_uncheck");
+              check(
+                (await lists())
+                  .find((c) => c.checklist_id === first.entity_id)
+                  ?.items.find((i) => i.item_id === I1)?.checked === false,
+                "UNCHECK_READBACK_FAILED",
+              );
+              await toggle(I1, "task_checklist_item_check");
+              const completedLists = await lists();
+              check(
+                completedLists.length === 2 &&
+                  completedLists.every((c) =>
+                    c.items.every((i) => i.checked),
+                  ) &&
+                  (await task(C)).status === "Inbox" &&
+                  (await task(A)).readiness === "blocked",
+                "CHECKLISTS_MUST_NOT_COMPLETE_TASK_OR_GATE",
+              );
+              await passed(
+                "two_named_checklists_check_uncheck_readback_independent_of_workflow",
+              );
+              await transition(C, "task_complete");
+              check((await task(A)).ready_now, "ALL_DONE_READINESS_WRONG");
+              const readyA = await task(A);
+              await write(
+                "task_update",
+                { task_id: A, status: "In progress" },
+                readyA.revision,
+              );
+              await transition(B, "task_reopen");
+              const atRisk = await task(A);
+              check(
+                atRisk.status === "In progress" &&
+                  atRisk.readiness === "blocked" &&
+                  atRisk.started_at_risk,
+                "REOPEN_MUST_RECOMPUTE_WITHOUT_REWINDING_STATUS",
+              );
+              await transition(D, "task_reopen");
+              check(
+                (await task(B)).readiness === "blocked" &&
+                  (await task(C)).status === "Done" &&
+                  (await lists()).every((c) => c.items.every((i) => i.checked)),
+                "REOPEN_PROPAGATION_CORRUPTED_INDEPENDENT_STATE",
+              );
+              await transition(D, "task_complete");
+              check(
+                (await task(B)).ready_now &&
+                  (await task(A)).readiness === "blocked",
+                "RECOMPLETION_MUST_NOT_AUTO_COMPLETE_DOWNSTREAM",
+              );
+              await passed(
+                "ALL_completion_and_transitive_reopen_preserve_downstream_workflow",
+              );
+              await transition(E, "task_complete");
+              check(
+                (await task(X)).ready_now && (await task(F)).status === "Inbox",
+                "ANY_ONE_DONE_MUST_QUALIFY",
+              );
+              await transition(E, "task_reopen");
+              check(
+                (await task(X)).readiness === "blocked",
+                "ANY_REOPEN_LAST_QUALIFIER_MUST_BLOCK",
+              );
+              await transition(F, "task_complete");
+              check(
+                (await task(X)).ready_now &&
+                  (await task(E)).status === "Next" &&
+                  (await task(F)).status === "Done",
+                "ANY_ALTERNATIVE_DONE_MUST_QUALIFY",
+              );
+              await passed("ANY_alternative_and_reopen_readiness");
+
+              const promotionItem = (await lists())
+                .flatMap((c) => c.items)
+                .find((i) => i.item_id === I3)!;
+              const promotionKey = randomUUID(),
+                promotionInput = { item_id: I3, original: "keep_reference" };
+              const promoted = await write(
+                "task_checklist_item_promote",
+                promotionInput,
+                promotionItem.revision,
+                promotionKey,
+              );
+              const promotedReplay = await write(
+                "task_checklist_item_promote",
+                promotionInput,
+                promotionItem.revision,
+                promotionKey,
+              );
+              check(
+                promotedReplay.replayed === true &&
+                  promotedReplay.entity_id === promoted.entity_id,
+                "PROMOTION_RETRY_IDENTITY_CHANGED",
+              );
+              const afterPromotion = (await lists())
+                .flatMap((c) => c.items)
+                .find((i) => i.item_id === I3)!;
+              const repeatIntent = await write(
+                "task_checklist_item_promote",
+                promotionInput,
+                afterPromotion.revision,
+              );
+              const promotedTask = await task(promoted.entity_id);
+              check(
+                repeatIntent.entity_id === promoted.entity_id &&
+                  afterPromotion.promoted_task_id === promoted.entity_id &&
+                  promotedTask.parent_task_id === C &&
+                  promotedTask.status === "Inbox" &&
+                  promotedTask.source_reference === "checklist:" + I3 &&
+                  (await task(C)).status === "Done",
+                "PROMOTION_MUST_CREATE_EXACTLY_ONE_INDEPENDENT_CHILD",
+              );
+              report.roles.promoted = promoted.entity_id;
+              await passed(
+                "item_promotion_preserves_reference_and_identity_once",
+              );
+
+              const P = await create("P nested parent", C),
+                Q = await create("Q nested sibling", C),
+                G = await create("G nested grandchild", P);
+              await dependencies(Q, [G], "ALL");
+              const template = await write("task_template_create", {
+                title: prefix + "nested template",
+                root_task_id: C,
+              });
+              const templatePlan = await preview(
+                "task_template_instantiate_preview",
                 {
-                  title: prefix + role,
+                  template_id: template.entity_id,
                   project_id: project.entity_id,
-                  source_reference:
-                    "synthetic-production-graph-proof:" + report.run_id,
-                  ...(parent ? { parent_task_id: parent } : {}),
+                  preserve_external_links: false,
                 },
               );
-              report.roles[role] = result.entity_id;
-              const read = await task(result.entity_id);
-              check(
-                read.title === prefix + role &&
-                  read.status === "Inbox" &&
-                  read.due_date === null &&
-                  read.due_at === null &&
-                  read.archived_at === null,
-                "SYNTHETIC_TASK_READBACK_FAILED",
+              const instanceKey = randomUUID(),
+                instanceInput = { preview_id: templatePlan.preview_id };
+              const instantiated = await write(
+                "task_template_instantiate_commit",
+                instanceInput,
+                undefined,
+                instanceKey,
               );
-              await persist();
-              return result.entity_id;
-            }
-            const A = await create("A ALL root"),
-              B = await create("B chain"),
-              C = await create("C checklist template root"),
-              D = await create("D leaf");
-            const X = await create("X ANY root"),
-              E = await create("E ANY option"),
-              F = await create("F ANY option");
-            await dependencies(A, [B, C], "ALL");
-            await dependencies(B, [D], "ALL");
-            await dependencies(X, [E, F], "ANY");
-            check(
-              (await task(A)).readiness === "blocked" &&
-                (await task(B)).readiness === "blocked" &&
-                (await task(C)).ready_now &&
-                (await task(D)).ready_now,
-              "INITIAL_ALL_CHAIN_READINESS_WRONG",
-            );
-            check(
-              (await task(X)).readiness === "blocked",
-              "INITIAL_ANY_READINESS_WRONG",
-            );
-            await passed(
-              "MCP_graph_commit_REST_read_and_exact_idempotent_edge_replay",
-            );
-
-            step = "ATOMIC_CYCLE_DENIAL";
-            const beforeCycle = graphState(
-              await Promise.all([A, B, C, D].map(task)),
-            );
-            const rejected = await tool("task_dependency_add_preview", {
-              task_id: D,
-              prerequisites: [{ task_id: A }],
-              operator: "ALL",
-            });
-            check(
-              rejected.isError === true &&
-                envelope(rejected).error?.code === "DEPENDENCY_CYCLE",
-              "TYPED_CYCLE_DENIAL_REQUIRED",
-            );
-            check(
-              JSON.stringify(
-                graphState(await Promise.all([A, B, C, D].map(task))),
-              ) === JSON.stringify(beforeCycle),
-              "CYCLE_DENIAL_CHANGED_GRAPH_OR_REVISION",
-            );
-            await passed("typed_cycle_denial_preserves_known_graph_atomically");
-
-            await transition(D, "task_complete");
-            check(
-              (await task(B)).ready_now &&
-                (await task(A)).readiness === "blocked",
-              "CHAIN_D_COMPLETION_WRONG",
-            );
-            await transition(B, "task_complete");
-            check(
-              (await task(A)).readiness === "blocked" &&
-                (await task(A)).blocked_by.some((b) => b.task_id === C),
-              "ALL_REQUIRES_EACH_DONE_PREREQUISITE",
-            );
-
-            const first = await write("task_checklist_create", {
-              task_id: C,
-              title: prefix + "Preparation",
-            });
-            const second = await write("task_checklist_create", {
-              task_id: C,
-              title: prefix + "Submission",
-            });
-            const lists = () =>
-              query<ChecklistDTO[]>("task_checklist_get", { task_id: C });
-            async function addItem(checklist: string, title: string) {
-              const list = (await lists()).find(
-                (c) => c.checklist_id === checklist,
-              );
-              check(list, "CHECKLIST_READBACK_REQUIRED");
-              return (
-                await write(
-                  "task_checklist_item_add",
-                  { checklist_id: checklist, title: prefix + title },
-                  list.revision,
-                )
-              ).entity_id;
-            }
-            const I1 = await addItem(first.entity_id, "prepare document"),
-              I2 = await addItem(first.entity_id, "verify document"),
-              I3 = await addItem(second.entity_id, "independent follow-up");
-            async function toggle(
-              item: string,
-              command:
-                "task_checklist_item_check" | "task_checklist_item_uncheck",
-            ) {
-              const existing = (await lists())
-                .flatMap((c) => c.items)
-                .find((i) => i.item_id === item);
-              check(existing, "CHECKLIST_ITEM_READBACK_REQUIRED");
-              await write(command, { item_id: item }, existing.revision);
-            }
-            await toggle(I1, "task_checklist_item_check");
-            await toggle(I2, "task_checklist_item_check");
-            await toggle(I3, "task_checklist_item_check");
-            await toggle(I1, "task_checklist_item_uncheck");
-            check(
-              (await lists())
-                .find((c) => c.checklist_id === first.entity_id)
-                ?.items.find((i) => i.item_id === I1)?.checked === false,
-              "UNCHECK_READBACK_FAILED",
-            );
-            await toggle(I1, "task_checklist_item_check");
-            const completedLists = await lists();
-            check(
-              completedLists.length === 2 &&
-                completedLists.every((c) => c.items.every((i) => i.checked)) &&
-                (await task(C)).status === "Inbox" &&
-                (await task(A)).readiness === "blocked",
-              "CHECKLISTS_MUST_NOT_COMPLETE_TASK_OR_GATE",
-            );
-            await passed(
-              "two_named_checklists_check_uncheck_readback_independent_of_workflow",
-            );
-            await transition(C, "task_complete");
-            check((await task(A)).ready_now, "ALL_DONE_READINESS_WRONG");
-            const readyA = await task(A);
-            await write(
-              "task_update",
-              { task_id: A, status: "In progress" },
-              readyA.revision,
-            );
-            await transition(B, "task_reopen");
-            const atRisk = await task(A);
-            check(
-              atRisk.status === "In progress" &&
-                atRisk.readiness === "blocked" &&
-                atRisk.started_at_risk,
-              "REOPEN_MUST_RECOMPUTE_WITHOUT_REWINDING_STATUS",
-            );
-            await transition(D, "task_reopen");
-            check(
-              (await task(B)).readiness === "blocked" &&
-                (await task(C)).status === "Done" &&
-                (await lists()).every((c) => c.items.every((i) => i.checked)),
-              "REOPEN_PROPAGATION_CORRUPTED_INDEPENDENT_STATE",
-            );
-            await transition(D, "task_complete");
-            check(
-              (await task(B)).ready_now &&
-                (await task(A)).readiness === "blocked",
-              "RECOMPLETION_MUST_NOT_AUTO_COMPLETE_DOWNSTREAM",
-            );
-            await passed(
-              "ALL_completion_and_transitive_reopen_preserve_downstream_workflow",
-            );
-            await transition(E, "task_complete");
-            check(
-              (await task(X)).ready_now && (await task(F)).status === "Inbox",
-              "ANY_ONE_DONE_MUST_QUALIFY",
-            );
-            await transition(E, "task_reopen");
-            check(
-              (await task(X)).readiness === "blocked",
-              "ANY_REOPEN_LAST_QUALIFIER_MUST_BLOCK",
-            );
-            await transition(F, "task_complete");
-            check(
-              (await task(X)).ready_now &&
-                (await task(E)).status === "Next" &&
-                (await task(F)).status === "Done",
-              "ANY_ALTERNATIVE_DONE_MUST_QUALIFY",
-            );
-            await passed("ANY_alternative_and_reopen_readiness");
-
-            const promotionItem = (await lists())
-              .flatMap((c) => c.items)
-              .find((i) => i.item_id === I3)!;
-            const promotionKey = randomUUID(),
-              promotionInput = { item_id: I3, original: "keep_reference" };
-            const promoted = await write(
-              "task_checklist_item_promote",
-              promotionInput,
-              promotionItem.revision,
-              promotionKey,
-            );
-            const promotedReplay = await write(
-              "task_checklist_item_promote",
-              promotionInput,
-              promotionItem.revision,
-              promotionKey,
-            );
-            check(
-              promotedReplay.replayed === true &&
-                promotedReplay.entity_id === promoted.entity_id,
-              "PROMOTION_RETRY_IDENTITY_CHANGED",
-            );
-            const afterPromotion = (await lists())
-              .flatMap((c) => c.items)
-              .find((i) => i.item_id === I3)!;
-            const repeatIntent = await write(
-              "task_checklist_item_promote",
-              promotionInput,
-              afterPromotion.revision,
-            );
-            const promotedTask = await task(promoted.entity_id);
-            check(
-              repeatIntent.entity_id === promoted.entity_id &&
-                afterPromotion.promoted_task_id === promoted.entity_id &&
-                promotedTask.parent_task_id === C &&
-                promotedTask.status === "Inbox" &&
-                promotedTask.source_reference === "checklist:" + I3 &&
-                (await task(C)).status === "Done",
-              "PROMOTION_MUST_CREATE_EXACTLY_ONE_INDEPENDENT_CHILD",
-            );
-            report.roles.promoted = promoted.entity_id;
-            await passed(
-              "item_promotion_preserves_reference_and_identity_once",
-            );
-
-            const P = await create("P nested parent", C),
-              Q = await create("Q nested sibling", C),
-              G = await create("G nested grandchild", P);
-            await dependencies(Q, [G], "ALL");
-            const template = await write("task_template_create", {
-              title: prefix + "nested template",
-              root_task_id: C,
-            });
-            const templatePlan = await preview(
-              "task_template_instantiate_preview",
-              {
-                template_id: template.entity_id,
-                project_id: project.entity_id,
-                preserve_external_links: false,
-              },
-            );
-            const instanceKey = randomUUID(),
-              instanceInput = { preview_id: templatePlan.preview_id };
-            const instantiated = await write(
-              "task_template_instantiate_commit",
-              instanceInput,
-              undefined,
-              instanceKey,
-            );
-            const clone = instantiated.data as {
-              instance_id: string;
-              id_mapping: Record<string, string>;
-              tasks: TaskDTO[];
-            };
-            const originalIds = [C, promoted.entity_id, P, Q, G];
-            check(
-              sameIds(Object.keys(clone.id_mapping), originalIds) &&
-                new Set(Object.values(clone.id_mapping)).size ===
-                  originalIds.length &&
-                Object.values(clone.id_mapping).every(
-                  (id) => !originalIds.includes(id),
-                ),
-              "TEMPLATE_SUBTREE_ID_REMAP_WRONG",
-            );
-            const clonedTasks = await Promise.all(
-              Object.values(clone.id_mapping).map(task),
-            );
-            const cloneById = new Map(clonedTasks.map((t) => [t.task_id, t]));
-            check(
-              cloneById.get(clone.id_mapping[G])?.parent_task_id ===
-                clone.id_mapping[P] &&
-                cloneById.get(clone.id_mapping[Q])?.parent_task_id ===
-                  clone.id_mapping[C],
-              "TEMPLATE_PARENT_REMAP_WRONG",
-            );
-            check(
-              cloneById.get(clone.id_mapping[Q])?.prerequisites[0]
-                ?.prerequisite_task_id === clone.id_mapping[G] &&
-                clonedTasks.every((t) =>
-                  t.prerequisites.every((e) =>
-                    Object.values(clone.id_mapping).includes(
-                      e.prerequisite_task_id,
-                    ),
-                  ),
-                ),
-              "TEMPLATE_EDGE_REMAP_LEAKED_OLD_INSTANCE",
-            );
-            const clonedLists = await query<ChecklistDTO[]>(
-              "task_checklist_get",
-              { task_id: clone.id_mapping[C] },
-            );
-            check(
-              clonedTasks.every(
-                (t) =>
-                  t.status === "Inbox" &&
-                  t.due_date === null &&
-                  t.due_at === null,
-              ) &&
-                clonedLists.length === 2 &&
-                clonedLists.every(
-                  (c) =>
-                    ![first.entity_id, second.entity_id].includes(
-                      c.checklist_id,
-                    ) &&
-                    c.items.every(
-                      (i) =>
-                        !i.checked &&
-                        ![I1, I2, I3].includes(i.item_id) &&
-                        i.promoted_task_id === null,
-                    ),
-                ),
-              "TEMPLATE_INSTANCE_MUST_RESET_INDEPENDENT_CHECKLIST_AND_WORKFLOW",
-            );
-            remember("template_instances", [clone.instance_id]);
-            remember(
-              "checklists",
-              clonedLists.map((c) => c.checklist_id),
-            );
-            remember(
-              "items",
-              clonedLists.flatMap((c) => c.items.map((i) => i.item_id)),
-            );
-            remember(
-              "edges",
-              clonedTasks.flatMap((t) => t.prerequisites.map((e) => e.edge_id)),
-            );
-            remember(
-              "groups",
-              clonedTasks.flatMap((t) =>
-                t.prerequisites.map((e) => e.group_id),
-              ),
-            );
-            const templateReplay = await write(
-              "task_template_instantiate_commit",
-              instanceInput,
-              undefined,
-              instanceKey,
-            );
-            check(
-              templateReplay.replayed === true &&
-                sameIds(
-                  templateReplay.affected_task_ids,
-                  Object.values(clone.id_mapping),
-                ),
-              "TEMPLATE_RETRY_CREATED_SECOND_INSTANCE",
-            );
-            report.roles.template_root = clone.id_mapping[C];
-            await passed(
-              "nested_template_remaps_every_parent_edge_and_named_checklist_once",
-            );
-
-            step = "RECURRENCE_EXPLICIT_OWNER_RULE";
-            const today = new Intl.DateTimeFormat("sv-SE", {
-              timeZone: "Europe/Berlin",
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            }).format(new Date());
-            const rule = await write("task_recurrence_create", {
-              template_id: template.entity_id,
-              title: prefix + "one configured occurrence",
-              start_date: today,
-              timezone: "Europe/Berlin",
-              rrule: "FREQ=DAILY;COUNT=1",
-            });
-            report.roles.recurrence_rule = rule.entity_id;
-            const run = await daily();
-            check(
-              run.delivered === 0 &&
-                run.cancelled === 0 &&
-                run.recurring.instances_created === 1 &&
-                run.recurring.task_ids.length === originalIds.length,
-              "RECURRENCE_RUN_MUST_ONLY_CREATE_CONFIGURED_FIXTURE",
-            );
-            const recurring = await Promise.all(
-              run.recurring.task_ids.map(task),
-            );
-            const recurringIds = run.recurring.task_ids;
-            check(
-              recurring.every(
-                (t) =>
-                  !originalIds.includes(t.task_id) &&
-                  !Object.values(clone.id_mapping).includes(t.task_id) &&
-                  t.status === "Inbox" &&
-                  t.start_date === today &&
-                  t.due_date === null &&
-                  t.due_at === null &&
-                  (!t.parent_task_id ||
-                    recurringIds.includes(t.parent_task_id)) &&
-                  t.prerequisites.every((e) =>
-                    recurringIds.includes(e.prerequisite_task_id),
-                  ),
-              ),
-              "RECURRENCE_MUST_NOT_LINK_PRIOR_INSTANCES_OR_INVENT_DEADLINES",
-            );
-            const recurringRoot = recurring.find(
-              (t) => t.title === prefix + "C checklist template root",
-            );
-            check(recurringRoot, "RECURRENCE_ROOT_READBACK_REQUIRED");
-            const recurringLists = await query<ChecklistDTO[]>(
-              "task_checklist_get",
-              { task_id: recurringRoot.task_id },
-            );
-            check(
-              recurringLists.length === 2 &&
-                recurringLists.every((c) => c.items.every((i) => !i.checked)),
-              "RECURRENCE_CHECKLIST_RESET_WRONG",
-            );
-            remember(
-              "checklists",
-              recurringLists.map((c) => c.checklist_id),
-            );
-            remember(
-              "items",
-              recurringLists.flatMap((c) => c.items.map((i) => i.item_id)),
-            );
-            remember(
-              "edges",
-              recurring.flatMap((t) => t.prerequisites.map((e) => e.edge_id)),
-            );
-            remember(
-              "groups",
-              recurring.flatMap((t) => t.prerequisites.map((e) => e.group_id)),
-            );
-            const instances = await query<
-              PageDTO<{
+              const clone = instantiated.data as {
                 instance_id: string;
-                occurrence_date: string;
-                task_ids: string[];
-              }>
-            >("task_recurrence_instances", { rule_id: rule.entity_id });
-            check(
-              instances.total === 1 &&
-                instances.items[0].occurrence_date === today &&
-                sameIds(instances.items[0].task_ids, recurringIds),
-              "RECURRENCE_DURABLE_INSTANCE_READBACK_WRONG",
-            );
-            const secondRun = await daily();
-            check(
-              secondRun.delivered === 0 &&
-                secondRun.cancelled === 0 &&
-                secondRun.recurring.instances_created === 0 &&
-                (
-                  await query<PageDTO<unknown>>("task_recurrence_instances", {
-                    rule_id: rule.entity_id,
-                  })
-                ).total === 1,
-              "RECURRENCE_SECOND_JOB_DUPLICATED_INSTANCE",
-            );
-            report.roles.recurring_root = recurringRoot.task_id;
-            await passed(
-              "configured_finite_recurrence_runs_once_with_isolated_nested_instance",
-            );
+                id_mapping: Record<string, string>;
+                tasks: TaskDTO[];
+              };
+              const originalIds = [C, promoted.entity_id, P, Q, G];
+              check(
+                sameIds(Object.keys(clone.id_mapping), originalIds) &&
+                  new Set(Object.values(clone.id_mapping)).size ===
+                    originalIds.length &&
+                  Object.values(clone.id_mapping).every(
+                    (id) => !originalIds.includes(id),
+                  ),
+                "TEMPLATE_SUBTREE_ID_REMAP_WRONG",
+              );
+              const clonedTasks = await Promise.all(
+                Object.values(clone.id_mapping).map(task),
+              );
+              const cloneById = new Map(clonedTasks.map((t) => [t.task_id, t]));
+              check(
+                cloneById.get(clone.id_mapping[G])?.parent_task_id ===
+                  clone.id_mapping[P] &&
+                  cloneById.get(clone.id_mapping[Q])?.parent_task_id ===
+                    clone.id_mapping[C],
+                "TEMPLATE_PARENT_REMAP_WRONG",
+              );
+              check(
+                cloneById.get(clone.id_mapping[Q])?.prerequisites[0]
+                  ?.prerequisite_task_id === clone.id_mapping[G] &&
+                  clonedTasks.every((t) =>
+                    t.prerequisites.every((e) =>
+                      Object.values(clone.id_mapping).includes(
+                        e.prerequisite_task_id,
+                      ),
+                    ),
+                  ),
+                "TEMPLATE_EDGE_REMAP_LEAKED_OLD_INSTANCE",
+              );
+              const clonedLists = await query<ChecklistDTO[]>(
+                "task_checklist_get",
+                { task_id: clone.id_mapping[C] },
+              );
+              check(
+                clonedTasks.every(
+                  (t) =>
+                    t.status === "Inbox" &&
+                    t.due_date === null &&
+                    t.due_at === null,
+                ) &&
+                  clonedLists.length === 2 &&
+                  clonedLists.every(
+                    (c) =>
+                      ![first.entity_id, second.entity_id].includes(
+                        c.checklist_id,
+                      ) &&
+                      c.items.every(
+                        (i) =>
+                          !i.checked &&
+                          ![I1, I2, I3].includes(i.item_id) &&
+                          i.promoted_task_id === null,
+                      ),
+                  ),
+                "TEMPLATE_INSTANCE_MUST_RESET_INDEPENDENT_CHECKLIST_AND_WORKFLOW",
+              );
+              remember("template_instances", [clone.instance_id]);
+              remember(
+                "checklists",
+                clonedLists.map((c) => c.checklist_id),
+              );
+              remember(
+                "items",
+                clonedLists.flatMap((c) => c.items.map((i) => i.item_id)),
+              );
+              remember(
+                "edges",
+                clonedTasks.flatMap((t) =>
+                  t.prerequisites.map((e) => e.edge_id),
+                ),
+              );
+              remember(
+                "groups",
+                clonedTasks.flatMap((t) =>
+                  t.prerequisites.map((e) => e.group_id),
+                ),
+              );
+              const templateReplay = await write(
+                "task_template_instantiate_commit",
+                instanceInput,
+                undefined,
+                instanceKey,
+              );
+              check(
+                templateReplay.replayed === true &&
+                  sameIds(
+                    templateReplay.affected_task_ids,
+                    Object.values(clone.id_mapping),
+                  ),
+                "TEMPLATE_RETRY_CREATED_SECOND_INSTANCE",
+              );
+              report.roles.template_root = clone.id_mapping[C];
+              await passed(
+                "nested_template_remaps_every_parent_edge_and_named_checklist_once",
+              );
+
+              step = "RECURRENCE_EXPLICIT_OWNER_RULE";
+              const today = new Intl.DateTimeFormat("sv-SE", {
+                timeZone: "Europe/Berlin",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              }).format(new Date());
+              const rule = await write("task_recurrence_create", {
+                template_id: template.entity_id,
+                title: prefix + "one configured occurrence",
+                start_date: today,
+                timezone: "Europe/Berlin",
+                rrule: "FREQ=DAILY;COUNT=1",
+              });
+              report.roles.recurrence_rule = rule.entity_id;
+              const run = await daily();
+              check(
+                run.delivered === 0 &&
+                  run.cancelled === 0 &&
+                  run.recurring.instances_created === 1 &&
+                  run.recurring.task_ids.length === originalIds.length,
+                "RECURRENCE_RUN_MUST_ONLY_CREATE_CONFIGURED_FIXTURE",
+              );
+              const recurring = await Promise.all(
+                run.recurring.task_ids.map(task),
+              );
+              const recurringIds = run.recurring.task_ids;
+              check(
+                recurring.every(
+                  (t) =>
+                    !originalIds.includes(t.task_id) &&
+                    !Object.values(clone.id_mapping).includes(t.task_id) &&
+                    t.status === "Inbox" &&
+                    t.start_date === today &&
+                    t.due_date === null &&
+                    t.due_at === null &&
+                    (!t.parent_task_id ||
+                      recurringIds.includes(t.parent_task_id)) &&
+                    t.prerequisites.every((e) =>
+                      recurringIds.includes(e.prerequisite_task_id),
+                    ),
+                ),
+                "RECURRENCE_MUST_NOT_LINK_PRIOR_INSTANCES_OR_INVENT_DEADLINES",
+              );
+              const recurringRoot = recurring.find(
+                (t) => t.title === prefix + "C checklist template root",
+              );
+              check(recurringRoot, "RECURRENCE_ROOT_READBACK_REQUIRED");
+              const recurringLists = await query<ChecklistDTO[]>(
+                "task_checklist_get",
+                { task_id: recurringRoot.task_id },
+              );
+              check(
+                recurringLists.length === 2 &&
+                  recurringLists.every((c) => c.items.every((i) => !i.checked)),
+                "RECURRENCE_CHECKLIST_RESET_WRONG",
+              );
+              remember(
+                "checklists",
+                recurringLists.map((c) => c.checklist_id),
+              );
+              remember(
+                "items",
+                recurringLists.flatMap((c) => c.items.map((i) => i.item_id)),
+              );
+              remember(
+                "edges",
+                recurring.flatMap((t) => t.prerequisites.map((e) => e.edge_id)),
+              );
+              remember(
+                "groups",
+                recurring.flatMap((t) =>
+                  t.prerequisites.map((e) => e.group_id),
+                ),
+              );
+              const instances = await query<
+                PageDTO<{
+                  instance_id: string;
+                  occurrence_date: string;
+                  task_ids: string[];
+                }>
+              >("task_recurrence_instances", { rule_id: rule.entity_id });
+              check(
+                instances.total === 1 &&
+                  instances.items[0].occurrence_date === today &&
+                  sameIds(instances.items[0].task_ids, recurringIds),
+                "RECURRENCE_DURABLE_INSTANCE_READBACK_WRONG",
+              );
+              const secondRun = await daily();
+              check(
+                secondRun.delivered === 0 &&
+                  secondRun.cancelled === 0 &&
+                  secondRun.recurring.instances_created === 0 &&
+                  (
+                    await query<PageDTO<unknown>>("task_recurrence_instances", {
+                      rule_id: rule.entity_id,
+                    })
+                  ).total === 1,
+                "RECURRENCE_SECOND_JOB_DUPLICATED_INSTANCE",
+              );
+              report.roles.recurring_root = recurringRoot.task_id;
+              await passed(
+                "configured_finite_recurrence_runs_once_with_isolated_nested_instance",
+              );
+              return { A, X, prefix };
+            }
+            async function retainedFixture() {
+              step = "RETAINED_SCOPE_PHASE_RESUME_READBACK";
+              const prefix =
+                "SYNTHETIC GRAPH PROOF " + report.run_id.slice(0, 8) + " ";
+              const recurring = new Set(
+                report.operations
+                  .filter(
+                    (op) =>
+                      op.command === "owner_daily_job" &&
+                      op.status === "accepted",
+                  )
+                  .flatMap((op) => {
+                    const data = op.result?.data as
+                      { recurring?: { task_ids?: string[] } } | undefined;
+                    return data?.recurring?.task_ids ?? [];
+                  }),
+              );
+              check(
+                recurring.size === 5 &&
+                  [...recurring].every((id) =>
+                    report.created.tasks.includes(id),
+                  ) &&
+                  report.created.tasks.includes(report.roles.promoted) &&
+                  !recurring.has(report.roles.promoted),
+                "EXACT_PROMOTED_AND_RECURRING_CREATION_RECEIPTS_REQUIRED",
+              );
+              for (const id of report.created.tasks) {
+                const current = await task(id);
+                check(
+                  current.task_id === id &&
+                    current.title.startsWith(prefix) &&
+                    current.project_id ===
+                      (id === report.roles.promoted || recurring.has(id)
+                        ? null
+                        : report.roles.project) &&
+                    current.archived_at === null,
+                  "RETAINED_OWNER_FIXTURE_IDENTITY_REQUIRED",
+                );
+                resumedTasks.set(id, current);
+                report.resume_tasks_verified = resumedTasks.size;
+                await persist();
+              }
+              const A = report.roles["A ALL root"],
+                X = report.roles["X ANY root"];
+              check(
+                report.created.tasks.includes(A) &&
+                  report.created.tasks.includes(X),
+                "RETAINED_CORE_ROLES_REQUIRED",
+              );
+              check(
+                (await task(A)).started_at_risk && (await task(X)).ready_now,
+                "RETAINED_FINAL_GRAPH_STATE_REQUIRED",
+              );
+              return { A, X, prefix };
+            }
+            const { A, X, prefix } = resume
+              ? await retainedFixture()
+              : await createFixture();
 
             step = "REMOTE_AUTH_AND_READONLY_SCOPE_DENIAL";
             reader = await connection(["tasks:read", "files:read"]);
@@ -1245,6 +1376,12 @@ it.skipIf(!enabled)(
                 reads.push(...(await Promise.all(ids.map((id) => task(id)))));
               else for (const id of ids) reads.push(await task(id));
               for (const read of reads) {
+                if (resume)
+                  check(
+                    JSON.stringify(read) ===
+                      JSON.stringify(resumedTasks.get(read.task_id)),
+                    "RETAINED_FIXTURE_CHANGED_DURING_SCOPE_PROOF",
+                  );
                 check(
                   read.archived_at === null,
                   "FIXTURE_MUST_REMAIN_ACTIVE_FOR_RESTORE_PROOF",
@@ -1300,6 +1437,9 @@ it.skipIf(!enabled)(
               "accepted_mutation_receipts_have_owner_bound_durable_audit",
             );
             report.status = "passed";
+            delete report.failed_step;
+            delete report.failed_check;
+            delete report.failed_kind;
             report.completed_at = new Date().toISOString();
             await passed(
               "all_created_ids_retained_active_for_UI_hosted_restore_and_redeploy",
@@ -1307,6 +1447,18 @@ it.skipIf(!enabled)(
           } catch (error) {
             report.status = "failed";
             report.failed_step = step;
+            report.failed_kind =
+              error instanceof Error &&
+              [
+                "Error",
+                "TimeoutError",
+                "AbortError",
+                "TypeError",
+                "SyntaxError",
+                "StreamableHTTPError",
+              ].includes(error.name)
+                ? error.name
+                : "Unknown";
             if (
               error instanceof Error &&
               /^[A-Z][A-Z0-9_]+$/.test(error.message)
