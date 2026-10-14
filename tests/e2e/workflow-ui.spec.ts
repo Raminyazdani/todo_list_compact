@@ -172,9 +172,17 @@ test("task_precise_deadline_project_reference_and_linked_intervals_share_canonic
   await timeDialog
     .getByLabel("شرح بازهٔ مرتبط", { exact: true })
     .fill("Synthetic task-linked actual time.");
+  const timeAcknowledged = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/commands") &&
+      response.request().method() === "POST" &&
+      response.request().postDataJSON()?.command === "time_entry_create" &&
+      response.request().postDataJSON()?.input?.task_id === created.entity_id,
+  );
   await timeDialog
     .getByRole("button", { name: "تأیید ثبت بازهٔ مرتبط", exact: true })
     .click();
+  expect((await timeAcknowledged).status()).toBe(200);
   await expect(page.getByRole("dialog")).toHaveCount(1);
   const summary = await readQuery<{ minutes: number; entries: number }>(
     request,
@@ -206,9 +214,18 @@ test("task_precise_deadline_project_reference_and_linked_intervals_share_canonic
   await eventDialog
     .getByLabel("پایان بازهٔ مرتبط", { exact: true })
     .fill(`${day}T11:00:07`);
+  const eventAcknowledged = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/commands") &&
+      response.request().method() === "POST" &&
+      response.request().postDataJSON()?.command ===
+        "calendar_create_local_event" &&
+      response.request().postDataJSON()?.input?.task_id === created.entity_id,
+  );
   await eventDialog
     .getByRole("button", { name: "تأیید ثبت بازهٔ مرتبط", exact: true })
     .click();
+  expect((await eventAcknowledged).status()).toBe(200);
   await expect(page.getByRole("dialog")).toHaveCount(1);
   const events = await readQuery<PageDTO<EventDTO>>(
     request,

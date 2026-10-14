@@ -278,5 +278,32 @@
     "review": "CLEAR",
     "live_final_CI": "PENDING",
     "server_rate_scopes": "UNCHANGED"
+  },
+  "observed_CI_5de8aae": {
+    "cause": "Nested Radix accessible dialog count1 is already true before ACK; premature RR read returns0 before time entry commits",
+    "native_postgres_passed": 12,
+    "coverage_optin_skipped": 28,
+    "browser_failed": 1,
+    "conclusion": "FAIL",
+    "browser_minutes": 2.2,
+    "browser_skipped": 2,
+    "browser_passed": 23,
+    "failed_case": "task_precise_deadline_project_reference_and_linked_intervals_share_canonical_state",
+    "head_sha": "5de8aaeaa6edb0213298970806677358722c7b68",
+    "run": 38514771531,
+    "coverage_passed": 382,
+    "coverage_files_passed": 51,
+    "coverage_files_skipped": 9,
+    "SDK_and_HTTP_security_after_browser": "NOT_RUN"
+  },
+  "affected_task_interval_ACK_build17": {
+    "browser_cases_passed": 1,
+    "status": "PASS",
+    "browser_minutes": 1.4,
+    "assertions": "actual time and linked event POST200 ACK before canonical reads; exact30minutes/1entry and IDs retained",
+    "type_lint_format": "PASS",
+    "app_source_changed": false,
+    "full_final_CI": "PENDING",
+    "independent_diagnosis": "CLEAR"
   }
 }

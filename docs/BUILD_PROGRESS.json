@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T05:00:57.0591071Z",
+  "updated_at": "2026-10-14T05:24:00.5321469Z",
   "branch": "feat/life-os",
-  "commit": "fb2c7ef9c783385f2836044fb3e544d9ac707aa1",
-  "phase": "frozen_app17_bounded_DCR_singleflight_and_retained_proof_resume",
+  "commit": "5de8aaeaa6edb0213298970806677358722c7b68",
+  "phase": "frozen_app17_task_interval_ACK_repair_after_exactSHA_CI",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -114,9 +114,7 @@
     "completed_scoped_migration_and_read_concurrency_reviews"
   ],
   "next_actions": [
-    "repair_shared_read_contention_with_native_lock_tests_and_targeted_browser_rechecks",
-    "finish_frozen_browser_run_and_fix_only_affected_case",
-    "commit_all_related_paths_then_green_exact_commit_ci",
+    "commit_ACK_operator_fix_then_green_exactSHA_CI",
     "guarded_production_additive_schema_and_master_release",
     "fresh_source_checkpoint_import_and_canonical_API_verification",
     "real_production_graph_UI_backup_restore_and_DG36_redeploy",
@@ -159,20 +157,21 @@
     "runtime_concurrent_read_max_ms": 5027
   },
   "latest_observed_CI": {
-    "run": 38510579036,
-    "head_sha": "fb2c7ef9c783385f2836044fb3e544d9ac707aa1",
-    "conclusion": "FAIL",
-    "coverage_passed": 373,
-    "coverage_optin_skipped": 28,
+    "cause": "Nested Radix accessible dialog count1 is already true before ACK; premature RR read returns0 before time entry commits",
     "native_postgres_passed": 12,
-    "browser_passed": 24,
+    "coverage_optin_skipped": 28,
+    "browser_failed": 1,
+    "conclusion": "FAIL",
+    "browser_minutes": 2.2,
     "browser_skipped": 2,
-    "browser_minutes": 2.4,
-    "actual_local_SDK_tools": 130,
-    "HTTP_security_passed": 13,
-    "failed_suite": "http-notification-scopes",
-    "cause": "DCR5/60 exhausted by preceding positive/negative test registrations, before4 target-scope grants",
-    "OIDC_rate_expiry_after_suite": "NOT_RUN"
+    "browser_passed": 23,
+    "failed_case": "task_precise_deadline_project_reference_and_linked_intervals_share_canonical_state",
+    "head_sha": "5de8aaeaa6edb0213298970806677358722c7b68",
+    "run": 38514771531,
+    "coverage_passed": 382,
+    "coverage_files_passed": 51,
+    "coverage_files_skipped": 9,
+    "SDK_and_HTTP_security_after_browser": "NOT_RUN"
   },
   "advanced_stage_rehearsal": {
     "status": "FAIL",
@@ -186,7 +185,8 @@
     "remaining_scope_and_UI": "NOT_PASS",
     "resume": "exactsamejournal; no positive mutation/job replay",
     "last_resume": "TimeoutError after3 retained reads;101.49s",
-    "current_native_wait_probe": "SELECT1 PASS3.7s; no observed otherTX/ownerlock"
+    "current_native_wait_probe": "SELECT1 PASS3.7s; no observed otherTX/ownerlock",
+    "transport_diagnosis": "network_connect_timeout; pool total1 idle0 waiting0; firstparty read probe also fails; not specifically OAuth"
   },
   "build17_targeted_verification": {
     "build": "PASS",
@@ -198,7 +198,7 @@
     "independent_reviews": "CLEAR",
     "private_failure_diagnostics": "No row values/owner/SQL/URL/error message or stack logged",
     "full_final_CI": "PENDING",
-    "stage_21_task_graph": "RUNNING"
+    "stage_21_task_graph": "FAIL_retained_journal_no_pending_operation"
   },
   "OAuth_test_operator_fix": {
     "status": "focused_tests_and_independent_review_PASS",
@@ -207,5 +207,15 @@
     "DCR_retry": "only explicit429 withvalidheader;2retries/65s",
     "renewal": "singleflight perrole onlyexpired401; stickyuncertainfailure",
     "full_final_CI": "PENDING"
+  },
+  "task_interval_ACK_repair": {
+    "browser_cases_passed": 1,
+    "status": "PASS",
+    "browser_minutes": 1.4,
+    "assertions": "actual time and linked event POST200 ACK before canonical reads; exact30minutes/1entry and IDs retained",
+    "type_lint_format": "PASS",
+    "app_source_changed": false,
+    "full_final_CI": "PENDING",
+    "independent_diagnosis": "CLEAR"
   }
 }
