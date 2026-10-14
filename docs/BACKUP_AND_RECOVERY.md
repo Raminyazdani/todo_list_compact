@@ -1,6 +1,6 @@
 # Backup and recovery
 
-**Current scope, 2026-10-14:** [actual Neon verification](NEON_LIVE_VERIFICATION.md) supersedes the earlier Blob/AI/ChatGPT limits as current delivery conditions. Neon files and both manual metadata/original-byte cloud recovery proofs pass; native Codex OAuth login is complete but current-chat tool loading/read awaits a full restart. In-app AI is deferred. Scheduled cron execution and product-specific calendar grants remain separate. The milestones below retain their original times, counts and scope.
+**Current scope, 2026-10-14:** [actual Neon verification](NEON_LIVE_VERIFICATION.md) supersedes the earlier Blob/AI/ChatGPT limits as current delivery conditions. Neon files and both manual metadata/original-byte cloud recovery proofs pass; native Codex OAuth and actual current-chat tool loading/read now pass (130 tools, five calls, 45 active tasks and three original active files; zero business writes). In-app AI is deferred. Scheduled cron execution and product-specific calendar grants remain separate. The milestones below retain their original times, counts and scope.
 
 ## Observed hosted recovery
 

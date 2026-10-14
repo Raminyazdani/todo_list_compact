@@ -1,6 +1,6 @@
 # انتشار
 
-**Current scope, 2026-10-14:** [actual Neon verification](NEON_LIVE_VERIFICATION.md) supersedes the earlier Blob/AI/ChatGPT limits as current delivery conditions. Neon files and both manual metadata/original-byte cloud recovery proofs pass; native Codex OAuth login is complete but current-chat tool loading/read awaits a full restart. In-app AI is deferred. Scheduled cron execution and product-specific calendar grants remain separate. The milestones below retain their original times, counts and scope.
+**Current scope, 2026-10-14:** [actual Neon verification](NEON_LIVE_VERIFICATION.md) supersedes the earlier Blob/AI/ChatGPT limits as current delivery conditions. Neon files and both manual metadata/original-byte cloud recovery proofs pass; native Codex OAuth and actual current-chat tool loading/read now pass (130 tools, five calls, 45 active tasks and three original active files; zero business writes). In-app AI is deferred. Scheduled cron execution and product-specific calendar grants remain separate. The milestones below retain their original times, counts and scope.
 
 مقصد مجاز فقط مخزن `Raminyazdani/todo_list_compact` و پروژهٔ تازهٔ `ramin-life-os` در تیم `ramin-yazdanis-projects` است. پروژه‌های قدیمی تغییر نمی‌کنند. شاخهٔ production مخزن `master` است. نشانی واقعی HTTPS تولید [ramin-life-os.vercel.app](https://ramin-life-os.vercel.app) است؛ در نقطهٔ عطف ۱۴ اکتبر۲۰۲۶ نسخهٔ `334ee291d9fcea0024e120423860111eaa5120c5` روی آن مشاهده شد.
 

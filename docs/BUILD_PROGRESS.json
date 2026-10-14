@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T15:21:14.142Z",
+  "updated_at": "2026-10-14T16:01:14.643Z",
   "branch": "master",
-  "commit": "5ef90ec1387fe3243c4fb1163dad37280a80bcbb",
-  "phase": "Neon_live_files_and_manual_cloud_recovery_PASS_native_MCP_reload_required",
+  "commit": "5139c99f0d2c35b1bb847cdb12f7197a92659178",
+  "phase": "current_owner_Neon_AI_deferral_native_MCP_request_PASS",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -46,9 +46,11 @@
     "actual_Neon_staging_domain_native_protected_download_smoke",
     "actual_Neon_production_HTTPS_browser_files_and_exact_QA_archive",
     "actual_Neon_cloud_metadata_decrypt_manifest_and_same_day_replay",
-    "actual_Neon_cloud_original_bytes_download_decrypt_three_checksums"
+    "actual_Neon_cloud_original_bytes_download_decrypt_three_checksums",
+    "actual_current_chat_native_Codex_MCP_130_tools_and_five_owner_bound_reads",
+    "open_PR_audit_zero_PR1_already_merged_ancestor_and_old_attachment_detached"
   ],
-  "active": ["restart_Codex_continue_same_chat_then_actual_native_MCP_read"],
+  "active": [],
   "tests": [
     {
       "actual_SDK_tools": 130,
@@ -126,24 +128,18 @@
     }
   },
   "open_severity": {
-    "production_gates": "Neon_PASS_native_Codex_current_chat_tool_read_pending",
+    "production_gates": "CURRENT_OWNER_REQUEST_PASS_original_calendar_and_scheduled_cron_evidence_separate",
     "known_p0_code_defects": "none_observed_in_verified_snapshot",
-    "known_p1_checks": "No unresolved code defect observed in exact complete CI or actual production UI/files/cloud recovery; current-chat native tool loading/read remains unverified.",
-    "external_provider_gates": "CURRENT_NATIVE_MCP_RUNTIME_RELOAD_REQUIRED_calendar_grants_separate"
+    "known_p1_checks": "No unresolved code defect observed in complete CI or production verification; native current-chat MCP read now PASS. Unobserved scheduled cron and original product-calendar grants retain their separate limits.",
+    "external_provider_gates": "No provider block remains for the current direct owner change; product-calendar grant and scheduled execution are separate."
   },
-  "blockers": [
-    {
-      "evidence": "Native life_os OAuth login successful and CLI reports o_auth; current tool runtime says unknown MCP server",
-      "area": "native_Codex_MCP_tool_loading",
-      "state": "AWAITING_CURRENT_CHAT_RELOAD"
-    }
-  ],
+  "blockers": [],
   "available_agents": [
     "all_scoped_implementation_and_independent_reviews_completed",
     "root_final_verified_receipts_recorded"
   ],
   "next_actions": [
-    "restart_Codex_continue_same_chat_then_actual_native_MCP_read"
+    "scheduled_cron_and_product_calendar_grants_remain_separate_original_scope_evidence"
   ],
   "release_complete": false,
   "execution_prompt": "docs/CONTINUE_PROMPT_FA.md",
@@ -231,17 +227,18 @@
     "independent_diagnosis": "CLEAR"
   },
   "current_deployment": {
-    "id": "dpl_ES9QpWct7NJWY7pqpoivimFHMzWD",
+    "id": "dpl_7odgs3S2G4YbgmPZ8CKfHpkYwsby",
     "branch": "master",
     "app_MCP_catalog": 130,
-    "commit": "5ef90ec1387fe3243c4fb1163dad37280a80bcbb",
+    "commit": "5139c99f0d2c35b1bb847cdb12f7197a92659178",
     "live_Neon_storage": "PASS_actual_production_HTTPS_and_browser",
     "actual_owner_UI_proof_commit": "5ef90ec1387fe3243c4fb1163dad37280a80bcbb",
     "application_source_equivalence": "PASS_zero_runtime_changes_from_fully_tested_d347404",
     "origin": "https://ramin-life-os.vercel.app",
     "original_file_reference_readback": 3,
     "target": "production",
-    "state": "READY"
+    "state": "READY",
+    "native_current_chat_MCP_read": "PASS"
   },
   "production_graph_proof": {
     "snapshots": 21,
@@ -417,14 +414,27 @@
     "authority": "direct_human_request",
     "database": "EXISTING_NEON_POSTGRESQL",
     "native_Codex_MCP": {
-      "current_chat_tool_read": "NOT_RUN_runtime_unknown_server",
+      "current_chat_tool_read": "PASS_actual_native_calls_in_this_same_chat",
       "OAuth_login": "PASS",
       "scopes": "normal_business_operations_no_admin_or_backup",
-      "configuration": "PASS"
+      "configuration": "PASS",
+      "observed_at": "2026-10-14T16:01:14.643Z",
+      "tools": 130,
+      "read_calls": 5,
+      "channel": "MCP",
+      "existing_owner_and_actor_match": true,
+      "normal_scopes": 12,
+      "admin_or_backup_granted": false,
+      "active_original_tasks": 45,
+      "active_original_files": 3,
+      "business_writes": 0,
+      "new_thread_created": false,
+      "private_receipt": "outside_public_Git",
+      "initial_unknown_server": "historical_retained_not_reclassified"
     },
     "storage_live": "PASS_actual_staging_and_production",
     "ChatGPT_installation": "NOT_REQUIRED_CURRENT_SCOPE",
-    "application_release": "Neon_files_and_manual_cloud_recovery_PASS_native_current_chat_tool_read_pending",
+    "application_release": "CURRENT_OWNER_CHANGE_PASS_Neon_AI_disabled_native_MCP",
     "new_file_provider": "neon_object_storage",
     "owner_password_rotation": {
       "old_sessions_revoked": true,
@@ -627,6 +637,17 @@
       "private_artifacts": "outside_public_Git",
       "repeated_import_or_restore": false,
       "failed_CLI_stdin_attempt": "Retained privately; direct argv data corrected before any bucket/credential mutation; same stable intent resumed after read-only reconciliation"
+    },
+    "requested_changes_complete": true,
+    "PR_followup": {
+      "repository_open_PRs": 0,
+      "number": 1,
+      "state": "MERGED",
+      "merge_commit_present_in_master": true,
+      "all_PR_checks": "SUCCESS",
+      "unresolved_review_threads": 0,
+      "old_attachment_detached": true,
+      "GitHub_write_required": false
     }
   },
   "historical_source_verified_deployment": {
@@ -641,5 +662,6 @@
     "id": "dpl_3kaY1N3FrWU5FY8Cr169HtotNjbC",
     "observed_readback_at": "2026-10-14T07:26:48.878Z"
   },
-  "final_live_receipt_update": "Operational activation and documentation only; application/tests/schema/dependencies unchanged from complete CI d347404. Prior historical metrics remain scoped to their original snapshots."
+  "final_live_receipt_update": "Operational activation and documentation only; application/tests/schema/dependencies unchanged from complete CI d347404. Prior historical metrics remain scoped to their original snapshots.",
+  "final_native_receipt_update": "Read-only native MCP runtime verification and documentation only. No application/test/schema/dependency change or repeated import/restore/QA mutation. Full original release flags remain false for unobserved scheduled execution/product-calendar grants."
 }
