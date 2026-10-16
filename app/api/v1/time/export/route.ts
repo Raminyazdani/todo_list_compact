@@ -3,6 +3,7 @@ import { getDomainService } from "@/server/domain/service";
 import { exportEmployerXlsx, type WorkEntry } from "@/server/integrations/time";
 import { failure, rateLimit } from "@/server/http";
 import { z } from "zod";
+import { zonedLocalToInstant } from "@/shared/datetime";
 export async function GET(request: Request) {
   try {
     const principal = await requirePrincipal(request);
@@ -16,11 +17,20 @@ export async function GET(request: Request) {
       .enum(["Jena", "Seewiesen"])
       .parse(url.searchParams.get("employer"));
     const entries: WorkEntry[] = [];
+    const nextMonth = new Date(`${month}-01T12:00:00Z`);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    const from = zonedLocalToInstant(`${month}-01T00:00`, "Europe/Berlin"),
+      to = zonedLocalToInstant(
+        `${nextMonth.toISOString().slice(0, 10)}T00:00`,
+        "Europe/Berlin",
+      );
     let cursor: string | null = null;
     do {
       const page = (await getDomainService().query(
         "time_entry_list",
-        { employer, limit: 200, ...(cursor ? { cursor } : {}) },
+        // The workbook filters the selected employer after computing conflicts
+        // against all work intervals, including cross-employer/overnight rows.
+        { from, to, limit: 200, ...(cursor ? { cursor } : {}) },
         principal,
       )) as { items: WorkEntry[]; next_cursor: string | null };
       entries.push(...page.items);

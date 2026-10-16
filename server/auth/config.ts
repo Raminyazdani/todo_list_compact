@@ -67,7 +67,13 @@ export function createAuth(bootstrap = false) {
               accessType: "offline",
               prompt: "select_account consent",
               includeGrantedScopes: false,
-              scope: ["https://www.googleapis.com/auth/calendar.readonly"],
+              // Read selected calendars, but write only calendars owned by this
+              // account. Attendee/organizer guards are also enforced by the
+              // canonical personal-event dispatcher before every provider write.
+              scope: [
+                "https://www.googleapis.com/auth/calendar.readonly",
+                "https://www.googleapis.com/auth/calendar.events.owned",
+              ],
             },
           }
         : {}),

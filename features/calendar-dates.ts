@@ -42,3 +42,17 @@ export function moveLocalEventToDate(
   ).toISOString();
   return { starts_at, ends_at };
 }
+
+/** A display horizon may cross a spring gap; resolving it never edits an event. */
+export function upcomingCalendarEnd(now: string, timezone = "Europe/Berlin") {
+  const local = instantToLocalDateTime(now, timezone);
+  try {
+    return zonedLocalToInstant(
+      `${addCalendarDays(local.slice(0, 10), 7)}T${local.split("T")[1]}`,
+      timezone,
+      "earlier",
+    );
+  } catch {
+    return new Date(Date.parse(now) + 7 * 86400000).toISOString();
+  }
+}

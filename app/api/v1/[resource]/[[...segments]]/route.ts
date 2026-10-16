@@ -75,7 +75,21 @@ const routes: Record<
     update: "saved_view_update",
     id: "view_id",
   },
-  "calendar-connections": { list: "calendar_list" },
+  "calendar-connections": {
+    list: "calendar_list",
+    create: "calendar_source_configure",
+    update: "calendar_source_configure",
+    archive: "calendar_source_disconnect",
+    id: "source_id",
+  },
+  "calendar-operations": { list: "calendar_operation_status" },
+  "time-drafts": {
+    list: "time_draft_list",
+    create: "time_draft_save",
+    update: "time_draft_save",
+    archive: "time_draft_archive",
+    id: "draft_id",
+  },
 };
 type Context = { params: Promise<{ resource: string; segments?: string[] }> };
 async function handle(request: Request, context: Context) {
@@ -109,10 +123,16 @@ async function handle(request: Request, context: Context) {
         "from",
         "to",
         "employer",
+        "calendar_id",
         "cursor",
         "entity_id",
       ])
         if (params.has(key)) input[key] = params.get(key);
+      if (params.has("source_ids"))
+        input.source_ids = z
+          .array(z.string().min(1).max(512))
+          .max(100)
+          .parse(params.getAll("source_ids"));
       if (params.has("limit"))
         input.limit = z.coerce
           .number()

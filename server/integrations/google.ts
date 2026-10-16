@@ -32,11 +32,24 @@ export class GoogleReadClient {
         503,
       );
   }
-  private async request(url: URL): Promise<Record<string, unknown>> {
+  protected async request(
+    url: URL,
+    options: {
+      method?: string;
+      body?: Record<string, unknown>;
+      etag?: string;
+    } = {},
+  ): Promise<Record<string, unknown>> {
     let response: Response;
     try {
       response = await fetch(url, {
-        headers: { Authorization: "Bearer " + this.accessToken },
+        method: options.method,
+        headers: {
+          Authorization: "Bearer " + this.accessToken,
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...(options.etag ? { "If-Match": options.etag } : {}),
+        },
+        ...(options.body ? { body: JSON.stringify(options.body) } : {}),
         signal: AbortSignal.timeout(8000),
         redirect: "error",
         cache: "no-store",
@@ -45,28 +58,91 @@ export class GoogleReadClient {
       throw new DomainError(
         "UNSUPPORTED_OPERATION",
         "Google source could not be reached; reconnect or retry the source.",
-        {},
+        { outcome_unknown: !!options.method && options.method !== "GET" },
         503,
       );
     }
     if (!response.ok) {
-      await response.body?.cancel();
+      // Never retain the provider error text (it can include private identifiers).
+      let reason = "";
+      const errorReader = response.body?.getReader();
+      if (errorReader) {
+        try {
+          const errorChunks: Uint8Array[] = [];
+          let errorBytes = 0;
+          while (errorBytes <= 16384) {
+            const chunk = await errorReader.read();
+            if (chunk.done) break;
+            errorBytes += chunk.value.byteLength;
+            if (errorBytes <= 16384) errorChunks.push(chunk.value);
+          }
+          if (errorBytes > 0 && errorBytes <= 16384) {
+            const error = JSON.parse(
+              Buffer.concat(errorChunks).toString("utf8"),
+            );
+            reason = String(
+              error?.error?.errors?.[0]?.reason ??
+                error?.error?.details?.find(
+                  (detail: { reason?: string }) => detail?.reason,
+                )?.reason ??
+                "",
+            );
+          }
+        } catch {
+          /* Provider details are intentionally discarded. */
+        } finally {
+          await errorReader.cancel().catch(() => {});
+          errorReader.releaseLock();
+        }
+      }
+      const retryAfter = response.headers.get("retry-after");
+      const retrySeconds = retryAfter
+        ? /^\d+$/.test(retryAfter)
+          ? Number(retryAfter)
+          : Math.max(0, Math.ceil((Date.parse(retryAfter) - Date.now()) / 1000))
+        : undefined;
+      const configurationError = [
+        "accessNotConfigured",
+        "serviceDisabled",
+        "SERVICE_DISABLED",
+        "apiNotActivated",
+        "API_NOT_ACTIVATED",
+      ].includes(reason);
+      const rateLimited =
+        response.status === 429 ||
+        [
+          "rateLimitExceeded",
+          "userRateLimitExceeded",
+          "quotaExceeded",
+        ].includes(reason);
       throw new DomainError(
         "UNSUPPORTED_OPERATION",
-        response.status === 401 || response.status === 403
-          ? "Google grant expired, revoked, or insufficient; reconnect the source."
-          : "Google source could not be read.",
-        { upstream_status: response.status },
+        configurationError
+          ? "The requested Google API is disabled for this OAuth project; enable it in Google Cloud."
+          : rateLimited
+            ? "Google source is rate limited; retry after the indicated delay."
+            : response.status === 401 || response.status === 403
+              ? "Google grant expired, revoked, or insufficient; reconnect the source."
+              : "Google source could not be read.",
+        {
+          upstream_status: response.status,
+          configuration_error: configurationError,
+          rate_limited: rateLimited,
+          ...(Number.isFinite(retrySeconds)
+            ? { retry_after_seconds: Math.min(86400, retrySeconds!) }
+            : {}),
+        },
         502,
       );
     }
+    if (response.status === 204) return {};
     const maxBytes = 2 * 1024 * 1024;
     const reader = response.body?.getReader();
     if (!reader)
       throw new DomainError(
         "UNSUPPORTED_OPERATION",
         "Google source returned no data.",
-        {},
+        { outcome_unknown: !!options.method && options.method !== "GET" },
         502,
       );
     const chunks: Uint8Array[] = [];
@@ -185,6 +261,58 @@ export class GoogleReadClient {
     );
   }
 }
+/** Calendar writes are deliberately limited to personal events by the provider dispatcher. */
+export class GoogleCalendarClient extends GoogleReadClient {
+  calendar(id: string) {
+    return this.request(
+      new URL(
+        "https://www.googleapis.com/calendar/v3/users/me/calendarList/" +
+          encodeURIComponent(id),
+      ),
+    );
+  }
+  syncEvents(calendarId: string, syncToken?: string, pageToken?: string) {
+    const url = new URL(
+      "https://www.googleapis.com/calendar/v3/calendars/" +
+        encodeURIComponent(calendarId) +
+        "/events",
+    );
+    // These parameters are identical for initial and incremental sync. In particular,
+    // a moving timeMin/timeMax/orderBy must never be combined with a sync token.
+    url.searchParams.set("singleEvents", "false");
+    url.searchParams.set("showDeleted", "true");
+    url.searchParams.set("maxResults", "1000");
+    if (syncToken) url.searchParams.set("syncToken", syncToken);
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    return this.request(url);
+  }
+  event(calendarId: string, eventId: string) {
+    return this.request(
+      new URL(
+        "https://www.googleapis.com/calendar/v3/calendars/" +
+          encodeURIComponent(calendarId) +
+          "/events/" +
+          encodeURIComponent(eventId),
+      ),
+    );
+  }
+  change(
+    calendarId: string,
+    eventId: string | null,
+    method: "POST" | "PUT" | "DELETE",
+    body?: Record<string, unknown>,
+    etag?: string,
+  ) {
+    const url = new URL(
+      "https://www.googleapis.com/calendar/v3/calendars/" +
+        encodeURIComponent(calendarId) +
+        "/events" +
+        (eventId ? "/" + encodeURIComponent(eventId) : ""),
+    );
+    url.searchParams.set("sendUpdates", "none");
+    return this.request(url, { method, body, etag });
+  }
+}
 export function normalizeGoogleEvent(
   event: Record<string, unknown>,
   fallbackTimezone = "Europe/Berlin",
@@ -194,16 +322,29 @@ export function normalizeGoogleEvent(
     end = event.end as typeof start;
   if (!start || !end || event.status === "cancelled") return null;
   const timezone = start.timeZone || fallbackTimezone;
-  const starts_at =
-    start.dateTime ||
-    (start.date
-      ? zonedLocalToInstant(start.date + "T00:00", timezone, "earlier")
-      : null);
-  const ends_at =
-    end.dateTime ||
-    (end.date
-      ? zonedLocalToInstant(end.date + "T00:00", timezone, "earlier")
-      : null);
+  const resolveTime = (time: NonNullable<typeof start>) => {
+    try {
+      if (time.dateTime)
+        return /(?:Z|[+-]\d{2}:\d{2})$/.test(time.dateTime)
+          ? time.dateTime
+          : zonedLocalToInstant(
+              time.dateTime,
+              time.timeZone || timezone,
+              "earlier",
+            );
+      return time.date
+        ? zonedLocalToInstant(
+            time.date + "T00:00",
+            time.timeZone || timezone,
+            "earlier",
+          )
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const starts_at = resolveTime(start);
+  const ends_at = resolveTime(end);
   if (
     !starts_at ||
     !ends_at ||
@@ -215,15 +356,48 @@ export function normalizeGoogleEvent(
       "INVALID_INPUT",
       "Google event has invalid time bounds.",
     );
+  const attendees = Array.isArray(event.attendees)
+    ? (event.attendees as Record<string, unknown>[])
+    : [];
+  const selfDeclined = attendees.some(
+    (attendee) =>
+      attendee.self === true && attendee.responseStatus === "declined",
+  );
+  let originalUrl: string | null = null;
+  if (typeof event.htmlLink === "string") {
+    try {
+      const url = new URL(event.htmlLink);
+      if (
+        url.protocol === "https:" &&
+        ["calendar.google.com", "www.google.com"].includes(url.hostname) &&
+        !url.username &&
+        !url.password
+      )
+        originalUrl = url.toString();
+    } catch {
+      /* A malformed provider link is never rendered. */
+    }
+  }
   return {
     external_uid: event.id,
     title: typeof event.summary === "string" ? event.summary : "",
     notes: typeof event.description === "string" ? event.description : "",
-    starts_at,
-    ends_at,
+    starts_at: new Date(starts_at).toISOString(),
+    ends_at: new Date(ends_at).toISOString(),
     timezone,
     all_day: !!start.date,
     provider: "google_calendar",
     source_read_only: true,
+    busy: event.transparency !== "transparent" && !selfDeclined,
+    transparency:
+      event.transparency === "transparent" ? "transparent" : "opaque",
+    self_declined: selfDeclined,
+    original_url: originalUrl,
+    provider_etag: typeof event.etag === "string" ? event.etag : null,
+    recurring_event_id:
+      typeof event.recurringEventId === "string"
+        ? event.recurringEventId
+        : null,
+    original_start: event.originalStartTime ?? null,
   };
 }

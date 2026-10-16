@@ -26,6 +26,10 @@ export const BACKUP_TABLES = [
   "calendar_events",
   "event_reminders",
   "time_entries",
+  "time_drafts",
+  "calendar_sources",
+  "calendar_external_events",
+  "calendar_mutation_intents",
   "preferences",
   "saved_views",
   "reminders",
@@ -382,6 +386,10 @@ export async function legacyImport(
   };
 }
 const ADDITIVE_BACKUP_TABLES: readonly string[] = [
+  "time_drafts",
+  "calendar_sources",
+  "calendar_external_events",
+  "calendar_mutation_intents",
   "file_annotations",
   "event_reminders",
 ];
@@ -552,7 +560,7 @@ export async function restoreBackup(
         return jsonColumns.has(c) && value !== null ? json(value) : value;
       });
       await tx.query(
-        `INSERT INTO ${table}(${keys.join(",")}) VALUES(${keys.map((_, index) => `$${index + 1}`).join(",")})`,
+        `INSERT INTO ${table}(${keys.map((key) => '"' + key.replaceAll('"', '""') + '"').join(",")}) VALUES(${keys.map((_, index) => `$${index + 1}`).join(",")})`,
         vals,
       );
     }

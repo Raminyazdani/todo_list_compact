@@ -12,7 +12,7 @@ const files = execFileSync(
 const forbiddenFiles =
   /(?:PRIVATE_SOURCE|REFERENCE_(?:LEDGER|HUB)|migration-input|credentials-.+-private|\.env(?:\.|$)|live-source|\.xlsx$|\.zip$|backup.+\.json$)/i;
 const forbiddenSecrets =
-  /(?:gh[opusr]_[A-Za-z0-9]{25,}|AIza[A-Za-z0-9_-]{30,}|sk-(?:proj-)?[A-Za-z0-9_-]{30,}|postgres(?:ql)?:\/\/[^\s:@]+:[^\s@]+@(?!localhost|127\.0\.0\.1))/;
+  /(?:gh[opusr]_[A-Za-z0-9]{25,}|AIza[A-Za-z0-9_-]{30,}|GOCSPX-[A-Za-z0-9_-]{20,}|sk-(?:proj-)?[A-Za-z0-9_-]{30,}|postgres(?:ql)?:\/\/[^\s:@]+:[^\s@]+@(?!localhost|127\.0\.0\.1))/;
 let privateIds: string[] = [];
 const sourceIndex = process.argv.indexOf("--private-source");
 if (sourceIndex >= 0) {
@@ -23,7 +23,11 @@ if (sourceIndex >= 0) {
     if (Array.isArray(value)) value.forEach(collect);
     else if (value && typeof value === "object")
       for (const [key, item] of Object.entries(value)) {
-        if (key.endsWith("_id") && typeof item === "string" && item.length > 10)
+        if (
+          (key === "id" || key.endsWith("_id")) &&
+          typeof item === "string" &&
+          item.length > 10
+        )
           privateIds.push(item);
         else collect(item);
       }

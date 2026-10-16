@@ -18,6 +18,236 @@
   font-family: Tahoma, "Segoe UI", Arial, sans-serif;
   font-size: 14px;
 }
+.calendar-workspace-tabs {
+  margin-bottom: 18px;
+}
+.calendar-source-status {
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.calendar-source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.calendar-source-chips:empty {
+  display: none;
+}
+.calendar-source-chips .chip {
+  white-space: normal;
+}
+.calendar-source-list {
+  margin-top: 20px;
+}
+.work-month-panel {
+  margin: 22px 0;
+}
+.work-month-scroll {
+  overflow: auto;
+  max-height: 78vh;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overscroll-behavior-inline: contain;
+}
+.work-month-grid {
+  min-width: 1100px;
+}
+.work-month-ruler,
+.work-month-day {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+}
+.work-month-ruler {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--raised);
+  height: 34px;
+  border-bottom: 1px solid var(--line);
+}
+.work-month-ruler > span {
+  padding: 8px 12px;
+}
+.work-month-ruler > div {
+  position: relative;
+  margin-inline: 10px;
+}
+.work-month-ruler > div > span {
+  position: absolute;
+  transform: translateX(-50%);
+  top: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.work-month-date {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-content: center;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.work-month-date strong {
+  font-size: 18px;
+}
+.work-month-date small {
+  color: var(--muted);
+}
+.work-month-date > span {
+  width: 100%;
+  font-size: 9px;
+  color: var(--danger);
+}
+.work-month-day.holiday .work-month-date {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+}
+.work-month-track {
+  position: relative;
+  margin-inline: 10px;
+  border-bottom: 1px solid var(--line);
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(4.16667% - 1px),
+    var(--line) calc(4.16667% - 1px),
+    var(--line) 4.16667%
+  );
+  touch-action: pan-y;
+}
+.work-month-track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.work-month-block {
+  display: flex;
+  position: absolute;
+  min-width: 20px;
+  height: 27px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  z-index: 1;
+}
+.work-month-block.seewiesen {
+  border-color: var(--green);
+  background: color-mix(in srgb, var(--green) 14%, var(--surface));
+  color: var(--green);
+}
+.work-month-block button {
+  color: inherit;
+  background: transparent;
+  border: 0;
+  min-width: 0;
+  padding: 2px 3px;
+  touch-action: none;
+}
+.work-month-block .work-interval-move {
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: 10px;
+  cursor: grab;
+}
+.work-month-block .work-interval-start,
+.work-month-block .work-interval-end {
+  cursor: ew-resize;
+  width: 14px;
+  min-width: 10px;
+}
+.work-month-block button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.work-calendar-overlay {
+  position: absolute;
+  height: 17px;
+  min-width: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--orange);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 10px;
+  background: color-mix(in srgb, var(--orange) 12%, var(--surface));
+  color: var(--orange);
+}
+.work-drawing {
+  position: absolute;
+  inset-block: 0;
+  border: 1px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  pointer-events: none;
+}
+.work-inline-table {
+  min-width: 830px;
+}
+.work-inline-table input[type="time"] {
+  width: 100px;
+}
+.work-inline-table input[type="date"] {
+  min-width: 140px;
+}
+.work-inline-table td > small,
+.work-inline-table td > [role="status"] {
+  display: block;
+}
+.work-inline-table td:last-child .button {
+  margin: 3px;
+}
+.work-description-row td {
+  padding-block: 5px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.work-description-row textarea {
+  width: 100%;
+  resize: vertical;
+}
+.work-row-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.work-row-status .small select {
+  margin-inline-start: 8px;
+  width: auto;
+}
+.work-row-status .warning {
+  flex-basis: 100%;
+}
+@media (max-width: 640px) {
+  .calendar-source-status {
+    padding: 10px;
+  }
+  .calendar-source-status .form-actions {
+    gap: 7px;
+  }
+  .calendar-workspace-tabs {
+    width: 100%;
+  }
+  .work-month-ruler,
+  .work-month-day {
+    grid-template-columns: 78px 1fr;
+  }
+  .work-month-date {
+    padding: 6px;
+  }
+  .work-month-panel {
+    padding: 12px;
+  }
+}
 .graph-scope .field {
   flex: 1;
   min-width: 210px;

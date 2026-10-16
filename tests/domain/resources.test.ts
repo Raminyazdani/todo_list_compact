@@ -289,7 +289,7 @@ describe("Persistence, backup and resource integrity", () => {
       ),
     ).rejects.toMatchObject({ code: "ENTITY_NOT_FOUND" });
   });
-  it("time_entries_reject_overlap_and_keep_calendar_independent", async () => {
+  it("time_entries_preserve_overlap_with_warning_and_keep_calendar_independent", async () => {
     await exec("calendar_create_local_event", {
       title: "Appointment",
       starts_at: "2030-01-01T10:00:00Z",
@@ -307,15 +307,16 @@ describe("Persistence, backup and resource integrity", () => {
         starts_at: "2030-01-01T10:30:00Z",
         ends_at: "2030-01-01T11:30:00Z",
       }),
-    ).rejects.toMatchObject({ code: "TIME_OVERLAP" });
+    ).resolves.toMatchObject({ data: { warnings: ["WORK_INTERVAL_OVERLAP"] } });
     await exec("time_entry_create", {
       employer: "Seewiesen",
       starts_at: "2030-01-01T11:00:00Z",
       ends_at: "2030-01-01T12:00:00Z",
     });
     expect(await service.query("time_summary", {}, principal)).toMatchObject({
-      minutes: 120,
-      employers: { Jena: 60, Seewiesen: 60 },
+      minutes: 180,
+      overlap_minutes: 60,
+      employers: { Jena: 60, Seewiesen: 120 },
     });
     expect(
       await service.query(

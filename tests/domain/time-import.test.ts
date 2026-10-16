@@ -153,7 +153,7 @@ describe("Reviewed transactional work-log JSON import", () => {
       { total: 0 },
     );
   });
-  it("overlap_guards_match_existing_work_logs_and_allow_exact_touching_boundaries", async () => {
+  it("overlap_warnings_preserve_intervals_and_allow_exact_touching_boundaries", async () => {
     const a = entry({
         starts_at: "2027-04-01T08:00:00Z",
         ends_at: "2027-04-01T09:00:00Z",
@@ -162,11 +162,14 @@ describe("Reviewed transactional work-log JSON import", () => {
         starts_at: "2027-04-01T08:30:00Z",
         ends_at: "2027-04-01T09:30:00Z",
       });
-    await expect(preview([a, b])).rejects.toMatchObject({
-      code: "TIME_OVERLAP",
+    expect(await preview([a, b])).toMatchObject({
+      warnings: ["WORK_INTERVAL_OVERLAP"],
+      changes: { overlap: { overlap_minutes: 30 } },
     });
     await commit((await preview([a])).preview_id);
-    await expect(preview([b])).rejects.toMatchObject({ code: "TIME_OVERLAP" });
+    expect(await preview([b])).toMatchObject({
+      warnings: ["WORK_INTERVAL_OVERLAP"],
+    });
     const adjacent = entry({
       starts_at: "2027-04-01T09:00:00Z",
       ends_at: "2027-04-01T10:00:00Z",

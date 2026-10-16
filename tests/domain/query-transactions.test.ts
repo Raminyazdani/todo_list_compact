@@ -40,9 +40,7 @@ describe("Canonical pure-read transaction routing", () => {
         "task_batch_preview",
         "calendar_occurrence_reschedule_preview",
         "time_entry_import_preview",
-        "calendar_list",
-        "calendar_events_query",
-        "calendar_availability",
+        "calendar_event_change_preview",
       ].sort(),
     );
     for (const operation of QUERY_NAMES)

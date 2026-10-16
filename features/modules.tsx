@@ -1982,14 +1982,14 @@ export function Settings({
         <section className="panel">
           <SectionHeading
             title={t(
-              "Google Calendar (فقط خواندنی)",
-              "Google Calendar (read only)",
+              "Google Calendar؛ همگام‌سازی دوطرفه",
+              "Google Calendar · two-way synchronization",
             )}
           />
           <p>
             {t(
-              "با اجازهٔ جداگانهٔ شما، رویدادها خوانده می‌شوند. این اتصال اجازهٔ ساخت، تغییر یا حذف رویدادهای Google را ندارد.",
-              "With your separate authorization, events can be read. This connection cannot create, change or delete Google events.",
+              "با رضایت جداگانهٔ شما، تقویم‌ها خوانده و رویدادهای شخصی در تقویم‌های متعلق به شما ساخته، ویرایش یا حذف می‌شوند. رویدادهای دارای مهمان و دعوت‌ها از Google مدیریت می‌شوند.",
+              "With your separate consent, calendars are read and personal events in calendars you own can be created, edited or deleted. Manage guest events and invitations in Google.",
             )}
           </p>
           <Button
@@ -2001,15 +2001,18 @@ export function Settings({
                   "/settings",
                   window.location.origin,
                 ).toString(),
-                scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+                scopes: [
+                  "https://www.googleapis.com/auth/calendar.readonly",
+                  "https://www.googleapis.com/auth/calendar.events.owned",
+                ],
               });
               if (result.error)
                 setMessage(result.error.message ?? "Google connection failed");
             }}
           >
             {t(
-              "اتصال خواندنی Google Calendar",
-              "Connect read-only Google Calendar",
+              "اتصال یا ارتقای مجوز Google Calendar",
+              "Connect or upgrade Google Calendar permission",
             )}
           </Button>
           {capabilities.data?.oauth_client_configured !== true && (
