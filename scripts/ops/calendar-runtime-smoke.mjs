@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { boundedSignIn } from "./bounded-signin.mjs";
+import { boundedRegistration } from "../../tests/contracts/bounded-registration.ts";
 import {
   admitPrivatePath,
   withPrivateFile,
@@ -53,6 +54,56 @@ async function readPrivate(path) {
   return withPrivateFile(path, async (file) =>
     JSON.parse(await file.readFile("utf8")),
   );
+}
+
+/** Preserve the journaled DCR identity; only explicit 429 rejections can retry. */
+export async function registerCalendarRuntimeGrant(
+  origin,
+  grant,
+  metadata,
+  save,
+  dependencies = {},
+) {
+  check(
+    !grant.client_id && grant.registration_state !== "attempted",
+    "CALENDAR_RUNTIME_DCR_OUTCOME_UNKNOWN_RETAIN_JOURNAL",
+  );
+  if (grant.registration_metadata)
+    check(
+      JSON.stringify(grant.registration_metadata) === JSON.stringify(metadata),
+      "CALENDAR_RUNTIME_DCR_RETAINED_METADATA_MISMATCH",
+    );
+  else grant.registration_metadata = metadata;
+  grant.registration_state = "attempted";
+  await save();
+  let response;
+  try {
+    response = await boundedRegistration(
+      origin,
+      grant.registration_metadata,
+      dependencies,
+    );
+  } catch {
+    // Acceptance may precede transport failure. Retain attempted, never retry.
+    throw new Error("CALENDAR_RUNTIME_DCR_OUTCOME_UNKNOWN_RETAIN_JOURNAL");
+  }
+  if (!response.ok) {
+    if (
+      response.status >= 400 &&
+      response.status < 500 &&
+      response.status !== 408
+    ) {
+      grant.registration_state = "rejected";
+      await save();
+      throw new Error("CALENDAR_RUNTIME_DCR_REJECTED_" + response.status);
+    }
+    throw new Error("CALENDAR_RUNTIME_DCR_OUTCOME_UNKNOWN_RETAIN_JOURNAL");
+  }
+  const registration = await response.json();
+  check(registration.client_id, "CALENDAR_RUNTIME_DCR_ACK_INVALID");
+  grant.client_id = registration.client_id;
+  grant.registration_state = "confirmed";
+  await save();
 }
 
 /** Actual SDK/HTTP proof. It never calls a source or Google mutation command. */
@@ -150,16 +201,10 @@ export async function verifyCalendarRuntime(args) {
   const authorize = async (grant) => {
     const callback = "http://127.0.0.1:39876/callback";
     if (!grant.client_id) {
-      check(
-        grant.registration_state !== "attempted",
-        "CALENDAR_RUNTIME_DCR_OUTCOME_UNKNOWN_RETAIN_JOURNAL",
-      );
-      grant.registration_state = "attempted";
-      await save();
-      const response = await http("/api/auth/oauth2/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await registerCalendarRuntimeGrant(
+        origin,
+        grant,
+        {
           client_name:
             "Synthetic calendar runtime QA " +
             journal.run_id +
@@ -172,18 +217,9 @@ export async function verifyCalendarRuntime(args) {
           response_types: ["code"],
           scope: grant.scopes.join(" "),
           resources: [origin + "/api/mcp"],
-        }),
-      });
-      if (!response.ok) {
-        grant.registration_state = "rejected";
-        await save();
-        throw new Error("CALENDAR_RUNTIME_DCR_REJECTED_" + response.status);
-      }
-      const registration = await response.json();
-      check(registration.client_id, "CALENDAR_RUNTIME_DCR_ACK_INVALID");
-      grant.client_id = registration.client_id;
-      grant.registration_state = "confirmed";
-      await save();
+        },
+        save,
+      );
     }
     if (grant.access_token && grant.expires_at > Date.now() + 60000)
       return grant.access_token;
