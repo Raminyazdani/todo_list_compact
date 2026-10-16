@@ -885,7 +885,7 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
   whoami:
     "Read the authenticated actor, owner workspace, channel and granted scopes; no session tokens are returned.",
   system_capabilities:
-    "Read available canonical operations and actual integration capabilities; disconnected services are disclosed.",
+    "Read implemented canonical feature support and integration configuration flags. Feature support does not establish an owner OAuth grant. Use calendar_sync_status with calendar:read for current source readiness; personal changes still require calendar:write, fresh provider checks and a confirmed preview.",
   task_search:
     "Search owner tasks with explicit status/readiness/project/archive/deadline filters and bounded cursor pagination; dates remain Berlin local dates.",
   task_get:

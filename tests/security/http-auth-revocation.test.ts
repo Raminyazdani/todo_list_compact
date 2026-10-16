@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   httpEnabled,
   origin,
@@ -8,9 +8,15 @@ import {
 describe.skipIf(!httpEnabled)(
   "Actual owner consent revocation invalidates an existing OAuth JWT immediately",
   () => {
+    let cookie = "",
+      issued: Awaited<ReturnType<typeof scopedToken>>;
+    // Setup permits sign-in 30s + bounded DCR 65s + 25s for PKCE requests;
+    // the revocation assertions retain their separate 60s budget.
+    beforeAll(async () => {
+      cookie = await ownerCookie();
+      issued = await scopedToken(cookie, ["tasks:read"]);
+    }, 120000);
     it("owner browser lists no tokens, revokes its new test client and the same unexpired JWT is denied", async () => {
-      const cookie = await ownerCookie(),
-        issued = await scopedToken(cookie, ["tasks:read"]);
       const tokenHeaders = { Authorization: "Bearer " + issued.accessToken };
       expect(
         (

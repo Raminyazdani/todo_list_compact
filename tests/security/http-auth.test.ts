@@ -15,11 +15,12 @@ let cookie = "",
 describe.skipIf(!httpEnabled)(
   "Independent HTTP auth and policy adversarial checks",
   () => {
+    // Setup permits sign-in 30s + bounded DCR 65s + 25s for PKCE requests.
     beforeAll(async () => {
       cookie = await ownerCookie();
       registration = await readonlyToken(cookie);
       token = registration.accessToken;
-    }, 60000);
+    }, 120000);
     it("real read-only OAuth token can read but cannot mutate REST or MCP", async () => {
       const headers = { Authorization: "Bearer " + token };
       const read = await fetch(origin + "/api/v1/query?operation=task_search", {

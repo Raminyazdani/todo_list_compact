@@ -1822,6 +1822,11 @@ export function Settings({
   } | null>(null);
   const [message, setMessage] = useState("");
   const session = authClient.useSession();
+  const [googlePending, setGooglePending] = useState(false);
+  const [googleError, setGoogleError] = useState("");
+  const [googleAuthorizationUrl, setGoogleAuthorizationUrl] = useState<
+    string | null
+  >(null);
   async function saveSettings(settings: Record<string, unknown>) {
     if (!preferences.data || preferences.error || preferences.fetching) return;
     await action(
@@ -1993,21 +1998,57 @@ export function Settings({
             )}
           </p>
           <Button
-            disabled={capabilities.data?.oauth_client_configured !== true}
+            disabled={
+              capabilities.data?.oauth_client_configured !== true ||
+              googlePending
+            }
+            aria-busy={googlePending}
             onClick={async () => {
-              const result = await authClient.linkSocial({
-                provider: "google",
-                callbackURL: new URL(
-                  "/settings",
-                  window.location.origin,
-                ).toString(),
-                scopes: [
-                  "https://www.googleapis.com/auth/calendar.readonly",
-                  "https://www.googleapis.com/auth/calendar.events.owned",
-                ],
-              });
-              if (result.error)
-                setMessage(result.error.message ?? "Google connection failed");
+              setGooglePending(true);
+              setGoogleError("");
+              setGoogleAuthorizationUrl(null);
+              try {
+                const result = await authClient.linkSocial({
+                  provider: "google",
+                  callbackURL: new URL(
+                    "/settings",
+                    window.location.origin,
+                  ).toString(),
+                  scopes: [
+                    "https://www.googleapis.com/auth/calendar.readonly",
+                    "https://www.googleapis.com/auth/calendar.events.owned",
+                  ],
+                });
+                if (result.error) {
+                  setGoogleError(
+                    result.error.message ??
+                      t(
+                        "اتصال Google برقرار نشد؛ دوباره تلاش کن.",
+                        "Google connection failed. Please retry.",
+                      ),
+                  );
+                  return;
+                }
+                // Better Auth performs its normal redirect. Keep a native link
+                // available if the browser remains on this page afterwards.
+                const url = new URL(result.data?.url ?? "");
+                if (
+                  url.origin !== "https://accounts.google.com" ||
+                  url.username ||
+                  url.password
+                )
+                  throw new Error("INVALID_AUTHORIZATION_URL");
+                setGoogleAuthorizationUrl(url.href);
+              } catch {
+                setGoogleError(
+                  t(
+                    "صفحهٔ اتصال Google باز نشد. اتصال اینترنت را بررسی کن و دوباره تلاش کن.",
+                    "The Google connection page could not be opened. Check your connection and retry.",
+                  ),
+                );
+              } finally {
+                setGooglePending(false);
+              }
             }}
           >
             {t(
@@ -2015,6 +2056,30 @@ export function Settings({
               "Connect or upgrade Google Calendar permission",
             )}
           </Button>
+          {googlePending && (
+            <p role="status" aria-live="polite">
+              {t(
+                "در حال بازکردن صفحهٔ اتصال Google…",
+                "Opening the Google connection page…",
+              )}
+            </p>
+          )}
+          {googleError && (
+            <p role="alert" className="error">
+              {googleError}
+            </p>
+          )}
+          {googleAuthorizationUrl && (
+            <p className="connection-notice">
+              {t(
+                "اگر صفحهٔ Google باز نشد، از این لینک ادامه بده.",
+                "If the Google page did not open, continue using this link.",
+              )}{" "}
+              <a className="button" href={googleAuthorizationUrl}>
+                {t("ادامه در Google", "Continue in Google")}
+              </a>
+            </p>
+          )}
           {capabilities.data?.oauth_client_configured !== true && (
             <p className="muted small">
               {t(

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   httpEnabled,
   origin,
@@ -11,6 +11,20 @@ import {
 describe.skipIf(!httpEnabled)(
   "Actual OIDC DCR and PKCE interoperability under the MCP resource",
   () => {
+    let cookie = "",
+      nonce = "",
+      issued: Awaited<ReturnType<typeof scopedToken>>;
+    // Setup permits sign-in 30s + bounded DCR 65s + 25s for PKCE requests;
+    // the OIDC assertions retain their separate 60s budget.
+    beforeAll(async () => {
+      nonce = randomUUID();
+      cookie = await ownerCookie();
+      issued = await scopedToken(
+        cookie,
+        ["openid", "profile", "email", "tasks:read"],
+        { nonce },
+      );
+    }, 120000);
     it("advertised identity scopes register, consent and return owner-bound UserInfo without broadening the resource", async () => {
       const discovery = await fetch(
         origin + "/api/auth/.well-known/openid-configuration",
@@ -23,13 +37,6 @@ describe.skipIf(!httpEnabled)(
         jwks = new URL(metadata.jwks_uri);
       expect(userInfoEndpoint.origin).toBe(origin);
       expect(jwks.origin).toBe(origin);
-      const nonce = randomUUID(),
-        cookie = await ownerCookie(),
-        issued = await scopedToken(
-          cookie,
-          ["openid", "profile", "email", "tasks:read"],
-          { nonce },
-        );
       const headers = { Authorization: "Bearer " + issued.accessToken };
       const identityResponse = await fetch(
         origin + "/api/v1/query?operation=whoami",

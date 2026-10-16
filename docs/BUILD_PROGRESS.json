@@ -1,11 +1,11 @@
 {
-  "updated_at": "2026-10-16T18:14:32.656Z",
-  "branch": "codex/calendar-workplanner-integration",
-  "commit": "5139c99f0d2c35b1bb847cdb12f7197a92659178",
-  "phase": "calendar_workplanner_implementation_and_verification",
+  "updated_at": "2026-10-16T22:32:54.049Z",
+  "branch": "codex/calendar-live-verification",
+  "commit": "210582c500c4156f5fbfaf748e31289cadac6809",
+  "phase": "calendar_workplanner_deployed_google_link_verification",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
-  "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
+  "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/2",
   "initial_deployment": {
     "id": "dpl_DYEdvoPd32LP6PhgeM5pNEwTTHuo",
     "commit": "0ff748b8415e70e14c921c2db5f18f5fc2f0393f",
@@ -51,9 +51,8 @@
     "open_PR_audit_zero_PR1_already_merged_ancestor_and_old_attachment_detached"
   ],
   "active": [
-    "calendar_workplanner_integration",
-    "google_app_oauth_activation",
-    "final_release_validation"
+    "real_app_google_link_and_two_way_verification",
+    "truthful_calendar_feature_metadata"
   ],
   "tests": [
     {
@@ -95,6 +94,21 @@
       "OIDC_passed": 1,
       "coverage_passed": 462,
       "coverage_optin_skipped": 28
+    },
+    {
+      "head_sha": "a97688d51bc4da5a3513bef83c833f3fb352a0dd",
+      "run": 38951501388,
+      "conclusion": "success",
+      "unit_integration_passed": 593,
+      "optin_skipped": 29,
+      "native_PostgreSQL_passed": 13,
+      "browser_passed": 31,
+      "explicit_production_browser_gates_skipped": 3,
+      "HTTP_authorization_passed": 16,
+      "OIDC_passed": 1,
+      "rate_limit_passed": 6,
+      "real_token_expiry_passed": 1,
+      "actual_SDK_catalog": 142
     }
   ],
   "task_graph_status": {
@@ -132,62 +146,58 @@
     }
   },
   "open_severity": {
-    "production_gates": "CURRENT_OWNER_REQUEST_PASS_original_calendar_and_scheduled_cron_evidence_separate",
-    "known_p0_code_defects": "none_observed_in_verified_snapshot",
-    "known_p1_checks": "No unresolved code defect observed in complete CI or production verification; native current-chat MCP read now PASS. Unobserved scheduled cron and original product-calendar grants retain their separate limits.",
-    "external_provider_gates": "No provider block remains for the current direct owner change; product-calendar grant and scheduled execution are separate."
+    "known_p0_code_defects": "none_observed_in_verified_deployed_snapshot",
+    "known_p1_code_defects": "none_observed_after_independent_review_and_complete_CI",
+    "remaining_live_gate": "app_specific_Google_OAuth_callback_and_actual_two_way_event_roundtrip",
+    "metadata_followup": "P2_fix_implemented_27_focused_tests_type_lint_format_PASS_not_yet_released",
+    "Google_button_observation": "Controlled_production_click_POST200_Google_top_level_navigation_PASS_user_browser_failure_not_reproduced_inline_feedback_fix_4_browser_tests_PASS_not_yet_released",
+    "scheduled_execution": "historical_cron_receipt_not_observed_no_new_background_sync_added"
   },
-  "blockers": [],
+  "blockers": [
+    "No Google provider account is yet recorded for the authenticated production owner; initial OAuth request configuration is verified correct. Owner reports the settings button opens no Google page; client navigation investigation is active."
+  ],
   "available_agents": [
     "all_scoped_implementation_and_independent_reviews_completed",
     "root_final_verified_receipts_recorded"
   ],
   "next_actions": [
-    "scheduled_cron_and_product_calendar_grants_remain_separate_original_scope_evidence"
+    "Complete real app Google callback and verify personal-event roundtrip with exact QA cleanup",
+    "Release validated connection feedback and capability metadata followup, then retry owner Google consent with visible inline status"
   ],
   "release_complete": false,
   "execution_prompt": "docs/CONTINUE_PROMPT_FA.md",
-  "goal_status": "blocked_prior_scope_new_human_request_in_progress",
+  "goal_status": "in_progress_real_app_google_link",
   "goal_token_budget": null,
   "latest_verified": {
-    "rate_limit_passed": 6,
-    "coverage_files_skipped": 9,
-    "HTTP_authorization_notification_passed": 16,
-    "native_postgres_passed": 12,
-    "browser_skipped": 3,
-    "coverage_files_passed": 60,
-    "run": 38574338435,
-    "real_expiry_passed": 1,
-    "domain_branches_percent": 91.14,
-    "browser_failed": 0,
-    "head_sha": "d3474048e7731cd0da4d1b92df09204825afb943",
-    "conclusion": "PASS",
-    "browser_passed": 24,
-    "domain_statements_percent": 94.63,
-    "actual_SDK_tools": 130,
+    "head_sha": "a97688d51bc4da5a3513bef83c833f3fb352a0dd",
+    "run": 38951501388,
+    "conclusion": "success",
+    "unit_integration_passed": 593,
+    "optin_skipped": 29,
+    "native_PostgreSQL_passed": 13,
+    "browser_passed": 31,
+    "explicit_production_browser_gates_skipped": 3,
+    "HTTP_authorization_passed": 16,
     "OIDC_passed": 1,
-    "coverage_passed": 462,
-    "coverage_optin_skipped": 28
+    "rate_limit_passed": 6,
+    "real_token_expiry_passed": 1,
+    "actual_SDK_catalog": 142
   },
   "latest_observed_CI": {
-    "rate_limit_passed": 6,
-    "coverage_files_skipped": 9,
-    "HTTP_authorization_notification_passed": 16,
-    "native_postgres_passed": 12,
-    "browser_skipped": 3,
-    "coverage_files_passed": 60,
-    "run": 38574338435,
-    "real_expiry_passed": 1,
-    "domain_branches_percent": 91.14,
-    "browser_failed": 0,
-    "head_sha": "d3474048e7731cd0da4d1b92df09204825afb943",
-    "conclusion": "PASS",
-    "browser_passed": 24,
-    "domain_statements_percent": 94.63,
-    "actual_SDK_tools": 130,
-    "OIDC_passed": 1,
-    "coverage_passed": 462,
-    "coverage_optin_skipped": 28
+    "head_sha": "44776dd1d11e762027ab076a440fd8f1d57d6a41",
+    "run": 38977496863,
+    "conclusion": "failure_HTTP_test_setup_budget",
+    "unit_integration_passed": 598,
+    "optin_skipped": 29,
+    "native_PostgreSQL_passed": 13,
+    "browser_passed": 35,
+    "explicit_production_browser_gates_skipped": 3,
+    "HTTP_authorization_passed": 15,
+    "HTTP_authorization_failed": 1,
+    "remaining_security_groups": "NOT_RUN_after_revocation_test_timeout",
+    "actual_SDK_catalog": 142,
+    "correction": "OAuth_setup_isolated_in120s_hook_30s_signin_plus65s_DCR_plus25s_requests_original_assertion_budgets_and_production_policy_unchanged",
+    "forced_backoff_regression": "PASS_actual_local429_RetryAfter60_after5_invalid400_requests_zero_clients_created_revocation_suite62_22s_with_original60s_assertion_budget"
   },
   "advanced_stage_rehearsal": {
     "owner_UI_minutes": 1.3,
@@ -231,18 +241,15 @@
     "independent_diagnosis": "CLEAR"
   },
   "current_deployment": {
-    "id": "dpl_7odgs3S2G4YbgmPZ8CKfHpkYwsby",
+    "id": "dpl_5jaqjKYkgbqXzcz8XZ66GkJai4aD",
+    "commit": "210582c500c4156f5fbfaf748e31289cadac6809",
     "branch": "master",
-    "app_MCP_catalog": 130,
-    "commit": "5139c99f0d2c35b1bb847cdb12f7197a92659178",
-    "live_Neon_storage": "PASS_actual_production_HTTPS_and_browser",
-    "actual_owner_UI_proof_commit": "5ef90ec1387fe3243c4fb1163dad37280a80bcbb",
-    "application_source_equivalence": "PASS_zero_runtime_changes_from_fully_tested_d347404",
-    "origin": "https://ramin-life-os.vercel.app",
-    "original_file_reference_readback": 3,
     "target": "production",
     "state": "READY",
-    "native_current_chat_MCP_read": "PASS"
+    "origin": "https://ramin-life-os.vercel.app",
+    "app_MCP_catalog": 142,
+    "live_calendar_UI": "PASS_desktop_mobile_private_evidence",
+    "original_rows_preservation": "PASS_all_original_rows_and_fields_in36tables_after_production_cutover_and_MCP_QA_private_encrypted_manifests_verified"
   },
   "production_graph_proof": {
     "snapshots": 21,
@@ -669,7 +676,7 @@
   "final_live_receipt_update": "Operational activation and documentation only; application/tests/schema/dependencies unchanged from complete CI d347404. Prior historical metrics remain scoped to their original snapshots.",
   "final_native_receipt_update": "Read-only native MCP runtime verification and documentation only. No application/test/schema/dependency change or repeated import/restore/QA mutation. Full original release flags remain false for unobserved scheduled execution/product-calendar grants.",
   "calendar_workplanner_integration": {
-    "status": "IN_PROGRESS",
+    "status": "DEPLOYED_live_Google_link_pending",
     "source_written": false,
     "source_snapshot_encrypted_readback": true,
     "source_work_rows": 22,
@@ -681,21 +688,49 @@
     "native_postgres_calendar_nonblocking_regression": "PASS_5_native_tests",
     "canonical_mcp_contract_tests": "PASS_17",
     "google_oauth_production_variables": "CONFIGURED_private_intent_and_CLI_ack",
-    "google_app_owner_consent": "NOT_YET_VERIFIED",
-    "google_real_two_way": "NOT_YET_VERIFIED",
-    "production_data_cutover": "NOT_RUN",
-    "independent_review": "P1_generated_instance_ETag_and_both_revocation_races_fixed_62_targeted_tests_PASS",
-    "full_suite": "564_PASS_before_final_race_fixes_final_CI_pending",
+    "google_app_owner_consent": "NO_APP_GRANT_owner_reports_no_Google_page_on_click_client_investigation_active",
+    "google_real_two_way": "NOT_RUN_no_app_Google_provider_account",
+    "production_data_cutover": "PASS_20_entries_2_drafts_1_feed_full_field_reconciliation",
+    "independent_review": "PASS_generated_instance_ETag_revocation_races_retry_and_recurrence_168_equivalence_cases",
+    "full_suite": "PASS_CI_38951501388",
     "native_postgres_tests": 13,
     "native_calendar_browser_cases": 7,
     "calendar_accessibility_variants": "PASS_dark_light_desktop_mobile_zero_axe_violations",
-    "far_future_recurrence_regression": "FIXED_39_targeted_tests_PASS_daily_3167ms_to_4ms_synthetic_7311_range",
+    "far_future_recurrence_regression": "PASS_targeted_and_actual_browser_no_date_restriction_or_silent_truncation",
     "google_calendar_API": "ENABLED_user_observed_console",
-    "google_test_user": "awaiting_owner_step",
+    "google_test_user": "OWNER_CONFIRMED_added",
     "private_source_resnapshot": "PASS_same_source_hash_22_rows_no_source_write",
-    "public_private_value_scan": "PASS_336_files_25_private_identifiers_zero_matches",
+    "public_private_value_scan": "PASS_338_files_25_private_identifiers_zero_matches_before_release",
     "dependency_audit": "PASS_no_known_production_vulnerabilities",
     "prior_runs": "transient_failures_while_agents_edited_imported_modules_not_release_evidence",
-    "privacy": "credentials_feed_urls_source_rows_and_backups_outside_Git"
+    "privacy": "all_credentials_real_rows_feed_urls_journals_backups_and_real_screenshots_outside_public_Git",
+    "production_additive_migration": "PASS_private_encrypted_before_after_manifest_and_all_original_rows",
+    "production_postcutover_preservation": "PASS_verified_encrypted_before_after_backups_all_original_fields_and_rows_36_tables_tasks74_files5_preferences1_mappings104_unchanged",
+    "metadata_followup": "PASS_27_domain_tests_23_capability_and_MCP_contract_tests_type_lint_format_340_public_files_25_private_identifiers_zero_matches_not_yet_released",
+    "production_monthly_employer_reconciliation": "PASS_3_groups_independent_raw_source_wall_minutes",
+    "production_retained_API_replay": "PASS_same_operation_audit_entity_revision_no_duplicates",
+    "production_iCal": "PASS_connected_complete_31_current_month_occurrences",
+    "production_UI": "PASS_desktop_mobile_8_private_screenshots_work_data_unchanged",
+    "production_MCP": "PASS_actual_SDK_HTTP_142_tools_scope_denial_draft_promote_edit_undo_archive_and_2_QA_client_revocations",
+    "source_freshness": "PASS_read_only_resnapshot_unchanged_before_production_cutover",
+    "staging_privacy": "PASS_20_entries_2_drafts_only_under_separate_private_rehearsal_owner_zero_matching_IDs_under_public_test_owner",
+    "google_oauth_request": "PASS_live_client_redirect_scopes_PKCE_state_cookie_offline_initial_request",
+    "production_Google_button": "PASS_one_hydrated_click_HTTP200_and_accounts_Google_navigation_intercepted_before_authentication_zero_page_errors_no_grant_implied",
+    "Google_button_feedback_followup": "PASS_4_synthetic_browser_cases_default_SDK_navigation_and_scopes_inline_API_and_network_errors_pending_duplicate_guard_untrusted_fallback_rejected_type_lint_format_build_PASS_not_yet_released",
+    "final_CI": {
+      "head_sha": "a97688d51bc4da5a3513bef83c833f3fb352a0dd",
+      "run": 38951501388,
+      "conclusion": "success",
+      "unit_integration_passed": 593,
+      "optin_skipped": 29,
+      "native_PostgreSQL_passed": 13,
+      "browser_passed": 31,
+      "explicit_production_browser_gates_skipped": 3,
+      "HTTP_authorization_passed": 16,
+      "OIDC_passed": 1,
+      "rate_limit_passed": 6,
+      "real_token_expiry_passed": 1,
+      "actual_SDK_catalog": 142
+    }
   }
 }
