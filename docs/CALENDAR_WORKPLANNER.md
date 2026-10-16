@@ -18,6 +18,8 @@ Google caches raw masters, exceptions and cancellations. Incremental checkpoints
 
 Refresh runs on opening/focusing Calendar, every five minutes while visible, and manually. Outgoing intents are attempted immediately. Unfinished operations persist until subsequent foreground reconciliation; no new closed-app scheduler is installed. Completeness and freshness are distinct states.
 
+`system_capabilities.external_calendar_write` describes implemented feature support, with policy `owned_personal_events_only`. It does not attest to an OAuth grant. `oauth_client_configured` describes deployment configuration; owner-specific readiness comes from the scope-protected source status APIs. The private preflight reports feature support and healthy writable-source readiness separately.
+
 Multiple private iCal sources support conditional reads. Feed URLs are encrypted with owner/source-bound authenticated encryption and omitted from public DTOs. HTTPS requests deny redirects, URL credentials, arbitrary ports, IP hosts and nonpublic DNS results, and pin the validated public address. Time, byte and recurrence limits remain enforced. Source timezone, all-day exclusive ends, recurrence exceptions and free/declined metadata are preserved.
 
 ## Native work planning and migration

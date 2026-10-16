@@ -64,6 +64,7 @@ async function main() {
     query("calendar_events_query", { from, to, limit: 200 }),
   ]);
   const states = sync.ok ? (sync.data?.external_sync?.sources ?? []) : [];
+  const sourceItems = sources.ok ? (sources.data?.items ?? []) : [];
   const report = {
     format: "ramin-life-os-calendar-preflight/1",
     observed_at: new Date().toISOString(),
@@ -72,6 +73,14 @@ async function main() {
       capabilities.data.oauth_client_configured === true,
     app_external_write_capability:
       capabilities.data.external_calendar_write === true,
+    google_source_write_ready: sourceItems.some(
+      (source) =>
+        source.provider === "google_calendar" &&
+        source.enabled === true &&
+        source.writable === true &&
+        source.status === "connected" &&
+        source.coverage?.complete === true,
+    ),
     business_mutations_requested: false,
     source_query_ok: sources.ok,
     event_query_ok: events.ok,

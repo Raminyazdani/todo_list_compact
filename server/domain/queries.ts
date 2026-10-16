@@ -334,7 +334,9 @@ export async function domainQuery(
       checklists: true,
       hierarchy: true,
       templates: true,
-      external_calendar_write: false,
+      // Feature support; owner connection readiness is a scoped calendar query.
+      external_calendar_write: true,
+      external_calendar_write_policy: "owned_personal_events_only",
       email_send: false,
       ai_configured: aiConfigured,
       AI_configured: aiConfigured,
