@@ -59,11 +59,27 @@ test.beforeEach(async ({ request, context }) => {
     "These synthetic mutation tests run on the isolated local application only.",
   );
   const credentials = JSON.parse(await readFile(credentialsPath!, "utf8"));
-  const response = await request.post("/api/auth/sign-in/email", {
-    headers: { Origin: origin },
-    data: { email: credentials.email, password: credentials.password },
-  });
-  expect(response.ok(), "Synthetic staging sign-in").toBeTruthy();
+  let response: Awaited<ReturnType<typeof request.post>> | undefined;
+  let waited = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    response = await request.post("/api/auth/sign-in/email", {
+      headers: { Origin: origin },
+      data: { email: credentials.email, password: credentials.password },
+    });
+    if (response.status() !== 429 || attempt === 2) break;
+    const headers = response.headers(),
+      value = headers["x-retry-after"] ?? headers["retry-after"];
+    const seconds = value
+      ? Number.isFinite(Number(value))
+        ? Number(value)
+        : (Date.parse(value) - Date.now()) / 1000
+      : NaN;
+    const delay = Math.ceil(seconds * 1000);
+    if (!Number.isFinite(delay) || delay < 0 || waited + delay > 30000) break;
+    waited += delay;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  expect(response?.ok(), "Synthetic staging sign-in").toBeTruthy();
   const preferences = await read<{ revision: number }>(
     request,
     "preferences_get",
