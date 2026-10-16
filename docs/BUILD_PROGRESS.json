@@ -150,6 +150,7 @@
     "known_p1_code_defects": "none_observed_after_independent_review_and_complete_CI",
     "remaining_live_gate": "app_specific_Google_OAuth_callback_and_actual_two_way_event_roundtrip",
     "metadata_followup": "P2_fix_implemented_27_focused_tests_type_lint_format_PASS_not_yet_released",
+    "Google_button_observation": "Controlled_production_click_POST200_Google_top_level_navigation_PASS_user_browser_failure_not_reproduced_inline_feedback_fix_4_browser_tests_PASS_not_yet_released",
     "scheduled_execution": "historical_cron_receipt_not_observed_no_new_background_sync_added"
   },
   "blockers": [
@@ -161,7 +162,7 @@
   ],
   "next_actions": [
     "Complete real app Google callback and verify personal-event roundtrip with exact QA cleanup",
-    "Finish and release truthful capability metadata followup; diagnose the observed Google connect button navigation"
+    "Release validated connection feedback and capability metadata followup, then retry owner Google consent with visible inline status"
   ],
   "release_complete": false,
   "execution_prompt": "docs/CONTINUE_PROMPT_FA.md",
@@ -713,6 +714,8 @@
     "source_freshness": "PASS_read_only_resnapshot_unchanged_before_production_cutover",
     "staging_privacy": "PASS_20_entries_2_drafts_only_under_separate_private_rehearsal_owner_zero_matching_IDs_under_public_test_owner",
     "google_oauth_request": "PASS_live_client_redirect_scopes_PKCE_state_cookie_offline_initial_request",
+    "production_Google_button": "PASS_one_hydrated_click_HTTP200_and_accounts_Google_navigation_intercepted_before_authentication_zero_page_errors_no_grant_implied",
+    "Google_button_feedback_followup": "PASS_4_synthetic_browser_cases_default_SDK_navigation_and_scopes_inline_API_and_network_errors_pending_duplicate_guard_untrusted_fallback_rejected_type_lint_format_build_PASS_not_yet_released",
     "final_CI": {
       "head_sha": "a97688d51bc4da5a3513bef83c833f3fb352a0dd",
       "run": 38951501388,
