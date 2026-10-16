@@ -2516,6 +2516,7 @@ test("all_day_drag_keeps_calendar_days_across_dst_and_timed_drag_keeps_seconds",
     ...original,
   });
   await page.goto("/calendar");
+  await expect(page.locator(".save-status")).toContainText("متصل به سرور");
   await page.getByLabel("تاریخ تقویم", { exact: true }).fill("2027-03-21");
   const source = page.getByRole("button", { name: title, exact: true });
   await expect(source).toBeVisible();

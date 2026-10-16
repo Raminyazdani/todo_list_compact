@@ -327,7 +327,15 @@ export function TimeTransfer({
             "Nothing is saved before confirmation. Each batch is transactional; acknowledged batches survive interruptions and the same remaining intents can be recovered.",
           )}
         </p>
-        <div className="data-table-wrap">
+        <div
+          className="data-table-wrap"
+          role="region"
+          tabIndex={0}
+          aria-label={t(
+            "جدول قابل پیمایش پیش‌نمایش واردسازی",
+            "Scrollable import preview table",
+          )}
+        >
           <table>
             <thead>
               <tr>

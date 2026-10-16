@@ -431,7 +431,15 @@ export function WorkPlanner({
             "Changes save when you leave a field. Incomplete drafts stay outside totals and Excel. Local edits are retained during device conflicts.",
           )}
         </p>
-        <div className="data-table-wrap">
+        <div
+          className="data-table-wrap"
+          role="region"
+          tabIndex={0}
+          aria-label={t(
+            "جدول قابل پیمایش ساعات کار",
+            "Scrollable work-time table",
+          )}
+        >
           <table className="work-inline-table">
             <thead>
               <tr>
