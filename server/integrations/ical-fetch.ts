@@ -6,6 +6,31 @@ export interface IcalFeedPolicy {
   allowedHosts: readonly string[];
   maxBytes?: number;
   timeoutMs?: number;
+  etag?: string;
+  lastModified?: string;
+}
+export interface IcalFeedResponse {
+  text?: string;
+  notModified: boolean;
+  etag?: string;
+  lastModified?: string;
+}
+export class IcalFeedError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly upstream_status?: number,
+  ) {
+    super(message);
+    this.name = "IcalFeedError";
+  }
+}
+function transportCode(error: unknown) {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String(error.code)
+      : "UNKNOWN";
+  return /^[A-Z0-9_]{2,60}$/.test(code) ? code : "UNKNOWN";
 }
 export function isPublicAddress(address: string): boolean {
   if (isIP(address) === 4) {
@@ -40,6 +65,17 @@ export async function fetchIcalFeed(
   rawUrl: string,
   policy: IcalFeedPolicy,
 ): Promise<string> {
+  const result = await fetchIcalFeedConditional(rawUrl, {
+    ...policy,
+    etag: undefined,
+    lastModified: undefined,
+  });
+  return result.text!;
+}
+export async function fetchIcalFeedConditional(
+  rawUrl: string,
+  policy: IcalFeedPolicy,
+): Promise<IcalFeedResponse> {
   const url = new URL(rawUrl);
   if (
     url.protocol !== "https:" ||
@@ -62,17 +98,42 @@ export async function fetchIcalFeed(
       url,
       {
         method: "GET",
-        headers: { Accept: "text/calendar" },
+        // A pinned family disables Node's automatic multi-address lookup mode.
+        // Its `all:true` callback shape differs from the single pinned address
+        // callback, and otherwise produces ERR_INVALID_IP_ADDRESS on Node 24.
+        family: chosen.family,
+        headers: {
+          Accept: "text/calendar",
+          ...(policy.etag ? { "If-None-Match": policy.etag } : {}),
+          ...(policy.lastModified
+            ? { "If-Modified-Since": policy.lastModified }
+            : {}),
+        },
         lookup: (_host, _options, callback) =>
           callback(null, chosen.address, chosen.family),
         timeout: policy.timeoutMs ?? 8000,
       },
       (response) => {
+        const metadata = {
+          ...(typeof response.headers.etag === "string"
+            ? { etag: response.headers.etag }
+            : {}),
+          ...(typeof response.headers["last-modified"] === "string"
+            ? { lastModified: response.headers["last-modified"] }
+            : {}),
+        };
+        if (response.statusCode === 304) {
+          response.resume();
+          resolve({ notModified: true, ...metadata });
+          return;
+        }
         if (response.statusCode !== 200) {
           response.resume();
           reject(
-            new Error(
+            new IcalFeedError(
+              "ICAL_HTTP_ERROR",
               "Calendar source returned a non-success status; redirects are blocked.",
+              response.statusCode,
             ),
           );
           return;
@@ -82,22 +143,52 @@ export async function fetchIcalFeed(
         response.on("data", (chunk: Buffer) => {
           size += chunk.length;
           if (size > maxBytes)
-            req.destroy(new Error("Calendar feed exceeds byte limit."));
+            req.destroy(
+              new IcalFeedError(
+                "ICAL_FEED_TOO_LARGE",
+                "Calendar feed exceeds byte limit.",
+              ),
+            );
           else chunks.push(chunk);
         });
         response.on("end", () => {
           const text = Buffer.concat(chunks).toString("utf8");
           if (!text.includes("BEGIN:VCALENDAR"))
             reject(new Error("Source did not return an iCalendar document."));
-          else resolve(text);
+          else resolve({ text, notModified: false, ...metadata });
         });
         response.on("error", () =>
           reject(new Error("Calendar feed response could not be read.")),
         );
       },
     );
-    req.on("timeout", () => req.destroy(new Error("Calendar feed timed out.")));
-    req.on("error", () => reject(new Error("Calendar feed unavailable.")));
+    const deadline = setTimeout(
+      () =>
+        req.destroy(
+          new IcalFeedError(
+            "ICAL_TIMEOUT",
+            "Calendar feed exceeded its total request budget.",
+          ),
+        ),
+      policy.timeoutMs ?? 8000,
+    );
+    deadline.unref();
+    req.once("close", () => clearTimeout(deadline));
+    req.on("timeout", () =>
+      req.destroy(
+        new IcalFeedError("ICAL_TIMEOUT", "Calendar feed timed out."),
+      ),
+    );
+    req.on("error", (error) =>
+      reject(
+        error instanceof IcalFeedError
+          ? error
+          : new IcalFeedError(
+              "ICAL_TRANSPORT_" + transportCode(error),
+              "Calendar feed unavailable.",
+            ),
+      ),
+    );
     req.end();
   });
 }

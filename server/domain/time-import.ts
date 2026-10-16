@@ -3,7 +3,12 @@ import {
   type PreviewDTO,
   type Principal,
 } from "../../shared/contracts";
-import { findOverlaps, intervalMinutes } from "../../shared/datetime";
+import { intervalMinutes } from "../../shared/datetime";
+import {
+  prepareWorkPlannerImport,
+  type WorkPlannerImportOptions,
+} from "../../scripts/migration/work-planner";
+import { workMinutes, workOverlapSummary } from "./work-log";
 import type { SqlClient } from "../db/database";
 import {
   array,
@@ -18,6 +23,7 @@ import {
   requireScope,
   text,
   timezone,
+  choice,
   type Input,
 } from "./core";
 import type { Change } from "./tasks";
@@ -31,6 +37,9 @@ interface ImportEntry {
   ends_at: string;
   description: string;
   task_id: string | null;
+  reporting_policy: "elapsed" | "legacy_wall";
+  reported_minutes: number | null;
+  legacy_metadata: Input;
 }
 function exactKeys(input: Input, keys: string[]) {
   if (Object.keys(input).some((key) => !keys.includes(key)))
@@ -59,9 +68,29 @@ function importInstant(input: Input, key: string) {
   return instant(input, key);
 }
 function importData(input: Input) {
-  exactKeys(input, ["data"]);
-  const data = object(input.data);
-  exactKeys(data, ["format", "timezone", "entries"]);
+  exactKeys(input, ["data", "timezone", "resolutions"]);
+  let data = object(input.data);
+  if (data.version === 1) {
+    const converted = prepareWorkPlannerImport(data, {
+      timezone:
+        typeof input.timezone === "string" ? input.timezone : "Europe/Berlin",
+      resolutions: input.resolutions as WorkPlannerImportOptions["resolutions"],
+    });
+    if (!converted.ready)
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Resolve invalid or ambiguous legacy work intervals before importing.",
+        { errors: converted.errors },
+        409,
+      );
+    data = {
+      format: FORMAT,
+      timezone: input.timezone ?? "Europe/Berlin",
+      entries: converted.entries,
+      drafts: converted.drafts,
+    };
+  }
+  exactKeys(data, ["format", "timezone", "entries", "drafts"]);
   if (data.format !== FORMAT || typeof data.timezone !== "string")
     throw new DomainError(
       "INVALID_INPUT",
@@ -70,7 +99,7 @@ function importData(input: Input) {
   const zone = timezone(data),
     rows = array(data.entries, 1000),
     seen = new Set<string>();
-  if (!rows.length)
+  if (!rows.length && (!Array.isArray(data.drafts) || !data.drafts.length))
     throw new DomainError(
       "INVALID_INPUT",
       "Import between 1 and 1000 work-log entries.",
@@ -83,13 +112,49 @@ function importData(input: Input) {
       "ends_at",
       "description",
       "task_id",
+      "timezone",
+      "reporting_policy",
+      "reported_minutes",
+      "legacy_metadata",
     ]);
     if (row.description !== undefined && typeof row.description !== "string")
       throw new DomainError(
         "INVALID_INPUT",
         "Work-log description must be a plain string.",
       );
+    const policy = choice(
+        row,
+        "reporting_policy",
+        ["elapsed", "legacy_wall"],
+        "elapsed",
+      ),
+      reported = row.reported_minutes ?? null;
+    if (
+      policy === "legacy_wall" &&
+      (typeof reported !== "number" ||
+        !Number.isFinite(reported) ||
+        reported < 0 ||
+        reported > 366 * 1440)
+    )
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Legacy work logs require valid original reported minutes.",
+      );
+    if (policy === "elapsed" && reported !== null)
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Elapsed work logs cannot override their actual duration.",
+      );
+    const metadata = object(row.legacy_metadata ?? {});
+    if (json(metadata).length > 20000)
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Legacy work metadata exceeds its bound.",
+      );
     const entry: ImportEntry = {
+      reporting_policy: policy,
+      reported_minutes: reported as number | null,
+      legacy_metadata: metadata,
       entry_id: text(row, "entry_id", undefined, 512),
       employer: text(row, "employer", undefined, 200),
       starts_at: importInstant(row, "starts_at"),
@@ -128,7 +193,41 @@ function importData(input: Input) {
       );
     return entry;
   });
-  return { format: FORMAT, timezone: zone, entries };
+  const drafts = array(data.drafts ?? [], 1000).map((row) => {
+    exactKeys(row, [
+      "draft_id",
+      "employer",
+      "date",
+      "start",
+      "end",
+      "end_next_day",
+      "description",
+      "timezone",
+      "legacy_metadata",
+    ]);
+    const draftId = text(row, "draft_id", undefined, 512);
+    if (seen.has(draftId) || /[\u0000-\u001f\u007f]/.test(draftId))
+      throw new DomainError("INVALID_INPUT", "Work draft IDs must be unique.");
+    seen.add(draftId);
+    const metadata = object(row.legacy_metadata ?? {});
+    if (json(metadata).length > 20000)
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Legacy draft metadata exceeds its bound.",
+      );
+    return {
+      draft_id: draftId,
+      employer: text(row, "employer", "Jena", 200),
+      date: text(row, "date", "", 10),
+      start: text(row, "start", "", 10),
+      end: text(row, "end", "", 10),
+      end_next_day: row.end_next_day === true,
+      description: text(row, "description", "", 10000),
+      timezone: timezone({ timezone: row.timezone ?? zone }),
+      legacy_metadata: metadata,
+    };
+  });
+  return { format: FORMAT, timezone: zone, entries, drafts };
 }
 function requireImport(principal: Principal) {
   requireScope(principal, "time", true);
@@ -144,7 +243,7 @@ async function timeState(tx: SqlClient, owner: string) {
   const rows = (
     await tx.query<Input>(
       `SELECT entry_id,
-    encode(sha256(convert_to(jsonb_build_array(employer,starts_at,ends_at,description,task_id,revision,archived_at)::text,'UTF8')),'hex') AS fingerprint
+    encode(sha256(convert_to(jsonb_build_array(employer,starts_at,ends_at,description,task_id,revision,archived_at,reporting_policy,reported_minutes,legacy_metadata)::text,'UTF8')),'hex') AS fingerprint
     FROM time_entries WHERE owner_id=$1 ORDER BY entry_id LIMIT 50001`,
       [owner],
     )
@@ -154,7 +253,20 @@ async function timeState(tx: SqlClient, owner: string) {
       "INVALID_INPUT",
       "Owner work-log state exceeds the current bounded import preview limit.",
     );
-  return hash(rows);
+  const drafts = cleanRows(
+    (
+      await tx.query<Input>(
+        'SELECT draft_id,revision,archived_at,employer,date,start,"end",end_next_day,description,timezone,legacy_metadata FROM time_drafts WHERE owner_id=$1 ORDER BY draft_id LIMIT 50001',
+        [owner],
+      )
+    ).rows,
+  );
+  if (drafts.length > 50000)
+    throw new DomainError(
+      "INVALID_INPUT",
+      "Owner draft state exceeds the bounded import preview limit.",
+    );
+  return hash({ rows, drafts });
 }
 async function planImport(
   tx: SqlClient,
@@ -216,7 +328,11 @@ async function planImport(
     }
     if (
       prior.archived_at ||
-      Object.entries(entry).some(([key, value]) => prior[key] !== value)
+      Object.entries(entry).some(([key, value]) =>
+        key === "legacy_metadata"
+          ? hash(prior[key] ?? {}) !== hash(value)
+          : prior[key] !== value,
+      )
     )
       throw new DomainError(
         "REVISION_CONFLICT",
@@ -226,41 +342,57 @@ async function planImport(
       );
     skipped.push(entry.entry_id);
   }
-  const ordered = [...create].sort((a, b) =>
-    a.starts_at.localeCompare(b.starts_at),
-  );
-  for (let index = 1; index < ordered.length; index++) {
-    const pair = findOverlaps([ordered[index - 1], ordered[index]])[0];
-    if (pair)
-      throw new DomainError(
-        "TIME_OVERLAP",
-        "Imported work logs overlap each other.",
-        {
-          entry_ids: [pair.first.entry_id, pair.second.entry_id],
-          overlap_minutes: pair.overlap_minutes,
-        },
-        409,
-      );
-  }
-  if (create.length) {
-    const overlap = (
-      await tx.query<{ imported_entry_id: string; existing_entry_id: string }>(
-        `WITH incoming AS
-      (SELECT * FROM jsonb_to_recordset($2::jsonb) AS e(entry_id text,starts_at timestamptz,ends_at timestamptz))
-      SELECT incoming.entry_id AS imported_entry_id,t.entry_id AS existing_entry_id FROM incoming JOIN time_entries t
-      ON t.owner_id=$1 AND t.archived_at IS NULL AND t.starts_at<incoming.ends_at AND t.ends_at>incoming.starts_at LIMIT 1`,
-        [principal.ownerId, json(create)],
+  const existingActive = cleanRows(
+    (
+      await tx.query<Input>(
+        "SELECT entry_id,starts_at,ends_at FROM time_entries WHERE owner_id=$1 AND archived_at IS NULL ORDER BY starts_at LIMIT 50001",
+        [principal.ownerId],
       )
+    ).rows,
+  );
+  if (existingActive.length > 50000)
+    throw new DomainError(
+      "INVALID_INPUT",
+      "Owner work logs exceed the bounded import limit.",
+    );
+  const overlap = workOverlapSummary([
+    ...existingActive,
+    ...create.map((entry) => ({ ...entry })),
+  ]);
+  const drafts: typeof data.drafts = [],
+    skippedDrafts: string[] = [];
+  for (const draft of data.drafts) {
+    const collision = (
+      await tx.query<Input>("SELECT * FROM time_drafts WHERE draft_id=$1", [
+        draft.draft_id,
+      ])
     ).rows[0];
-    if (overlap)
-      throw new DomainError(
-        "TIME_OVERLAP",
-        "Imported work logs overlap an existing active entry.",
-        { entry_ids: [overlap.imported_entry_id, overlap.existing_entry_id] },
-        409,
-      );
+    if (collision) {
+      if (collision.owner_id !== principal.ownerId)
+        throw new DomainError(
+          "INSUFFICIENT_PERMISSIONS",
+          "Work draft identity unavailable.",
+          {},
+          403,
+        );
+      if (
+        collision.archived_at ||
+        Object.entries(draft).some(([key, value]) =>
+          key === "legacy_metadata"
+            ? hash(collision[key] ?? {}) !== hash(value)
+            : collision[key] !== value,
+        )
+      )
+        throw new DomainError(
+          "REVISION_CONFLICT",
+          "An existing work draft differs; review separately.",
+          { draft_id: draft.draft_id },
+          409,
+        );
+      skippedDrafts.push(draft.draft_id);
+    } else drafts.push(draft);
   }
-  return { create, skipped };
+  return { create, skipped, drafts, skippedDrafts, overlap };
 }
 export async function previewTimeImport(
   tx: SqlClient,
@@ -285,11 +417,15 @@ export async function previewTimeImport(
         provided: data.entries.length,
         new: plan.create.length,
         skipped: plan.skipped.length,
+        drafts_new: plan.drafts.length,
+        drafts_skipped: plan.skippedDrafts.length,
       },
       entries_to_create: plan.create,
       skipped_entry_ids: plan.skipped,
+      drafts_to_create: plan.drafts,
+      overlap: plan.overlap,
       minutes_to_create: plan.create.reduce(
-        (total, entry) => total + intervalMinutes(entry),
+        (total, entry) => total + workMinutes({ ...entry }),
         0,
       ),
     };
@@ -309,9 +445,12 @@ export async function previewTimeImport(
       ),
     ],
     changes: JSON.parse(json(changes)),
-    warnings: plan.skipped.length
-      ? ["EXACT_EXISTING_WORK_LOGS_WILL_BE_SKIPPED"]
-      : [],
+    warnings: [
+      ...(plan.skipped.length || plan.skippedDrafts.length
+        ? ["EXACT_EXISTING_WORK_LOGS_WILL_BE_SKIPPED"]
+        : []),
+      ...(plan.overlap.overlap_count ? ["WORK_INTERVAL_OVERLAP"] : []),
+    ],
   };
 }
 export async function commitTimeImport(
@@ -373,9 +512,9 @@ export async function commitTimeImport(
     created = cleanRows(
       (
         await tx.query<Input>(
-          `INSERT INTO time_entries(entry_id,owner_id,employer,starts_at,ends_at,description,task_id)
-      SELECT e.entry_id,$1,e.employer,e.starts_at,e.ends_at,e.description,e.task_id FROM jsonb_to_recordset($2::jsonb)
-      AS e(entry_id text,employer text,starts_at timestamptz,ends_at timestamptz,description text,task_id text) RETURNING *`,
+          `INSERT INTO time_entries(entry_id,owner_id,employer,starts_at,ends_at,description,task_id,reporting_policy,reported_minutes,legacy_metadata)
+      SELECT e.entry_id,$1,e.employer,e.starts_at,e.ends_at,e.description,e.task_id,e.reporting_policy,e.reported_minutes,e.legacy_metadata FROM jsonb_to_recordset($2::jsonb)
+      AS e(entry_id text,employer text,starts_at timestamptz,ends_at timestamptz,description text,task_id text,reporting_policy text,reported_minutes double precision,legacy_metadata jsonb) RETURNING *`,
           [principal.ownerId, json(plan.create)],
         )
       ).rows,
@@ -398,6 +537,12 @@ export async function commitTimeImport(
       ],
     );
   }
+  if (plan.drafts.length) {
+    await tx.query(
+      'INSERT INTO time_drafts(owner_id,draft_id,employer,date,start,"end",end_next_day,description,timezone,legacy_metadata) SELECT $1,d.draft_id,d.employer,d.date,d.start,d."end",d.end_next_day,d.description,d.timezone,d.legacy_metadata FROM jsonb_to_recordset($2::jsonb) AS d(draft_id text,employer text,date text,start text,"end" text,end_next_day boolean,description text,timezone text,legacy_metadata jsonb)',
+      [principal.ownerId, json(plan.drafts)],
+    );
+  }
   await tx.query(
     "UPDATE command_previews SET consumed_at=$3 WHERE preview_id=$1 AND owner_id=$2",
     [previewId, principal.ownerId, now()],
@@ -408,7 +553,12 @@ export async function commitTimeImport(
     after: {
       format: FORMAT,
       timezone: data.timezone,
-      counts: { created: created.length, skipped: plan.skipped.length },
+      counts: {
+        created: created.length,
+        skipped: plan.skipped.length,
+        drafts_created: plan.drafts.length,
+        drafts_skipped: plan.skippedDrafts.length,
+      },
       entry_ids: created.map((row) => String(row.entry_id)),
       skipped_entry_ids: plan.skipped,
     },

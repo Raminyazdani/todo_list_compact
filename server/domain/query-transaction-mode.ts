@@ -35,11 +35,15 @@ const modes = {
   file_get_metadata: "read",
   file_list_versions: "read",
   file_archive_preview: "read",
-  // These can refresh provider credentials and record source-sync state using
-  // the auth pool; they are not pure reads despite their public query names.
-  calendar_list: "exclusive",
-  calendar_events_query: "exclusive",
-  calendar_availability: "exclusive",
+  // External providers are synchronized separately; display reads cached owner data.
+  calendar_list: "read",
+  calendar_events_query: "read",
+  calendar_availability: "read",
+  calendar_sync_status: "read",
+  calendar_event_change_preview: "exclusive",
+  calendar_operation_status: "read",
+  time_draft_list: "read",
+  time_entry_export: "read",
   calendar_occurrence_reschedule_preview: "exclusive",
   calendar_reminder_list: "read",
   calendar_reminder_get: "read",

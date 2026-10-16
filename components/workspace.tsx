@@ -29,7 +29,7 @@ import { IN_APP_AI_ENABLED } from "@/shared/product-features";
 import { command, useQuery, ApiError } from "@/features/api";
 import { LocaleContext, type Language, useLocale } from "@/features/locale";
 import { CreateTask, TaskDetail, TaskExplorer } from "@/features/tasks";
-import { CalendarView, WorkLog } from "@/features/calendar";
+import { CalendarWorkspace } from "@/features/calendar-workspace";
 import {
   Assistant,
   Dashboard,
@@ -399,9 +399,9 @@ function WorkspaceContent({
           ) : pathname === "/projects" ? (
             <Projects onOpen={setTaskId} action={action} />
           ) : pathname === "/calendar" ? (
-            <CalendarView action={action} onOpen={setTaskId} />
+            <CalendarWorkspace action={action} onOpen={setTaskId} />
           ) : pathname === "/time" ? (
-            <WorkLog action={action} />
+            <CalendarWorkspace action={action} onOpen={setTaskId} initialWork />
           ) : pathname === "/files" ? (
             <Files action={action} onOpen={setTaskId} />
           ) : pathname === "/assistant" ? (

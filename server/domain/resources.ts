@@ -31,6 +31,8 @@ import {
 import { runRecurringTasks } from "./recurrence";
 import { commitCalendarOccurrence } from "./calendar";
 import { commitTimeImport } from "./time-import";
+import { calendarSourceCommand } from "./calendar-sources";
+import { workCommand, workReporting } from "./work-log";
 import { annotationFields, fileMetadata } from "./annotations";
 import {
   cancelEventReminders,
@@ -467,6 +469,16 @@ export async function resourceCommand(
       affected: [],
     };
   }
+  const sourceChange = await calendarSourceCommand(
+    tx,
+    command,
+    input,
+    principal,
+    revision,
+  );
+  if (sourceChange) return sourceChange;
+  const workChange = await workCommand(tx, command, input, principal, revision);
+  if (workChange) return workChange;
   if (command === "time_entry_import_commit")
     return commitTimeImport(tx, input, principal, operationId);
   if (command === "calendar_occurrence_reschedule_commit")
@@ -911,13 +923,7 @@ async function scheduledCommand(
       "SELECT entry_id FROM time_entries WHERE owner_id=$1 AND archived_at IS NULL AND entry_id<>$2 AND starts_at<$4 AND ends_at>$3",
       [owner, entityId, start, end],
     );
-    if (overlaps.rows.length)
-      throw new DomainError(
-        "TIME_OVERLAP",
-        "Worked time overlaps an existing entry.",
-        { entry_ids: overlaps.rows.map((r) => r.entry_id) },
-        409,
-      );
+    const reporting = workReporting(before, start, end);
     if (creation)
       await tx.query(
         "INSERT INTO time_entries(entry_id,owner_id,employer,starts_at,ends_at,description,task_id) VALUES($1,$2,$3,$4,$5,$6,$7)",
@@ -944,6 +950,36 @@ async function scheduledCommand(
           taskId,
         ],
       );
+    await tx.query(
+      "UPDATE time_entries SET reporting_policy=$3,reported_minutes=$4 WHERE owner_id=$1 AND entry_id=$2",
+      [owner, entityId, reporting.reporting_policy, reporting.reported_minutes],
+    );
+    if (creation && input.draft_id) {
+      const draft = await entity(
+        tx,
+        "time_drafts",
+        "draft_id",
+        text(input, "draft_id"),
+        owner,
+      );
+      guard(draft, Number(input.draft_revision));
+      if (draft.archived_at)
+        throw new DomainError(
+          "REVISION_CONFLICT",
+          "This draft was already promoted or archived.",
+          {},
+          409,
+        );
+      await tx.query(
+        "UPDATE time_drafts SET archived_at=now(),revision=revision+1,updated_at=now() WHERE owner_id=$1 AND draft_id=$2",
+        [owner, draft.draft_id],
+      );
+    }
+    // The overlap is an explicit warning, not a rejected or trimmed interval.
+    input = {
+      ...input,
+      _overlap_entry_ids: overlaps.rows.map((row) => row.entry_id),
+    };
   } else {
     const recurrence = optionalText(source, "recurrence_rule");
     const zone = timezone(source),
@@ -1079,6 +1115,16 @@ async function scheduledCommand(
     before,
     after: {
       ...(await entity(tx, table, column, entityId, owner)),
+      ...(isTime
+        ? {
+            overlap_entry_ids: input._overlap_entry_ids ?? [],
+            warnings:
+              Array.isArray(input._overlap_entry_ids) &&
+              input._overlap_entry_ids.length
+                ? ["WORK_INTERVAL_OVERLAP"]
+                : [],
+          }
+        : {}),
       ...(seriesRevision ? { series_revision: seriesRevision } : {}),
     },
     affected: taskId ? [taskId] : [],

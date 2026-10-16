@@ -34,10 +34,16 @@ import {
   type RecurringEvent,
 } from "../integrations/calendar";
 import {
-  externalCalendarEvents,
-  externalCalendarList,
-  externalCalendarStatus,
-} from "../integrations/calendar-runtime";
+  calendarSources,
+  sourceDTO,
+  previewCalendarChange,
+} from "./calendar-sources";
+import {
+  cachedCalendarAuxiliaryQuery,
+  cachedCalendarEvents,
+  cachedCalendarStatus,
+} from "./calendar-cache";
+import { workMinutes, workOverlapSummary } from "./work-log";
 import { resolveAiConfiguration } from "../integrations/ai-guard";
 import { IN_APP_AI_ENABLED } from "../../shared/product-features";
 import { analyticsRange, analyticsTrends } from "./analytics";
@@ -52,39 +58,6 @@ import {
   storageCapabilities,
 } from "../integrations/storage";
 
-async function calendarStatus(principal: Principal) {
-  let sources: Awaited<ReturnType<typeof externalCalendarStatus>> = [];
-  if (
-    principal.scopes.includes("calendar:read") ||
-    principal.scopes.includes("admin:manage")
-  )
-    try {
-      sources = await externalCalendarStatus(principal);
-    } catch {
-      sources = [
-        {
-          provider: "external_calendar",
-          status: "unavailable",
-          last_success_at: null,
-          error: "SOURCE_STATUS_UNAVAILABLE",
-        },
-      ];
-    }
-  return {
-    connected: sources.some((source) => source.status === "connected"),
-    state: sources.some((source) => source.status === "connected")
-      ? "Connected"
-      : sources.some(
-            (source) =>
-              source.status === "error" || source.status === "unavailable",
-          )
-        ? "Source read failed"
-        : sources.some((source) => source.status === "awaiting_grant")
-          ? "Awaiting grant"
-          : "Not configured",
-    sources,
-  };
-}
 export function page<T>(
   items: T[],
   input: Input,
@@ -636,7 +609,7 @@ export async function domainQuery(
       migration_batches: batches,
       jobs,
       cutover_status: "source_preserved_destination_unverified",
-      external_sync: await calendarStatus(principal),
+      external_sync: await cachedCalendarStatus(tx, principal),
     };
   }
   if (operation.startsWith("file_")) {
@@ -728,29 +701,92 @@ export async function domainQuery(
     );
     return page(reminders, input, (r) => String(r.reminder_id));
   }
+  if (operation === "calendar_event_change_preview")
+    return previewCalendarChange(tx, input, principal);
+  if (
+    operation === "calendar_sync_status" ||
+    operation === "calendar_operation_status"
+  )
+    return cachedCalendarAuxiliaryQuery(tx, operation, input, principal);
+  if (operation === "time_draft_list") {
+    requireScope(principal, "time");
+    const rows = cleanRows(
+      (
+        await tx.query<Input>(
+          "SELECT * FROM time_drafts WHERE owner_id=$1 AND archived_at IS NULL ORDER BY created_at,draft_id",
+          [owner],
+        )
+      ).rows,
+    );
+    return page(rows, input, (row) => String(row.draft_id));
+  }
+  if (operation === "time_entry_export") {
+    requireScope(principal, "time");
+    const values: unknown[] = [owner];
+    let condition = "owner_id=$1 AND archived_at IS NULL";
+    if (input.from) {
+      values.push(instant(input, "from"));
+      condition += ` AND ends_at>$${values.length}`;
+    }
+    if (input.to) {
+      values.push(instant(input, "to"));
+      condition += ` AND starts_at<$${values.length}`;
+    }
+    if (
+      input.from &&
+      input.to &&
+      Date.parse(String(input.to)) <= Date.parse(String(input.from))
+    )
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Work export requires an ordered interval.",
+      );
+    if (input.employer) {
+      values.push(text(input, "employer", undefined, 200));
+      condition += ` AND employer=$${values.length}`;
+    }
+    if (input.task_id) {
+      const task = text(input, "task_id");
+      await entity(tx, "tasks", "task_id", task, owner);
+      values.push(task);
+      condition += ` AND task_id=$${values.length}`;
+    }
+    const rows = cleanRows(
+      (
+        await tx.query<Input>(
+          `SELECT entry_id,employer,starts_at,ends_at,description,task_id,reporting_policy,reported_minutes,legacy_metadata FROM time_entries WHERE ${condition} ORDER BY starts_at,entry_id`,
+          values,
+        )
+      ).rows,
+    );
+    return {
+      ...page(rows, input, (row) => String(row.entry_id)),
+      format: "ramin-life-os-time/1",
+      timezone: "Europe/Berlin",
+    };
+  }
   if (operation.startsWith("calendar_") || operation.startsWith("time_")) {
     const isTime = operation.startsWith("time_");
     requireScope(principal, isTime ? "time" : "calendar");
     if (operation === "calendar_list") {
-      let external: Awaited<ReturnType<typeof externalCalendarList>> = [],
-        warnings: string[] = [];
-      try {
-        external = await externalCalendarList(principal);
-      } catch {
-        warnings = ["EXTERNAL_CALENDAR_UNAVAILABLE"];
-      }
+      const sources = (await calendarSources(tx, owner))
+        .filter((source) => source.enabled)
+        .map(sourceDTO);
       const items = [
         {
           calendar_id: "local",
+          source_id: "local",
           title: "Private local calendar",
           provider: "local",
           writable: true,
         },
-        ...external,
+        ...sources,
       ];
       return {
         ...page(items, input, (calendar) => calendar.calendar_id),
-        source_warnings: warnings,
+        source_warnings: sources
+          .filter((source) => source.status !== "connected")
+          .map((source) => source.source_id + ":" + source.status),
       };
     }
     const table = isTime ? "time_entries" : "calendar_events",
@@ -786,9 +822,7 @@ export async function domainQuery(
       ).rows,
     ).map((r): Input & { minutes: number } => ({
       ...r,
-      minutes:
-        (Date.parse(String(r.ends_at)) - Date.parse(String(r.starts_at))) /
-        60000,
+      minutes: workMinutes(r),
     }));
     if (operation === "time_summary") {
       const from = input.from ? Date.parse(instant(input, "from")) : -Infinity,
@@ -800,12 +834,7 @@ export async function domainQuery(
         );
       const intervals = rows.map((row): Input & { minutes: number } => ({
         ...row,
-        minutes: Math.max(
-          0,
-          (Math.min(to, Date.parse(String(row.ends_at))) -
-            Math.max(from, Date.parse(String(row.starts_at)))) /
-            60000,
-        ),
+        minutes: workMinutes(row, from, to),
       }));
       const employers: Record<string, number> = {};
       for (const r of intervals)
@@ -815,6 +844,7 @@ export async function domainQuery(
         minutes: intervals.reduce((sum, r) => sum + r.minutes, 0),
         employers,
         entries: rows.length,
+        ...workOverlapSummary(rows, from, to),
       };
     }
     if (!isTime) {
@@ -833,7 +863,10 @@ export async function domainQuery(
           "Calendar queries require an ordered range of at most one year.",
         );
       const expanded: Input[] = (
-        !input.calendar_id || input.calendar_id === "local" ? rows : []
+        (!input.calendar_id || input.calendar_id === "local") &&
+        (!Array.isArray(input.source_ids) || input.source_ids.includes("local"))
+          ? rows
+          : []
       )
         .flatMap((row) =>
           expandRecurrence(row as unknown as RecurringEvent, from, to).map(
@@ -846,20 +879,40 @@ export async function domainQuery(
           ),
         )
         .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
-      const warnings: string[] = [];
-      try {
-        expanded.push(
-          ...(
-            await externalCalendarEvents(
-              principal,
-              from,
-              to,
-              input.calendar_id ? text(input, "calendar_id") : undefined,
+      const cached = await cachedCalendarEvents(tx, principal, input, from, to),
+        warnings = cached.warnings;
+      expanded.push(...cached.events);
+      if (input.include_work === true) {
+        requireScope(principal, "time");
+        const work = cleanRows(
+          (
+            await tx.query<Input>(
+              "SELECT * FROM time_entries WHERE owner_id=$1 AND archived_at IS NULL AND starts_at<$3 AND ends_at>$2 ORDER BY starts_at,entry_id",
+              [owner, from, to],
             )
-          ).map((event): Input => ({ ...event })),
+          ).rows,
         );
-      } catch {
-        warnings.push("EXTERNAL_CALENDAR_UNAVAILABLE");
+        expanded.push(
+          ...work.map((row) => ({
+            event_id: "WORK-" + row.entry_id,
+            occurrence_key: "WORK-" + row.entry_id,
+            title: row.employer,
+            starts_at: row.starts_at,
+            ends_at: row.ends_at,
+            timezone: "Europe/Berlin",
+            all_day: false,
+            provider: "work_log",
+            category: "Work",
+            task_id: row.task_id,
+            notes: row.description,
+            recurrence_rule: null,
+            revision: row.revision,
+            source_read_only: true,
+            can_edit: false,
+            entry_id: row.entry_id,
+            minutes: workMinutes(row),
+          })),
+        );
       }
       const uniqueEvents = new Map<string, Input>();
       for (const event of expanded)
@@ -875,14 +928,22 @@ export async function domainQuery(
       const category =
         input.category === undefined
           ? null
-          : choice(input, "category", ["Work", "Personal", "Other"]);
+          : choice(input, "category", [
+              "Work",
+              "Personal",
+              "Other",
+              "Unclassified",
+            ]);
       expanded.splice(
         0,
         expanded.length,
         ...expanded.filter(
           (event) =>
             (!input.task_id || event.task_id === input.task_id) &&
-            (!category || event.category === category) &&
+            (!category ||
+              (category === "Unclassified"
+                ? !event.category
+                : event.category === category)) &&
             (!searched ||
               normalizedSearch(
                 String(event.title) + " " + String(event.notes ?? ""),
@@ -894,18 +955,28 @@ export async function domainQuery(
       );
       if (operation === "calendar_availability")
         return {
-          busy: expanded.map((r) => ({
-            starts_at: r.starts_at,
-            ends_at: r.ends_at,
-            event_id: r.event_id,
-          })),
+          busy: expanded
+            .filter(
+              (event) => event.busy !== false && event.self_declined !== true,
+            )
+            .map((r) => ({
+              starts_at: r.starts_at,
+              ends_at: r.ends_at,
+              event_id: r.event_id,
+            })),
           from,
           to,
           source_warnings: warnings,
+          source_coverage: cached.source_coverage,
+          complete: cached.complete,
+          fresh: cached.fresh,
         };
       return {
         ...page(expanded, input, (r) => String(r.occurrence_key)),
         source_warnings: warnings,
+        source_coverage: cached.source_coverage,
+        complete: cached.complete,
+        fresh: cached.fresh,
       };
     }
     return page(rows, input, (r) => String(r[column]));
@@ -1271,7 +1342,7 @@ export async function domainQuery(
         ? Number(
             (
               await tx.query<{ minutes: string }>(
-                "SELECT COALESCE(sum(EXTRACT(EPOCH FROM ends_at-starts_at)/60),0) minutes FROM time_entries WHERE owner_id=$1 AND archived_at IS NULL",
+                "SELECT COALESCE(sum(CASE WHEN reporting_policy='legacy_wall' THEN reported_minutes ELSE EXTRACT(EPOCH FROM ends_at-starts_at)/60 END),0) minutes FROM time_entries WHERE owner_id=$1 AND archived_at IS NULL",
                 [owner],
               )
             ).rows[0].minutes,

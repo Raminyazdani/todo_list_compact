@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { z } from "zod";
 import { TOOL_CATALOG, toolDescription } from "../../server/mcp/catalog";
 import { createDomainService } from "../../server/domain/service";
@@ -478,20 +486,21 @@ describe("MCP advertised schemas against the real canonical PostgreSQL service",
       ),
     ).toBe(true);
   });
-  it("accepts explicit work intervals while canonical overlap and range checks prevent invalid mutations", async () => {
+  it("retains overlapping work intervals with warnings and keeps reported totals separate from conflict minutes", async () => {
     const entry = await write("time_entry_create", {
       employer: "Jena",
       starts_at: "2027-03-28T00:30:00Z",
       ends_at: "2027-03-28T02:30:00Z",
       description: "DST elapsed work",
     });
-    await expect(
-      write("time_entry_create", {
-        employer: "Seewiesen",
-        starts_at: "2027-03-28T02:00:00Z",
-        ends_at: "2027-03-28T03:00:00Z",
-      }),
-    ).rejects.toMatchObject({ code: "TIME_OVERLAP" });
+    const overlapping = await write("time_entry_create", {
+      employer: "Seewiesen",
+      starts_at: "2027-03-28T02:00:00Z",
+      ends_at: "2027-03-28T03:00:00Z",
+    });
+    expect(overlapping.data).toMatchObject({
+      warnings: ["WORK_INTERVAL_OVERLAP"],
+    });
     await write(
       "time_entry_update",
       { entry_id: entry.entity_id, description: "Reviewed actual work" },
@@ -500,14 +509,120 @@ describe("MCP advertised schemas against the real canonical PostgreSQL service",
     const summary = (await read("time_summary", {
       from: "2027-03-28T00:00:00Z",
       to: "2027-03-29T00:00:00Z",
-    })) as { minutes: number };
-    expect(summary.minutes).toBe(120);
+    })) as { minutes: number; overlap_minutes: number };
+    expect(summary.minutes).toBe(180);
+    expect(summary.overlap_minutes).toBe(30);
     const entries = (await read("time_entry_list", {
       from: "2027-03-28T00:00:00Z",
       to: "2027-03-29T00:00:00Z",
     })) as PageDTO<{ description: string }>;
-    expect(entries.total).toBe(1);
-    expect(entries.items[0].description).toBe("Reviewed actual work");
+    expect(entries.total).toBe(2);
+    expect(
+      entries.items.some((item) => item.description === "Reviewed actual work"),
+    ).toBe(true);
+  });
+  it("offers scope-bound calendar sources without exposing their private feed URL", async () => {
+    vi.stubEnv(
+      "BETTER_AUTH_SECRET",
+      "synthetic-calendar-contract-secret-at-least-32-characters",
+    );
+    try {
+      const privateUrl =
+        "https://calendar.example.invalid/private/synthetic-feed-token/basic.ics";
+      const created = await write("calendar_source_configure", {
+        provider: "ical",
+        title: "Synthetic private feed",
+        url: privateUrl,
+      });
+      const sources = await read("calendar_list", { limit: 200 });
+      const status = await read("calendar_sync_status", {});
+      expect(JSON.stringify({ created, sources, status })).not.toContain(
+        privateUrl,
+      );
+      expect(JSON.stringify(status)).not.toContain("synthetic-feed-token");
+      const sourceRow = (
+        await db.query<{ encrypted_config: string }>(
+          "SELECT encrypted_config FROM calendar_sources WHERE owner_id=$1 AND source_id=$2",
+          [principal.ownerId, created.entity_id],
+        )
+      ).rows[0];
+      expect(sourceRow.encrypted_config).not.toContain("synthetic-feed-token");
+      expect(tool("calendar_event_change_preview").scopes).toEqual([
+        "calendar:write",
+      ]);
+      expect(tool("calendar_sync_request").openWorld).toBe(true);
+      expect(tool("calendar_event_change_commit").destructive).toBe(true);
+      const reader = { ...principal, scopes: ["calendar:read"] };
+      await expect(
+        write(
+          "calendar_source_disconnect",
+          { source_id: created.entity_id },
+          created.version,
+          reader,
+        ),
+      ).rejects.toMatchObject({ code: "INSUFFICIENT_PERMISSIONS" });
+      const otherOwner = {
+        ...principal,
+        ownerId: principal.ownerId + "-other",
+      };
+      await expect(
+        write(
+          "calendar_source_disconnect",
+          { source_id: created.entity_id },
+          created.version,
+          otherOwner,
+        ),
+      ).rejects.toMatchObject({ code: "ENTITY_NOT_FOUND" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  it("promotes a durable draft once through MCP and rejects stale promotion without changing work totals", async () => {
+    const draft = await write("time_draft_save", {
+      employer: "Jena",
+      date: "2026-10-10",
+      start: "09:",
+      end: "",
+      end_next_day: false,
+      description: "Synthetic unfinished work",
+    });
+    expect(
+      (await read("time_summary", {})) as { minutes: number },
+    ).toMatchObject({ minutes: 0 });
+    const input = {
+      employer: "Jena",
+      starts_at: "2026-10-10T07:00:00Z",
+      ends_at: "2026-10-10T08:00:00Z",
+      description: "Synthetic completed work",
+      draft_id: draft.entity_id,
+      draft_revision: draft.version,
+    };
+    const operation = randomUUID();
+    const promoted = await write(
+      "time_entry_create",
+      input,
+      undefined,
+      principal,
+      operation,
+    );
+    const replayed = await write(
+      "time_entry_create",
+      input,
+      undefined,
+      principal,
+      operation,
+    );
+    expect(replayed.entity_id).toBe(promoted.entity_id);
+    expect(replayed.replayed).toBe(true);
+    expect(
+      (await read("time_draft_list", {})) as PageDTO<unknown>,
+    ).toMatchObject({ total: 0 });
+    await expect(write("time_entry_create", input)).rejects.toMatchObject({
+      code: "REVISION_CONFLICT",
+    });
+    expect(
+      (await read("time_summary", {})) as { minutes: number },
+    ).toMatchObject({ minutes: 60 });
   });
   it("links distinct file purposes, retains immutable external metadata and fails wrong-owner references", async () => {
     const existing = await task();

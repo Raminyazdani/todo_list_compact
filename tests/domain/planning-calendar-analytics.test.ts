@@ -94,6 +94,10 @@ describe("Canonical recurrence exceptions, scoped planning and historical trends
       minutes: 150,
       entries: 2,
       employers: { "Synthetic overnight": 90, "Synthetic day": 60 },
+      overlap_count: 0,
+      overlap_minutes: 0,
+      conflicts: [],
+      conflicts_truncated: false,
     });
     const list = (await service.query(
       "time_entry_list",

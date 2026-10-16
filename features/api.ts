@@ -237,3 +237,96 @@ export function useQuery<T>(
     refresh,
   };
 }
+
+/** Load an entire bounded view instead of silently treating its first page as coverage. */
+export function usePagedQuery<T>(
+  operation: QueryName,
+  input: Record<string, unknown> = {},
+  enabled = true,
+) {
+  const inputKey = JSON.stringify(input);
+  const [state, setState] = useState<{
+    key: string;
+    data: import("@/shared/contracts").PageDTO<T> & {
+      source_warnings?: string[];
+    };
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [version, setVersion] = useState(0);
+  const refresh = useCallback(() => setVersion((value) => value + 1), []);
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    void (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      setFetching(true);
+      const items: T[] = [];
+      const warnings = new Set<string>();
+      const seen = new Set<string>();
+      let cursor: string | null = null;
+      let last: import("@/shared/contracts").PageDTO<T> | null = null;
+      do {
+        const page: import("@/shared/contracts").PageDTO<T> & {
+          source_warnings?: string[];
+        } = await query(operation, {
+          ...JSON.parse(inputKey),
+          limit: 200,
+          cursor,
+        });
+        if (!active) return;
+        items.push(...page.items);
+        page.source_warnings?.forEach((warning) => warnings.add(warning));
+        last = page;
+        cursor = page.next_cursor;
+        if (cursor && seen.has(cursor))
+          throw new Error("Repeated pagination cursor / صفحه‌بندی تکراری");
+        if (cursor) seen.add(cursor);
+      } while (cursor);
+      if (active && last) {
+        setState({
+          key: `${operation}:${inputKey}`,
+          data: {
+            ...last,
+            items,
+            next_cursor: null,
+            source_warnings: [...warnings],
+          },
+        });
+        setError(null);
+      }
+    })()
+      .catch((cause: unknown) => {
+        if (active)
+          setError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => {
+        if (active) setFetching(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [operation, inputKey, enabled, version]);
+  useEffect(() => {
+    const visibleRefresh = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("lifeos:changed", refresh);
+    window.addEventListener("focus", visibleRefresh);
+    const timer = window.setInterval(visibleRefresh, 30000);
+    return () => {
+      window.removeEventListener("lifeos:changed", refresh);
+      window.removeEventListener("focus", visibleRefresh);
+      window.clearInterval(timer);
+    };
+  }, [refresh]);
+  const data = state?.key === `${operation}:${inputKey}` ? state.data : null;
+  return {
+    data,
+    error,
+    loading: enabled && !data && !error,
+    fetching,
+    refresh,
+  };
+}

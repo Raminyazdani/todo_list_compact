@@ -161,9 +161,10 @@ const calendarQuery = {
   from: instant.optional(),
   to: instant.optional(),
   calendar_id: id.optional(),
+  source_ids: z.array(id).max(100).optional(),
   task_id: id.optional(),
   search: z.string().max(2000).optional(),
-  category: z.enum(["Work", "Personal", "Other"]).optional(),
+  category: z.enum(["Work", "Personal", "Other", "Unclassified"]).optional(),
   ...page,
 };
 const timeQuery = {
@@ -198,12 +199,58 @@ const timeImportData = object({
             "At most millisecond precision",
           ),
         description: notes.optional(),
+        reporting_policy: z.enum(["elapsed", "legacy_wall"]).optional(),
+        reported_minutes: z
+          .number()
+          .finite()
+          .nonnegative()
+          .nullable()
+          .optional(),
+        legacy_metadata: jsonObject.optional(),
         task_id: nullableId
           .refine(
             (value) => value === null || !/[\u0000-\u001f\u007f]/.test(value),
             "Identifier without control characters required",
           )
           .optional(),
+      }),
+    )
+    .max(1000),
+  drafts: z
+    .array(
+      object({
+        draft_id: id,
+        employer: text(200),
+        date: z.string().max(10),
+        start: z.string().max(5),
+        end: z.string().max(5),
+        end_next_day: z.boolean(),
+        description: notes,
+        timezone: zone,
+        legacy_metadata: jsonObject.optional(),
+      }),
+    )
+    .max(1000)
+    .optional(),
+}).refine((value) => {
+  const count =
+    (Array.isArray(value.entries) ? value.entries.length : 0) +
+    (Array.isArray(value.drafts) ? value.drafts.length : 0);
+  return count >= 1 && count <= 1000;
+}, "Import 1–1000 work records including drafts");
+const legacyTimeImportData = object({
+  version: z.literal(1),
+  revision: z.number().int().nonnegative().optional(),
+  entries: z
+    .array(
+      object({
+        id: id,
+        jobId: z.enum(["jena", "seewiesen"]),
+        date: z.string().max(10).optional(),
+        start: z.string().max(5).optional(),
+        end: z.string().max(5).optional(),
+        endNextDay: z.boolean().optional(),
+        tasks: notes.optional(),
       }),
     )
     .min(1)
@@ -344,9 +391,42 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
   calendar_events_query: object(calendarQuery),
   calendar_availability: object(calendarQuery),
   calendar_occurrence_reschedule_preview: object(occurrenceFields),
+  calendar_sync_status: object({ source_ids: z.array(id).max(100).optional() }),
+  calendar_operation_status: object({ operation_id: id.optional(), ...page }),
+  calendar_event_change_preview: object({
+    source_id: id,
+    action: z.enum(["create", "update", "delete"]),
+    event_id: id.optional(),
+    etag: z.string().min(1).max(1000).optional(),
+    series_etag: z.string().min(1).max(1000).optional(),
+    payload: object({
+      title: title.optional(),
+      starts_at: instant.optional(),
+      ends_at: instant.optional(),
+      timezone: zone.optional(),
+      all_day: z.boolean().optional(),
+      notes: notes.optional(),
+      recurrence_rule: z.string().max(1000).nullable().optional(),
+    }).optional(),
+    recurrence_scope: z.enum(["instance", "series"]).optional(),
+  }),
   time_entry_list: object(timeQuery),
+  time_entry_export: object(timeQuery),
+  time_draft_list: object({ employer: title.optional(), ...page }),
   time_summary: object(timeQuery),
-  time_entry_import_preview: object({ data: timeImportData }).refine(
+  time_entry_import_preview: object({
+    data: z.union([timeImportData, legacyTimeImportData]),
+    timezone: zone.optional(),
+    resolutions: z
+      .record(
+        id,
+        object({
+          start: z.enum(["earlier", "later"]).optional(),
+          end: z.enum(["earlier", "later"]).optional(),
+        }),
+      )
+      .optional(),
+  }).refine(
     (value) => Buffer.byteLength(JSON.stringify(value), "utf8") <= 2_000_000,
     "Work-log import input must not exceed 2,000,000 UTF-8 bytes",
   ),
@@ -538,12 +618,40 @@ export const WRITE_INPUT_SCHEMAS: Partial<Record<CommandName, z.ZodType>> = {
     apply_to_series: z.boolean().optional(),
   }),
   calendar_delete_local_event: object({ event_id: id }),
+  calendar_source_configure: object({
+    source_id: id.optional(),
+    provider: z.enum(["google_calendar", "ical"]),
+    external_calendar_id: id.optional(),
+    title,
+    timezone: zone.optional(),
+    url: z.string().url().max(10000).optional(),
+  }),
+  calendar_source_disconnect: object({ source_id: id }),
+  calendar_sync_request: object({
+    source_ids: z.array(id).max(100).optional(),
+    force: z.boolean().optional(),
+  }),
+  calendar_event_change_commit: previewInput,
+  time_draft_save: object({
+    draft_id: id.optional(),
+    employer: text(200),
+    date: z.string().max(10),
+    start: z.string().max(5),
+    end: z.string().max(5),
+    end_next_day: z.boolean(),
+    description: notes.optional(),
+    timezone: zone.optional(),
+  }),
+  time_draft_archive: object({ draft_id: id }),
+  time_entry_undo: object({ entry_id: id.optional() }),
   time_entry_create: object({
     employer: title,
     starts_at: instant,
     ends_at: instant,
     description: notes.optional(),
     task_id: nullableId.optional(),
+    draft_id: id.optional(),
+    draft_revision: z.number().int().positive().optional(),
   }),
   time_entry_update: object({
     entry_id: id,
@@ -637,6 +745,8 @@ const revisionCommands = new Set<CommandName>([
   "calendar_reminder_resume",
   "calendar_reminder_cancel",
   "calendar_delete_local_event",
+  "calendar_source_disconnect",
+  "time_draft_archive",
   "time_entry_update",
   "time_entry_archive",
   "saved_view_update",
@@ -691,7 +801,12 @@ export function requiredToolScopes(
   if (["whoami", "system_capabilities", "system_health"].includes(name))
     return [];
   if (name === "export_data_manifest") return ["backup:export"];
-  if (name === "calendar_occurrence_reschedule_preview")
+  if (
+    [
+      "calendar_occurrence_reschedule_preview",
+      "calendar_event_change_preview",
+    ].includes(name)
+  )
     return ["calendar:write"];
   if (name === "time_entry_import_preview") return ["time:write"];
   if (
@@ -723,6 +838,30 @@ export function requiredToolScopes(
   ];
 }
 const semantics: Partial<Record<QueryName | CommandName, string>> = {
+  calendar_sync_status:
+    "Read owner-bound source capabilities, last successful refresh, coverage and sanitized source failures from persistent cache. This read performs no provider network requests and never returns private feed credentials.",
+  calendar_operation_status:
+    "Read owner-bound queued personal Google event changes and pending, confirmed, uncertain or conflict states. A timeout is not proof a provider write failed; reconcile the original intent before retrying.",
+  calendar_event_change_preview:
+    "Preview creation, change or deletion of a personal event on an owned Google calendar. Read the fresh provider event/master outside owner locks and review its original values and pinned revisions. Guest meetings, special events and other organizers remain read-only. Choose one occurrence or the complete series explicitly; no invitations are sent.",
+  calendar_source_configure:
+    "Configure one owner Google calendar or private HTTPS iCal source. Feed secrets are encrypted server-side and excluded from reads. Updating an existing source requires its current revision; this does not modify the source calendar.",
+  calendar_source_disconnect:
+    "Disconnect one exact source at its current revision and stop displaying its cached events. The original external calendar and its events remain untouched; old in-flight results cannot reconnect it.",
+  calendar_sync_request:
+    "Request a bounded foreground refresh of selected owner sources and reconcile pending outgoing changes. Provider I/O runs outside owner write locks; each source reports its own partial, stale or successful state.",
+  calendar_event_change_commit:
+    "Commit one actor-bound personal Google event preview as a durable idempotent intent. The dispatcher rechecks full provider event, organizer and guests, and uses ETag preconditions. Read operation status after an uncertain result; never create a replacement intent blindly.",
+  time_draft_list:
+    "List durable owner work drafts with bounded pagination. Incomplete drafts retain entered local date/time and description but are excluded from reported hours, conflict totals and employer Excel exports.",
+  time_draft_save:
+    "Save an incomplete owner work row durably in PostgreSQL without inventing a missing time. Existing rows require the current revision; pending edits must survive acknowledgement and multi-device conflicts.",
+  time_draft_archive:
+    "Archive one owner work draft at its current revision while retaining its audit history. This does not archive a completed work interval or change employer totals.",
+  time_entry_undo:
+    "Compensate the latest eligible owner work-interval change after revision checks. Original history is retained; a newer independent device edit must produce a conflict instead of being overwritten.",
+  time_entry_export:
+    "Page the complete owner work-log history and durable drafts for a recoverable JSON export. Preserve reporting policy and imported provenance; exports contain private user data and must never enter public Git.",
   calendar_reminder_list:
     "List owner in-app reminders for local calendar events, optionally scoped to one exact event. No email or external calendar writes.",
   calendar_reminder_get:
@@ -740,7 +879,7 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
   file_metadata_update:
     "Update only owner app description and normalized tags on one exact file, including external references. Requires the current file revision. Empty description/tags explicitly clear annotations; original bytes, Drive metadata, provider, parents and immutable versions remain unchanged.",
   time_entry_import_preview:
-    "Preview 1–1000 explicit versioned JSON work-log rows (at most 2,000,000 UTF-8 bytes). Exact existing owner duplicates are skipped; conflicts/overlaps fail before mutation. Uploaded fields never relabel the owner.",
+    "Preview 1–1000 work rows or drafts from Life OS or legacy Work Planner JSON, bounded to 2,000,000 UTF-8 bytes. Preserve imported wall-clock reporting and descriptions. Exact duplicates are skipped; ambiguous DST times require explicit resolution. Overlaps are warnings and never trim hours. Uploaded fields cannot relabel the owner.",
   time_entry_import_commit:
     "Commit one actor-bound work-log import preview atomically only while the pinned owner work-log state still matches. Original entry IDs are preserved; accepted retries reuse the operation ID. AI/import/system channels cannot authorize uploaded work-log writes.",
   whoami:
@@ -1004,6 +1143,7 @@ export const TOOL_CATALOG = [
         "calendar_list",
         "calendar_events_query",
         "calendar_availability",
+        "calendar_event_change_preview",
       ].includes(name),
       destructive: false,
     }),
@@ -1016,9 +1156,14 @@ export const TOOL_CATALOG = [
     schema: writeSchema(name),
     scopes: requiredToolScopes(name, false),
     scopeAlternatives: toolScopeAlternatives(name),
-    openWorld: false,
+    openWorld: [
+      "calendar_sync_request",
+      "calendar_event_change_commit",
+    ].includes(name),
     destructive:
-      /archive|delete|unlink|waive|remove|batch|undo|redo|cancel/.test(name),
+      /archive|delete|unlink|waive|remove|batch|undo|redo|cancel|disconnect/.test(
+        name,
+      ) || name === "calendar_event_change_commit",
   })),
 ];
 export function toolDescription(name: string, readOnly: boolean) {

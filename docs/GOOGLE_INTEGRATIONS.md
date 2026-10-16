@@ -1,5 +1,7 @@
 # Google and calendar connections
 
+> Historical baseline below. The current Calendar/Work Planner architecture and Google activation procedure are documented in [CALENDAR_WORKPLANNER.md](CALENDAR_WORKPLANNER.md); release observations are tracked in BUILD_PROGRESS.json.
+
 The build's connected Google Drive tool successfully read the owner's live source. The coordinator also authenticated the native Google Calendar connector and observed two calendar sources. These are real connector reads inside the build chat. Neither connector grant is transferred into the deployed app or treated as an app OAuth refresh token. `server/integrations/google.ts` provides a scoped read-only adapter and truthful disconnected capabilities until an app-specific user grant is configured. Tokens never enter browser bundles, logs or public Git. The adapter offers metadata, bounded ledger cells, paginated calendar lists/events and all-day normalization. It has no source write, file-move or Calendar write method.
 
 An owner must configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, approved callback origins and an encrypted owner-bound OAuth grant through an implemented consent flow before app sync can be enabled. Merely filling those variables is insufficient. Current connector discovery and a working local adapter do not prove deployed OAuth sync. Calendar writes remain unavailable until explicitly supported and authorized.

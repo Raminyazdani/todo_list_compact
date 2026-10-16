@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { getDatabase, type Database } from "../../server/db/database";
 import { createDomainService } from "../../server/domain/service";
@@ -8,6 +8,40 @@ import type {
   PreviewDTO,
   TaskDTO,
 } from "../../shared/contracts";
+
+const calendarNetwork = vi.hoisted(() => ({
+  block: null as null | (() => Promise<void>),
+}));
+vi.mock("../../server/integrations/calendar-provider", async (original) => {
+  const actual =
+    await original<
+      typeof import("../../server/integrations/calendar-provider")
+    >();
+  return {
+    ...actual,
+    discoverGoogleCalendars: async () => [
+      {
+        external_calendar_id: "synthetic-primary",
+        title: "Synthetic calendar",
+        provider: "google_calendar",
+        timezone: "Europe/Berlin",
+        writable: false,
+        grant_fingerprint: "synthetic-grant",
+      },
+    ],
+    syncCalendarSource: async () => {
+      if (calendarNetwork.block) await calendarNetwork.block();
+      return {
+        events: [],
+        deleted_ids: [],
+        replace: true,
+        checkpoint: { sync_token: "synthetic-native-checkpoint" },
+        timezone: "Europe/Berlin",
+        complete: true,
+      };
+    },
+  };
+});
 
 function deferred() {
   let resolve!: () => void;
@@ -66,6 +100,55 @@ describe.skipIf(process.env.TEST_POSTGRES !== "1")(
     afterAll(async () => {
       await db?.close?.();
     });
+
+    it("deferred_calendar_provider_does_not_hold_owner_lock_or_block_task_and_preferences_writes", async () => {
+      const separate: Principal = {
+          ...principal,
+          ownerId: "staging-synthetic-calendar-no-network-lock-" + randomUUID(),
+        },
+        entered = deferred(),
+        release = deferred();
+      calendarNetwork.block = async () => {
+        entered.resolve();
+        await release.promise;
+      };
+      const sync = service.execute("calendar_sync_request", {}, separate, {
+        idempotencyKey: randomUUID(),
+      });
+      let completed = false;
+      const observedSync = sync.finally(() => {
+        completed = true;
+      });
+      try {
+        await within(entered.promise, 15000);
+        const task = await within(
+          service.execute(
+            "task_create",
+            { title: "Synthetic task during deferred calendar network" },
+            separate,
+            { idempotencyKey: randomUUID() },
+          ),
+          5000,
+        );
+        expect(task.version).toBe(1);
+        expect(
+          await within(
+            service.execute(
+              "preferences_update",
+              { settings: { theme: "dark" } },
+              separate,
+              { idempotencyKey: randomUUID() },
+            ),
+            5000,
+          ),
+        ).toMatchObject({ version: 1 });
+        expect(completed).toBe(false);
+      } finally {
+        release.resolve();
+        calendarNetwork.block = null;
+        await within(observedSync, 15000);
+      }
+    }, 45000);
 
     it("five_same_owner_readers_reach_a_barrier_concurrently_in_SQL_read_only_repeatable_read", async () => {
       const allEntered = deferred(),

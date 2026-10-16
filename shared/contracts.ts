@@ -213,6 +213,17 @@ export interface EventDTO {
   notes: string;
   recurrence_rule: string | null;
   recurrence_exceptions?: string[];
+  source_id?: string;
+  source_title?: string;
+  external_id?: string;
+  external_url?: string;
+  busy?: boolean;
+  self_declined?: boolean;
+  etag?: string;
+  series_etag?: string;
+  can_edit?: boolean;
+  source_read_only?: boolean;
+  sync_state?: string;
   revision: number;
 }
 export interface TimeEntryDTO {
@@ -224,6 +235,38 @@ export interface TimeEntryDTO {
   task_id: string | null;
   revision: number;
   minutes: number;
+  reporting_policy?: "elapsed" | "legacy_wall";
+  reported_minutes?: number | null;
+  legacy_metadata?: Record<string, JsonValue>;
+  overlap_entry_ids?: string[];
+  warnings?: string[];
+}
+export interface CalendarSourceDTO {
+  source_id: string;
+  calendar_id: string;
+  provider: "google_calendar" | "ical";
+  title: string;
+  timezone: string;
+  writable: boolean;
+  primary?: boolean;
+  enabled: boolean;
+  revision: number;
+  status: string;
+  last_success_at: string | null;
+  last_error: string | null;
+  coverage: Record<string, JsonValue>;
+}
+export interface TimeDraftDTO {
+  draft_id: string;
+  employer: string;
+  date: string;
+  start: string;
+  end: string;
+  end_next_day: boolean;
+  description: string;
+  timezone: string;
+  revision: number;
+  legacy_metadata?: Record<string, JsonValue>;
 }
 export interface ReminderDTO {
   reminder_id: string;
@@ -254,11 +297,15 @@ export interface TimeImportEntryDTO {
   ends_at: string;
   description?: string;
   task_id?: string | null;
+  reporting_policy?: "elapsed" | "legacy_wall";
+  reported_minutes?: number | null;
+  legacy_metadata?: Record<string, JsonValue>;
 }
 export interface TimeImportDataDTO {
   format: "ramin-life-os-time/1";
   timezone: string;
   entries: TimeImportEntryDTO[];
+  drafts?: Omit<TimeDraftDTO, "revision">[];
 }
 export interface ActivityDTO {
   event_id: string;
@@ -402,6 +449,10 @@ export const COMMAND_NAMES = [
   "file_archive",
   "file_restore",
   "calendar_create_local_event",
+  "calendar_source_configure",
+  "calendar_source_disconnect",
+  "calendar_sync_request",
+  "calendar_event_change_commit",
   "calendar_update_local_event",
   "calendar_delete_local_event",
   "calendar_occurrence_reschedule_commit",
@@ -410,6 +461,9 @@ export const COMMAND_NAMES = [
   "calendar_reminder_resume",
   "calendar_reminder_cancel",
   "time_entry_create",
+  "time_draft_save",
+  "time_draft_archive",
+  "time_entry_undo",
   "time_entry_update",
   "time_entry_archive",
   "time_entry_import_commit",
@@ -442,6 +496,11 @@ export const COMMAND_NAMES = [
 export type CommandName = (typeof COMMAND_NAMES)[number];
 export const QUERY_NAMES = [
   "system_capabilities",
+  "calendar_sync_status",
+  "calendar_event_change_preview",
+  "calendar_operation_status",
+  "time_draft_list",
+  "time_entry_export",
   "system_health",
   "whoami",
   "task_search",

@@ -12,6 +12,7 @@ import {
 import type { SqlClient } from "../db/database";
 import { DomainError } from "../../shared/contracts";
 import { cleanRows, date as localDate, timezone, type Input } from "./core";
+import { workMinutes } from "./work-log";
 
 export function analyticsRange(input: Input) {
   const zone = timezone(input);
@@ -109,8 +110,11 @@ export async function analyticsTrends(
           starts_at: string;
           ends_at: string;
           task_id: string | null;
+          reporting_policy: string;
+          reported_minutes: number | null;
+          legacy_metadata: Input;
         }>(
-          `SELECT starts_at,ends_at,task_id FROM time_entries WHERE owner_id=$1 AND archived_at IS NULL
+          `SELECT starts_at,ends_at,task_id,reporting_policy,reported_minutes,legacy_metadata FROM time_entries WHERE owner_id=$1 AND archived_at IS NULL
         AND starts_at < $3::timestamptz AND ends_at > $2::timestamptz`,
           [principal.ownerId, start, end],
         )
@@ -140,7 +144,12 @@ export async function analyticsTrends(
       };
       for (const part of splitIntervalByLocalDate(clipped, zone)) {
         const day = byDate.get(part.date);
-        if (day) day.minutes += part.minutes;
+        if (day)
+          day.minutes += workMinutes(
+            { ...interval },
+            Date.parse(part.starts_at),
+            Date.parse(part.ends_at),
+          );
       }
     }
   }

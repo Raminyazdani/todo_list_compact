@@ -2032,7 +2032,7 @@ test("all_main_views_have_synthetic_desktop_mobile_and_tablet_evidence", async (
   const views = [
     ["projects", "پروژه‌ها"],
     ["calendar", "تقویم"],
-    ["time", "ثبت ساعت کار"],
+    ["time", "ساعات کار"],
     ["files", "فایل‌ها و منابع"],
     ["reports", "گزارش و مرور"],
     ["settings", "تنظیمات و اتصال‌ها"],
@@ -2112,14 +2112,29 @@ test("worklog_exact_edit_month_summary_json_preview_export_and_archive_are_canon
   }>(request, "time_summary", { from, to });
   expect(summary.employers[employer]).toBe(150);
   await page.goto("/time");
+  await expect(page.locator(".save-status")).toContainText("متصل به سرور");
   await page.getByLabel("ماه", { exact: true }).fill(month);
-  const row = page.getByRole("row").filter({ hasText: `${employer} precise` });
-  await row.getByRole("button", { name: "ویرایش بازه", exact: true }).click();
-  await page
-    .getByLabel("شرح فعالیت", { exact: true })
+  const row = page.locator(`[data-work-entry="${second.entity_id}"]`);
+  await row
+    .locator("xpath=following-sibling::tr[1]")
+    .getByLabel("شرح فعالیت ردیف", { exact: true })
     .fill(`${employer} notes-only edit`);
-  await page.getByRole("button", { name: "ثبت ساعت", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page
+    .getByRole("heading", { name: "جدول ساعات و توضیحات", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await readQuery<PageDTO<TimeEntryDTO>>(request, "time_entry_list", {
+            from,
+            to,
+            limit: 200,
+          })
+        ).items.find((entry) => entry.entry_id === second.entity_id)
+          ?.description,
+    )
+    .toBe(`${employer} notes-only edit`);
   const afterEdit = (
     await readQuery<PageDTO<TimeEntryDTO>>(request, "time_entry_list", {
       from,
@@ -2204,6 +2219,9 @@ test("worklog_exact_edit_month_summary_json_preview_export_and_archive_are_canon
     ...data.entries[0],
     starts_at: `${year}-12-03T10:00:12.000Z`,
     ends_at: `${year}-12-03T11:00:12.000Z`,
+    reporting_policy: "elapsed",
+    reported_minutes: null,
+    legacy_metadata: {},
   });
   expect(
     exported.entries.every((entry: Record<string, unknown>) =>
@@ -2215,28 +2233,51 @@ test("worklog_exact_edit_month_summary_json_preview_export_and_archive_are_canon
           "ends_at",
           "description",
           "task_id",
+          "reporting_policy",
+          "reported_minutes",
+          "legacy_metadata",
         ].includes(key),
       ),
     ),
   ).toBeTruthy();
+  expect(Array.isArray(exported.drafts)).toBe(true);
+  const fullDownloadEvent = page.waitForEvent("download");
   await page
-    .getByRole("row")
-    .filter({ hasText: `${employer} overnight` })
-    .getByRole("button", { name: "ویرایش بازه", exact: true })
+    .getByRole("button", {
+      name: "خروجی JSON تمام تاریخچه و پیش‌نویس‌ها",
+      exact: true,
+    })
     .click();
-  await page
-    .getByRole("button", { name: "بایگانی این بازه", exact: true })
-    .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const fullDownload = await fullDownloadEvent;
+  const allHistory = JSON.parse(
+    await readFile((await fullDownload.path())!, "utf8"),
+  );
   expect(
-    (
-      await readQuery<PageDTO<TimeEntryDTO>>(request, "time_entry_list", {
-        from,
-        to,
-        limit: 200,
-      })
-    ).items.some((entry) => entry.entry_id === first.entity_id),
-  ).toBeFalsy();
+    allHistory.entries.some(
+      (entry: { entry_id: string }) => entry.entry_id === first.entity_id,
+    ),
+  ).toBe(true);
+  expect(
+    allHistory.entries.some(
+      (entry: { entry_id: string }) =>
+        entry.entry_id === data.entries[0].entry_id,
+    ),
+  ).toBe(true);
+  await page
+    .locator(`[data-work-entry="${first.entity_id}"]`)
+    .getByRole("button", { name: "بایگانی", exact: true })
+    .click();
+  await expect
+    .poll(async () =>
+      (
+        await readQuery<PageDTO<TimeEntryDTO>>(request, "time_entry_list", {
+          from,
+          to,
+          limit: 200,
+        })
+      ).items.some((entry) => entry.entry_id === first.entity_id),
+    )
+    .toBe(false);
   expect(
     (
       await readQuery<{ employers: Record<string, number> }>(
@@ -2475,6 +2516,7 @@ test("all_day_drag_keeps_calendar_days_across_dst_and_timed_drag_keeps_seconds",
     ...original,
   });
   await page.goto("/calendar");
+  await expect(page.locator(".save-status")).toContainText("متصل به سرور");
   await page.getByLabel("تاریخ تقویم", { exact: true }).fill("2027-03-21");
   const source = page.getByRole("button", { name: title, exact: true });
   await expect(source).toBeVisible();

@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-14T16:01:14.643Z",
-  "branch": "master",
+  "updated_at": "2026-10-16T18:14:32.656Z",
+  "branch": "codex/calendar-workplanner-integration",
   "commit": "5139c99f0d2c35b1bb847cdb12f7197a92659178",
-  "phase": "current_owner_Neon_AI_deferral_native_MCP_request_PASS",
+  "phase": "calendar_workplanner_implementation_and_verification",
   "deployed_url": "https://ramin-life-os.vercel.app",
   "production_verified": false,
   "pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/1",
@@ -50,7 +50,11 @@
     "actual_current_chat_native_Codex_MCP_130_tools_and_five_owner_bound_reads",
     "open_PR_audit_zero_PR1_already_merged_ancestor_and_old_attachment_detached"
   ],
-  "active": [],
+  "active": [
+    "calendar_workplanner_integration",
+    "google_app_oauth_activation",
+    "final_release_validation"
+  ],
   "tests": [
     {
       "actual_SDK_tools": 130,
@@ -663,5 +667,35 @@
     "observed_readback_at": "2026-10-14T07:26:48.878Z"
   },
   "final_live_receipt_update": "Operational activation and documentation only; application/tests/schema/dependencies unchanged from complete CI d347404. Prior historical metrics remain scoped to their original snapshots.",
-  "final_native_receipt_update": "Read-only native MCP runtime verification and documentation only. No application/test/schema/dependency change or repeated import/restore/QA mutation. Full original release flags remain false for unobserved scheduled execution/product-calendar grants."
+  "final_native_receipt_update": "Read-only native MCP runtime verification and documentation only. No application/test/schema/dependency change or repeated import/restore/QA mutation. Full original release flags remain false for unobserved scheduled execution/product-calendar grants.",
+  "calendar_workplanner_integration": {
+    "status": "IN_PROGRESS",
+    "source_written": false,
+    "source_snapshot_encrypted_readback": true,
+    "source_work_rows": 22,
+    "complete_work_rows": 20,
+    "incomplete_drafts": 2,
+    "source_feed_count": 1,
+    "production_pre_additive_backup_verified": true,
+    "staging_additive_migration": "PASS",
+    "native_postgres_calendar_nonblocking_regression": "PASS_5_native_tests",
+    "canonical_mcp_contract_tests": "PASS_17",
+    "google_oauth_production_variables": "CONFIGURED_private_intent_and_CLI_ack",
+    "google_app_owner_consent": "NOT_YET_VERIFIED",
+    "google_real_two_way": "NOT_YET_VERIFIED",
+    "production_data_cutover": "NOT_RUN",
+    "independent_review": "P1_generated_instance_ETag_and_both_revocation_races_fixed_62_targeted_tests_PASS",
+    "full_suite": "564_PASS_before_final_race_fixes_final_CI_pending",
+    "native_postgres_tests": 13,
+    "native_calendar_browser_cases": 7,
+    "calendar_accessibility_variants": "PASS_dark_light_desktop_mobile_zero_axe_violations",
+    "far_future_recurrence_regression": "FIXED_39_targeted_tests_PASS_daily_3167ms_to_4ms_synthetic_7311_range",
+    "google_calendar_API": "ENABLED_user_observed_console",
+    "google_test_user": "awaiting_owner_step",
+    "private_source_resnapshot": "PASS_same_source_hash_22_rows_no_source_write",
+    "public_private_value_scan": "PASS_336_files_25_private_identifiers_zero_matches",
+    "dependency_audit": "PASS_no_known_production_vulnerabilities",
+    "prior_runs": "transient_failures_while_agents_edited_imported_modules_not_release_evidence",
+    "privacy": "credentials_feed_urls_source_rows_and_backups_outside_Git"
+  }
 }

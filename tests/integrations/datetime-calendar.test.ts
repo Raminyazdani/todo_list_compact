@@ -150,6 +150,27 @@ describe("IANA time and recurrence", () => {
       expect(isPublicAddress(ip)).toBe(false);
     expect(isPublicAddress("8.8.8.8")).toBe(true);
   });
+  it("iCal self-declined items remain visible without busy conflicts and moved exceptions enter their new range", () => {
+    const feed =
+      "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:synthetic-series\r\nDTSTART:20261020T080000Z\r\nDTEND:20261020T090000Z\r\nRRULE:FREQ=DAILY\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:synthetic-series\r\nRECURRENCE-ID:20261120T080000Z\r\nDTSTART:20261021T100000Z\r\nDTEND:20261021T110000Z\r\nATTENDEE;PARTSTAT=DECLINED:mailto:synthetic@example.invalid\r\nURL:https://calendar.google.com/calendar/event?eid=synthetic\r\nEND:VEVENT\r\nEND:VCALENDAR";
+    const items = parseIcal(
+      feed,
+      "2026-10-21T00:00Z",
+      "2026-10-22T00:00Z",
+      "Europe/Berlin",
+      1000,
+      "synthetic@example.invalid",
+    );
+    expect(items).toHaveLength(2);
+    expect(
+      items.find((item) => item.starts_at === "2026-10-21T10:00:00.000Z"),
+    ).toMatchObject({
+      busy: false,
+      self_declined: true,
+      original_start: "2026-11-20T08:00:00.000Z",
+      external_url: "https://calendar.google.com/calendar/event?eid=synthetic",
+    });
+  });
   it("holiday union preserves TH/BY municipal flags rather than treating every holiday as nationwide", () => {
     expect(easterSunday(2026)).toBe("2026-04-05");
     expect(

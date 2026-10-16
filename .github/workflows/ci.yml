@@ -60,6 +60,7 @@ jobs:
           pnpm exec playwright install --with-deps chromium
           pnpm test:e2e
           node scripts/ops/runtime-smoke.mjs /tmp/lifeos-ci-credentials.json
+          node scripts/ops/calendar-runtime-smoke.mjs --verify-calendar-runtime http://localhost:3000 /tmp/lifeos-ci-credentials.json /tmp/lifeos-calendar-runtime-journal.json
         env:
           E2E_CREDENTIALS_PATH: /tmp/lifeos-ci-credentials.json
           PLAYWRIGHT_CHROMIUM_CHANNEL: chromium
