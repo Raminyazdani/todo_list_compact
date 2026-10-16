@@ -184,19 +184,20 @@
     "actual_SDK_catalog": 142
   },
   "latest_observed_CI": {
-    "head_sha": "a97688d51bc4da5a3513bef83c833f3fb352a0dd",
-    "run": 38951501388,
-    "conclusion": "success",
-    "unit_integration_passed": 593,
+    "head_sha": "44776dd1d11e762027ab076a440fd8f1d57d6a41",
+    "run": 38977496863,
+    "conclusion": "failure_HTTP_test_setup_budget",
+    "unit_integration_passed": 598,
     "optin_skipped": 29,
     "native_PostgreSQL_passed": 13,
-    "browser_passed": 31,
+    "browser_passed": 35,
     "explicit_production_browser_gates_skipped": 3,
-    "HTTP_authorization_passed": 16,
-    "OIDC_passed": 1,
-    "rate_limit_passed": 6,
-    "real_token_expiry_passed": 1,
-    "actual_SDK_catalog": 142
+    "HTTP_authorization_passed": 15,
+    "HTTP_authorization_failed": 1,
+    "remaining_security_groups": "NOT_RUN_after_revocation_test_timeout",
+    "actual_SDK_catalog": 142,
+    "correction": "OAuth_setup_isolated_in120s_hook_30s_signin_plus65s_DCR_plus25s_requests_original_assertion_budgets_and_production_policy_unchanged",
+    "forced_backoff_regression": "PASS_actual_local429_RetryAfter60_after5_invalid400_requests_zero_clients_created_revocation_suite62_22s_with_original60s_assertion_budget"
   },
   "advanced_stage_rehearsal": {
     "owner_UI_minutes": 1.3,

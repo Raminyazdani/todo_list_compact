@@ -39,6 +39,7 @@ async function uiQuery(operation: string, input: Record<string, unknown>) {
 describe.skipIf(!httpEnabled)(
   "Actual JWT REST boundary cannot manufacture human graph authority",
   () => {
+    // Setup permits sign-in 30s + bounded DCR 65s + 25s for PKCE/fixture requests.
     beforeAll(async () => {
       cookie = await ownerCookie();
       token = (await scopedToken(cookie, ["tasks:read", "tasks:write"]))
@@ -66,7 +67,7 @@ describe.skipIf(!httpEnabled)(
         explicit_user_intent: true,
       });
       previewId = waive.preview_id;
-    }, 60000);
+    }, 120000);
     it("self-issued intent flags or forged tickets cannot waive through generic REST", async () => {
       for (const input of [
         { preview_id: previewId, explicit_user_intent: true },
