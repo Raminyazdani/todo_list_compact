@@ -3,6 +3,7 @@ import {
   type CommandName,
   type Principal,
 } from "../../shared/contracts";
+import { parseTaskRowLayout } from "../../shared/task-row-fields";
 import type { SqlClient } from "../db/database";
 import {
   audit,
@@ -42,6 +43,53 @@ import {
 import * as RRulePackage from "rrule";
 const RRule = (RRulePackage.RRule ??
   Reflect.get(RRulePackage, "default")?.RRule) as typeof RRulePackage.RRule;
+
+function rowLayout(value: unknown) {
+  try {
+    return parseTaskRowLayout(value);
+  } catch {
+    throw new DomainError("INVALID_INPUT", "Invalid task row layout.");
+  }
+}
+
+function patchRowLayouts(previous: unknown, patch: unknown): Input {
+  const changed = object(patch);
+  if (Object.keys(changed).some((key) => !["list", "tree"].includes(key)))
+    throw new DomainError(
+      "INVALID_INPUT",
+      "Task row layouts support list and tree views only.",
+    );
+  const old =
+    previous && typeof previous === "object" && !Array.isArray(previous)
+      ? (previous as Input)
+      : {};
+  const result: Input = {};
+  for (const view of ["list", "tree"]) {
+    if (Object.hasOwn(old, view)) result[view] = old[view];
+    if (Object.hasOwn(changed, view)) {
+      if (changed[view] === null) delete result[view];
+      else result[view] = rowLayout(changed[view]);
+    }
+  }
+  return result;
+}
+
+function savedViewConfiguration(value: unknown, previous?: unknown): Input {
+  const changed = object(value);
+  // A targeted row-fields patch preserves filters/layout. Other configuration
+  // updates keep the pre-existing replacement contract, including {} resets.
+  const result =
+    previous !== undefined &&
+    Object.keys(changed).length === 1 &&
+    Object.hasOwn(changed, "row_fields")
+      ? { ...object(previous), ...changed }
+      : { ...changed };
+  if (Object.hasOwn(changed, "row_fields")) {
+    if (changed.row_fields === null) delete result.row_fields;
+    else result.row_fields = rowLayout(changed.row_fields);
+  }
+  return result;
+}
 
 function recurrenceExceptions(value: unknown): string[] {
   if (!Array.isArray(value) || value.length > 1000)
@@ -504,6 +552,14 @@ export async function resourceCommand(
     else guard(before, revision ?? 0);
     const settings = { ...object(before.settings), ...object(input.settings) };
     const changed = object(input.settings);
+    if (Object.hasOwn(changed, "task_row_layouts")) {
+      if (changed.task_row_layouts === null) delete settings.task_row_layouts;
+      else
+        settings.task_row_layouts = patchRowLayouts(
+          object(before.settings).task_row_layouts,
+          changed.task_row_layouts,
+        );
+    }
     if (
       Object.keys(changed).some((key) =>
         [
@@ -573,7 +629,12 @@ export async function resourceCommand(
     const viewId = id("VIEW");
     await tx.query(
       "INSERT INTO saved_views(view_id,owner_id,title,configuration) VALUES($1,$2,$3,$4::jsonb)",
-      [viewId, owner, text(input, "title"), json(object(input.configuration))],
+      [
+        viewId,
+        owner,
+        text(input, "title"),
+        json(savedViewConfiguration(input.configuration)),
+      ],
     );
     return {
       entityId: viewId,
@@ -592,7 +653,11 @@ export async function resourceCommand(
         viewId,
         owner,
         text(input, "title", String(before.title)),
-        json(object(input.configuration ?? before.configuration)),
+        json(
+          input.configuration === undefined || input.configuration === null
+            ? object(before.configuration)
+            : savedViewConfiguration(input.configuration, before.configuration),
+        ),
       ],
     );
     return {

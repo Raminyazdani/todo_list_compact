@@ -1,4 +1,30 @@
 {
+  "inline_task_rows": {
+    "status": "implementation_in_progress",
+    "requested_at": "2026-10-18",
+    "baseline_commit": "19c5937d58430e858a50cbf026cd2ded6abc2f03",
+    "scope": "Common per-view field visibility, order and inline editing for My Tasks list/tree; no per-task presentation overrides.",
+    "observed": {
+      "client_acknowledgement_recovery_tests_passed": 2,
+      "native_postgresql_tests_passed": 14,
+      "private_pre_release_encrypted_backup_verified": true,
+      "production_environment_separate_from_synthetic_staging": true,
+      "full_unit_tests_passed_before_final_navigation_fix": 619,
+      "unit_tests_skipped_without_external_opt_in": 30,
+      "native_postgresql_scope": "14 actual tests across transaction, date and read-concurrency suites; includes stale preference revision rejection and independent view preservation.",
+      "lint_format_security_and_dependency_audit_passed": true,
+      "production_mode_staging_build_passed": true,
+      "initial_staging_browser_cases_passed": 8,
+      "browser_discovered_issue": "Off-route client navigation remounted the draft coordinator; fix and repeat acceptance are pending."
+    },
+    "pending": [
+      "complete_field_matrix_and_shared_view_UI",
+      "browser_accessibility_concurrency_and_lost_acknowledgement_checks",
+      "full_validation_and_security_checks",
+      "production_deployment_and_actual_readback"
+    ],
+    "private_evidence_policy": "Private credentials, backup paths, user rows, IDs and real screenshots remain outside public Git. Public tests use synthetic fixtures."
+  },
   "updated_at": "2026-10-16T23:17:54.557Z",
   "branch": "codex/calendar-production-evidence",
   "commit": "208d9a89af6d5f776dbec287a28ccf5f4a0f0a8e",

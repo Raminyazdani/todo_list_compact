@@ -45,6 +45,51 @@ let originalPreferences:
 const expect = baseExpect.configure({ timeout: 30000 });
 test.setTimeout(180000);
 
+// BetterAuth's configured 60-request window restarts after 60 seconds of
+// inactivity, not at each wall-clock minute. These many independent hard page
+// navigations must leave a quiet auth boundary instead of weakening that policy.
+const authIdleMilliseconds = 61000;
+const authCheckpointRequests = 25;
+let authRequestsSinceIdle = 0;
+let totalBrowserSessionRequests = 0;
+let lastBrowserSessionRequestAt = 0;
+let maximumAuthCheckpointCount = 0;
+let initialAuthIdleComplete = false;
+
+async function authIdleBoundary(initial = false) {
+  if (!initial && authRequestsSinceIdle < authCheckpointRequests) return;
+  if (initial) lastBrowserSessionRequestAt = Date.now();
+  const startedAt = Date.now();
+  console.log(
+    "WORKFLOW_AUTH_IDLE",
+    JSON.stringify({
+      reason: initial ? "initial_file_boundary" : "observed_request_budget",
+      requests_since_idle: authRequestsSinceIdle,
+      wait_ms: Math.max(
+        0,
+        lastBrowserSessionRequestAt + authIdleMilliseconds - startedAt,
+      ),
+    }),
+  );
+  for (;;) {
+    const remaining =
+      lastBrowserSessionRequestAt + authIdleMilliseconds - Date.now();
+    if (remaining <= 0) break;
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(remaining, 30000)),
+    );
+  }
+  authRequestsSinceIdle = 0;
+  console.log(
+    "WORKFLOW_AUTH_IDLE",
+    JSON.stringify({
+      reason: "idle_boundary_complete",
+      waited_ms: Date.now() - startedAt,
+      total_session_requests: totalBrowserSessionRequests,
+    }),
+  );
+}
+
 async function safeGet(
   request: APIRequestContext,
   url: string,
@@ -1104,6 +1149,26 @@ test.beforeEach(async ({ request, context, page }, testInfo) => {
       !process.env.E2E_REDEPLOY_SCRIPT,
     "Actual redeploy proof requires the explicitly configured coordinator script.",
   );
+  context.on("request", (request) => {
+    if (
+      !["GET", "POST"].includes(request.method()) ||
+      new URL(request.url()).pathname !== "/api/auth/get-session"
+    )
+      return;
+    authRequestsSinceIdle++;
+    totalBrowserSessionRequests++;
+    lastBrowserSessionRequestAt = Date.now();
+    maximumAuthCheckpointCount = Math.max(
+      maximumAuthCheckpointCount,
+      authRequestsSinceIdle,
+    );
+  });
+  // Prior files share the IP bucket. Establish the first boundary here, within
+  // the existing 180s test budget; beforeAll has a separate 60s hook budget.
+  // The largest case makes 24 navigations, so later checkpoints at 25 leave
+  // room for a whole case without any inter-action auth delay.
+  await authIdleBoundary(!initialAuthIdleComplete);
+  initialAuthIdleComplete = true;
   originalPreferences = undefined;
   await signIn(request);
   const captured = await readQuery<{
@@ -1124,6 +1189,17 @@ test.beforeEach(async ({ request, context, page }, testInfo) => {
   }
   await context.addCookies((await request.storageState()).cookies);
   page.setDefaultTimeout(30000);
+});
+
+test.afterEach(() => {
+  console.log(
+    "WORKFLOW_AUTH_BUDGET",
+    JSON.stringify({
+      requests_since_idle: authRequestsSinceIdle,
+      max_checkpoint_count: maximumAuthCheckpointCount,
+      total_session_requests: totalBrowserSessionRequests,
+    }),
+  );
 });
 
 test.afterEach(async ({ request }) => {

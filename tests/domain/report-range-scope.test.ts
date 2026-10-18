@@ -419,8 +419,10 @@ describe("Complete report ranges, local dates and scope boundaries", () => {
           ),
           "utf8",
         )
-      ).trim(),
-    ).toBe(MIGRATION_SQL.trim());
+      )
+        .replace(/\r\n/g, "\n")
+        .trim(),
+    ).toBe(MIGRATION_SQL.replace(/\r\n/g, "\n").trim());
   });
   it("authentic_unknown_table_or_checksum_and_unsupported_row_columns_fail_closed_instead_of_being_dropped", async () => {
     const project = await exec("project_create", {
