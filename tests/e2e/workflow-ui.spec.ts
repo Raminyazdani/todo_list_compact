@@ -54,6 +54,7 @@ let authRequestsSinceIdle = 0;
 let totalBrowserSessionRequests = 0;
 let lastBrowserSessionRequestAt = 0;
 let maximumAuthCheckpointCount = 0;
+let initialAuthIdleComplete = false;
 
 async function authIdleBoundary(initial = false) {
   if (!initial && authRequestsSinceIdle < authCheckpointRequests) return;
@@ -154,9 +155,6 @@ test.beforeAll(async () => {
     throw new Error(
       "Remote screenshot realpath resolves inside the repository.",
     );
-  // Prior files use the same localhost IP bucket. Their browser contexts have
-  // closed; establish a known idle boundary before this file consumes auth.
-  await authIdleBoundary(true);
 });
 
 test("task_precise_deadline_project_reference_and_linked_intervals_share_canonical_state", async ({
@@ -1165,9 +1163,12 @@ test.beforeEach(async ({ request, context, page }, testInfo) => {
       authRequestsSinceIdle,
     );
   });
-  // The largest case makes 24 page navigations. Check between cases at 25,
-  // leaving room for that whole case without any inter-action auth delay.
-  await authIdleBoundary();
+  // Prior files share the IP bucket. Establish the first boundary here, within
+  // the existing 180s test budget; beforeAll has a separate 60s hook budget.
+  // The largest case makes 24 navigations, so later checkpoints at 25 leave
+  // room for a whole case without any inter-action auth delay.
+  await authIdleBoundary(!initialAuthIdleComplete);
+  initialAuthIdleComplete = true;
   originalPreferences = undefined;
   await signIn(request);
   const captured = await readQuery<{
