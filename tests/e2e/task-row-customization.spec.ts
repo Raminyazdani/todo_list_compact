@@ -103,6 +103,61 @@ let createdTaskIds: string[] = [];
 let createdProjectIds: string[] = [];
 let screenshotDirectory: string | undefined;
 let activeJournal: CommandJournal | undefined;
+let nextReadSlot = 0;
+let readReservations = Promise.resolve();
+let currentReadCounts = new Map<string, number>();
+const suiteReadMinutes = new Map<number, number>();
+let currentSessionReads = { count: 0 };
+const suiteSessionMinutes = new Map<number, number>();
+
+// The authenticated API allows 600 reads per actor per fixed minute. Fast CI
+// PostgreSQL can compress these write-heavy scenarios into one bucket. Reserve
+// only half that capacity and leave headroom for the surrounding browser suite.
+// This delays reads before dispatch; a 429 still fails and no write is retried.
+function reserveRead(operation: string, counts = currentReadCounts) {
+  const reservation = readReservations.then(async () => {
+    const delay = nextReadSlot - Date.now();
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    // Space actual dispatch times, so a slow event loop cannot release a
+    // backlog of old timer reservations as one burst into the next bucket.
+    nextReadSlot = Date.now() + 200;
+    counts.set(operation, (counts.get(operation) ?? 0) + 1);
+    const minute = Math.floor(Date.now() / 60000);
+    suiteReadMinutes.set(minute, (suiteReadMinutes.get(minute) ?? 0) + 1);
+  });
+  readReservations = reservation;
+  return reservation;
+}
+
+async function pacePageReads(page: Page) {
+  const counts = currentReadCounts;
+  const sessions = currentSessionReads;
+  page.on("request", (request) => {
+    if (
+      request.method() !== "GET" ||
+      new URL(request.url()).pathname !== "/api/auth/get-session"
+    )
+      return;
+    sessions.count++;
+    const minute = Math.floor(Date.now() / 60000);
+    suiteSessionMinutes.set(minute, (suiteSessionMinutes.get(minute) ?? 0) + 1);
+  });
+  await page.route("**/api/v1/query**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/v1/query") {
+      const operation =
+        request.method() === "POST"
+          ? request.postDataJSON().operation
+          : url.searchParams.get("operation");
+      await reserveRead(
+        typeof operation === "string" ? operation : "unknown",
+        counts,
+      );
+    }
+    await route.continue();
+  });
+}
 
 test.describe.configure({ mode: "serial" });
 test.setTimeout(150000);
@@ -207,6 +262,7 @@ async function read<T>(
   operation: string,
   input: Record<string, unknown> = {},
 ): Promise<T> {
+  await reserveRead(operation);
   const response = await request.get(
     `${origin}/api/v1/query?${new URLSearchParams({ operation, input: JSON.stringify(input) })}`,
   );
@@ -413,8 +469,11 @@ test.beforeEach(async ({ request, context, page }, testInfo) => {
   );
   originalPreferences = undefined;
   activeJournal = undefined;
+  currentReadCounts = new Map();
+  currentSessionReads = { count: 0 };
   createdTaskIds = [];
   createdProjectIds = [];
+  await pacePageReads(page);
   const identity = await signIn(request);
   if (productionProof) {
     const path = testInfo.outputPath("task-row-command-journal.json");
@@ -505,6 +564,21 @@ test.afterEach(async ({ request }) => {
     activeJournal.document.cleanup_complete = true;
     await persistJournal(activeJournal);
   }
+  console.log(
+    "TASK_ROW_READ_BUDGET",
+    JSON.stringify({
+      queries: [...currentReadCounts.values()].reduce(
+        (sum, count) => sum + count,
+        0,
+      ),
+      operations: Object.fromEntries(
+        [...currentReadCounts.entries()].sort(([a], [b]) => a.localeCompare(b)),
+      ),
+      max_suite_minute: Math.max(0, ...suiteReadMinutes.values()),
+      auth_get_session: currentSessionReads.count,
+      max_suite_auth_minute: Math.max(0, ...suiteSessionMinutes.values()),
+    }),
+  );
 });
 
 test.beforeAll(async () => {
@@ -680,6 +754,7 @@ test("row_smoke_global_settings_apply_to_all_parent_and_child_rows_and_persist_a
   });
   try {
     const second = await other.newPage();
+    await pacePageReads(second);
     await journalPageCommands(second);
     await openTasks(second, prefix);
     await expect(field(second, child.task_id, "priority")).toBeVisible();
@@ -1448,6 +1523,17 @@ test("row_smoke_mobile_RTL_both_themes_and_keyboard_keep_selected_fields_and_foc
   page,
   request,
 }) => {
+  let identityReads = 0;
+  let sessionReads = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      url.pathname === "/api/v1/query" &&
+      url.searchParams.get("operation") === "whoami"
+    )
+      identityReads++;
+    if (url.pathname === "/api/auth/get-session") sessionReads++;
+  });
   const prefix = `SYNTHETIC ROW MOBILE ${crypto.randomUUID().slice(0, 8)}`;
   const a = await createTask(
     request,
@@ -1469,6 +1555,10 @@ test("row_smoke_mobile_RTL_both_themes_and_keyboard_keep_selected_fields_and_foc
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await expect(row(page, a.task_id)).toBeVisible();
+    const verifiedIdentityReads = identityReads;
+    const verifiedSessionReads = sessionReads;
+    expect(verifiedIdentityReads).toBeGreaterThan(0);
+    expect(verifiedSessionReads).toBeGreaterThan(0);
     const priority = field(page, a.task_id, "priority").getByRole("button", {
       name: "ویرایش اولویت",
       exact: true,
@@ -1514,6 +1604,10 @@ test("row_smoke_mobile_RTL_both_themes_and_keyboard_keep_selected_fields_and_foc
       .poll(async () => (await task(request, a.task_id)).due_date)
       .toBe(theme === "light" ? "2037-04-10" : "2037-04-11");
     await expect(due).toBeFocused();
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("lifeos:changed"));
+      window.dispatchEvent(new Event("focus"));
+    });
     const notes = await openEditor(page, a.task_id, "notes");
     await notes.locator("textarea").fill(`Keyboard draft ${theme}`);
     await notes.locator("textarea").press("Escape");
@@ -1548,6 +1642,10 @@ test("row_smoke_mobile_RTL_both_themes_and_keyboard_keep_selected_fields_and_foc
       `Explicit retained draft ${theme}`,
     );
     await reopened.getByRole("button", { name: "لغو", exact: true }).click();
+    // Saves, foreground refresh and soft app history keep the already verified
+    // session/owner scope; they must not consume a new identity/auth read each.
+    expect(identityReads).toBe(verifiedIdentityReads);
+    expect(sessionReads).toBe(verifiedSessionReads);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
