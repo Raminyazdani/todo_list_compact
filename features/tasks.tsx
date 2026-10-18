@@ -39,7 +39,21 @@ import type {
   TaskDTO,
 } from "@/shared/contracts";
 import { WORKFLOW_STATUSES } from "@/shared/contracts";
-import { query, useQuery } from "./api";
+import { command, query, usePagedQuery, useQuery } from "./api";
+import { resolveTaskRowLayout } from "@/shared/task-row-fields";
+import {
+  CustomizedTaskRow,
+  TaskRowDraftProvider,
+  TaskRowDraftShelf,
+  TaskRowLayoutProvider,
+  useTaskRows,
+} from "./task-row-fields";
+import {
+  TaskRowSettings,
+  type RowPreferences,
+  type RowSavedView,
+} from "./task-row-settings";
+import type { TaskRowMutation } from "./task-row-controller";
 import { useLabels, useLocale } from "./locale";
 import { PlanningPanel } from "./planning";
 import { TaskSchedule } from "./task-schedule";
@@ -94,6 +108,11 @@ export function TaskRow({
 }) {
   const labels = useLabels();
   const { t } = useLocale();
+  const customized = useTaskRows();
+  if (customized)
+    return (
+      <CustomizedTaskRow task={task} selected={selected} onSelect={onSelect} />
+    );
   return (
     <div className={`task-row ${task.status === "Done" ? "completed" : ""}`}>
       {onSelect && (
@@ -283,9 +302,33 @@ export function CreateTask({
 export function TaskExplorer({
   onOpen,
   action,
+  mutateTask = command,
 }: {
   onOpen: (id: string) => void;
   action: Action;
+  mutateTask?: TaskRowMutation;
+}) {
+  const params = useSearchParams();
+  return (
+    <TaskRowDraftProvider mutate={mutateTask}>
+      <TaskExplorerContent
+        key={params.toString()}
+        onOpen={onOpen}
+        action={action}
+        mutateTask={mutateTask}
+      />
+    </TaskRowDraftProvider>
+  );
+}
+
+function TaskExplorerContent({
+  onOpen,
+  action,
+  mutateTask,
+}: {
+  onOpen: (id: string) => void;
+  action: Action;
+  mutateTask: TaskRowMutation;
 }) {
   const { t } = useLocale();
   const labels = useLabels();
@@ -319,6 +362,7 @@ export function TaskExplorer({
       : "list",
   );
   const [create, setCreate] = useState(false);
+  const [activeSavedViewId, setActiveSavedViewId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const input = {
     limit: 100,
@@ -360,13 +404,23 @@ export function TaskExplorer({
     },
     view === "graph" || view === "timeline",
   );
-  const savedViews = useQuery<
-    PageDTO<{
-      view_id: string;
-      title: string;
-      configuration: { filters?: Record<string, unknown>; layout?: string };
-    }>
-  >("saved_view_list");
+  const savedViews = usePagedQuery<RowSavedView>("saved_view_list", {
+    limit: 100,
+  });
+  const preferences = useQuery<RowPreferences>("preferences_get");
+  const rowProjects = usePagedQuery<ProjectDTO>("project_list", {
+    limit: 100,
+    include_archived: true,
+  });
+  const activeSavedView = savedViews.data?.items.find(
+    (saved) => saved.view_id === activeSavedViewId,
+  );
+  const rowView = view === "tree" ? "tree" : "list";
+  const rowLayout = resolveTaskRowLayout({
+    view: rowView,
+    preferenceLayouts: preferences.data?.settings.task_row_layouts,
+    savedViewConfiguration: activeSavedView?.configuration,
+  });
   const [bulkPreview, setBulkPreview] = useState<PreviewDTO | null>(null);
   async function bulk() {
     try {
@@ -384,14 +438,26 @@ export function TaskExplorer({
     }
   }
   async function saveView() {
-    await action("saved_view_create", {
+    const result = await action("saved_view_create", {
       title: `${filter} · ${view}${search ? ` · ${search}` : ""}`,
-      configuration: { filters: input, layout: view },
+      configuration: {
+        filters: input,
+        layout: view,
+        ...(view === "list" || view === "tree"
+          ? { row_fields: rowLayout.layout }
+          : {}),
+      },
     });
+    if (result) setActiveSavedViewId(result.entity_id);
   }
   const rows = tasks.data?.items ?? [];
   return (
-    <>
+    <TaskRowLayoutProvider
+      layout={rowLayout.layout}
+      projects={rowProjects.data?.items ?? []}
+      tasks={rows}
+      onOpen={onOpen}
+    >
       <div className="page-heading">
         <div>
           <div className="eyebrow">
@@ -448,7 +514,10 @@ export function TaskExplorer({
                 className={view === value ? "active" : ""}
                 aria-label={String(value)}
                 title={String(value)}
-                onClick={() => setView(String(value))}
+                onClick={() => {
+                  setView(String(value));
+                  setActiveSavedViewId("");
+                }}
               >
                 <IconComponent size={17} />
               </button>
@@ -459,8 +528,9 @@ export function TaskExplorer({
       <div className="filter-bar">
         <select
           aria-label={t("نماهای ذخیره‌شده", "Saved views")}
-          defaultValue=""
+          value={activeSavedViewId}
           onChange={(event) => {
+            setActiveSavedViewId(event.target.value);
             const saved = savedViews.data?.items.find(
               (item) => item.view_id === event.target.value,
             );
@@ -582,7 +652,24 @@ export function TaskExplorer({
         <Button onClick={() => void saveView()}>
           {t("ذخیرهٔ نما", "Save view")}
         </Button>
+        <TaskRowSettings
+          view={rowView}
+          enabled={view === "list" || view === "tree"}
+          layout={rowLayout.layout}
+          source={rowLayout.source}
+          invalid={rowLayout.invalid}
+          preferences={preferences.data}
+          savedView={activeSavedView}
+          mutate={mutateTask}
+        />
       </div>
+      <TaskRowDraftShelf projects={rowProjects.data?.items ?? []} />
+      {rowProjects.error && (
+        <QueryState {...rowProjects} retry={rowProjects.refresh} />
+      )}
+      {preferences.error && (
+        <QueryState {...preferences} retry={preferences.refresh} />
+      )}
       {projectId && (
         <p className="small muted">
           {t("کارهای پروژه:", "Project tasks:")}{" "}
@@ -842,7 +929,7 @@ export function TaskExplorer({
           </>
         )}
       </Modal>
-    </>
+    </TaskRowLayoutProvider>
   );
 }
 

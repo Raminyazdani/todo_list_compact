@@ -146,6 +146,19 @@ export async function command(
           credentials: "same-origin",
         }),
       );
+      if (
+        !result ||
+        typeof result.operation_id !== "string" ||
+        typeof result.audit_event_id !== "string" ||
+        typeof result.entity_id !== "string" ||
+        !Number.isInteger(result.version) ||
+        result.version < 1 ||
+        !Array.isArray(result.affected_task_ids)
+      )
+        throw new ApiError(
+          "INVALID_ACKNOWLEDGEMENT",
+          "رسید ذخیره قابل بررسی نیست / Save acknowledgement could not be verified",
+        );
       mutationIntents.delete(fingerprint);
       clearQueryCache();
       window.dispatchEvent(new Event("lifeos:changed"));
@@ -167,6 +180,10 @@ export async function command(
       throw new ApiError(
         "WRITE_UNCONFIRMED",
         "ذخیره هنوز تأیید نشده؛ برای بررسی نتیجه همین عملیات را دوباره اجرا کن. / Save is unconfirmed. Retry the same action to recover its result.",
+        {
+          cause_code:
+            error instanceof ApiError ? error.code : "TRANSPORT_FAILURE",
+        },
       );
     } finally {
       intent.pending = undefined;

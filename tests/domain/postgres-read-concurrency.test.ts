@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { getDatabase, type Database } from "../../server/db/database";
 import { createDomainService } from "../../server/domain/service";
+import { parseTaskRowLayout } from "../../shared/task-row-fields";
 import type {
   DomainService,
   Principal,
@@ -100,6 +101,95 @@ describe.skipIf(process.env.TEST_POSTGRES !== "1")(
     afterAll(async () => {
       await db?.close?.();
     });
+
+    it("common_row_layout_concurrent_settings_writes_reject_stale_revision_then_preserve_both_views_and_audit_once", async () => {
+      const owner: Principal = {
+        ...principal,
+        ownerId: "staging-synthetic-row-layout-" + randomUUID(),
+      };
+      const empty = parseTaskRowLayout({ schema_version: 1, fields: [] });
+      await service.execute(
+        "preferences_update",
+        { settings: { theme: "dark", language: "fa" } },
+        owner,
+        { idempotencyKey: randomUUID(), expectedRevision: 0 },
+      );
+      const changes = (["list", "tree"] as const).map((view) => ({
+        input: { settings: { task_row_layouts: { [view]: empty } } },
+        options: { idempotencyKey: randomUUID(), expectedRevision: 1 },
+      }));
+      const attempts = await Promise.allSettled(
+        changes.map(({ input, options }) =>
+          service.execute("preferences_update", input, owner, options),
+        ),
+      );
+      expect(
+        attempts.filter((result) => result.status === "fulfilled"),
+      ).toHaveLength(1);
+      const acceptedIndex = attempts.findIndex(
+        (result) => result.status === "fulfilled",
+      );
+      const rejectedIndex = 1 - acceptedIndex;
+      expect(
+        (attempts[rejectedIndex] as PromiseRejectedResult).reason,
+      ).toMatchObject({ code: "REVISION_CONFLICT" });
+      const accepted = (
+        attempts[acceptedIndex] as PromiseFulfilledResult<
+          Awaited<ReturnType<DomainService["execute"]>>
+        >
+      ).value;
+      expect(
+        await service.execute(
+          "preferences_update",
+          changes[acceptedIndex].input,
+          owner,
+          changes[acceptedIndex].options,
+        ),
+      ).toEqual({ ...accepted, replayed: true });
+      await service.execute(
+        "preferences_update",
+        changes[rejectedIndex].input,
+        owner,
+        { idempotencyKey: randomUUID(), expectedRevision: 2 },
+      );
+      expect(await service.query("preferences_get", {}, owner)).toMatchObject({
+        revision: 3,
+        settings: {
+          theme: "dark",
+          language: "fa",
+          task_row_layouts: { list: empty, tree: empty },
+        },
+      });
+      expect(
+        (
+          await db.query(
+            "SELECT * FROM activity_events WHERE owner_id=$1 AND event_id=$2",
+            [owner.ownerId, accepted.audit_event_id],
+          )
+        ).rows,
+      ).toEqual([
+        expect.objectContaining({
+          operation_id: accepted.operation_id,
+          actor_id: owner.actorId,
+          channel: "UI",
+          event_type: "preferences_update",
+        }),
+      ]);
+      expect(
+        (
+          await db.query("SELECT * FROM activity_events WHERE owner_id=$1", [
+            owner.ownerId,
+          ])
+        ).rows,
+      ).toHaveLength(3);
+      expect(
+        (
+          await db.query("SELECT * FROM tasks WHERE owner_id=$1", [
+            owner.ownerId,
+          ])
+        ).rows,
+      ).toHaveLength(0);
+    }, 30000);
 
     it("deferred_calendar_provider_does_not_hold_owner_lock_or_block_task_and_preferences_writes", async () => {
       const separate: Principal = {
