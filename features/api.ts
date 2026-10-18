@@ -24,11 +24,14 @@ const mutationIntents = new Map<
   {
     key: string;
     body: string;
+    sessionGeneration: number;
     pending?: Promise<MutationResult>;
   }
 >();
 let readGeneration = 0;
+let sessionGeneration = 0;
 export function clearMutationIntents() {
+  sessionGeneration++;
   mutationIntents.clear();
 }
 export function clearQueryCache() {
@@ -37,7 +40,10 @@ export function clearQueryCache() {
   recentReads.clear();
 }
 
-async function responseData<T>(response: Response): Promise<T> {
+async function responseData<T>(
+  response: Response,
+  requestSessionGeneration: number,
+): Promise<T> {
   let body;
   try {
     body = await response.json();
@@ -50,12 +56,14 @@ async function responseData<T>(response: Response): Promise<T> {
     );
   }
   if (!response.ok) {
-    if (response.status === 401) {
+    const currentSession = requestSessionGeneration === sessionGeneration;
+    if (response.status === 401 && currentSession) {
       clearQueryCache();
       clearMutationIntents();
     }
     if (
       response.status === 401 &&
+      currentSession &&
       !window.location.pathname.startsWith("/login")
     )
       window.location.assign(
@@ -84,6 +92,7 @@ export async function query<T>(
   const existing = pendingReads.get(key);
   if (cacheable && existing) return existing as Promise<T>;
   const generation = readGeneration;
+  const requestSessionGeneration = sessionGeneration;
   const url = new URL(
     `/api/v1/query?operation=${operation}&input=${encodeURIComponent(JSON.stringify(input))}`,
     window.location.origin,
@@ -103,7 +112,7 @@ export async function query<T>(
         : {}),
     },
   )
-    .then(responseData<T>)
+    .then((response) => responseData<T>(response, requestSessionGeneration))
     .then((value) => {
       if (cacheable && generation === readGeneration) {
         if (recentReads.size > 100) recentReads.clear();
@@ -128,6 +137,7 @@ export async function command(
   const intent = mutationIntents.get(fingerprint) ?? {
     key: crypto.randomUUID(),
     body,
+    sessionGeneration,
   };
   if (intent.pending) return intent.pending;
   mutationIntents.set(fingerprint, intent);
@@ -145,6 +155,7 @@ export async function command(
           body: intent.body,
           credentials: "same-origin",
         }),
+        intent.sessionGeneration,
       );
       if (
         !result ||
@@ -159,9 +170,12 @@ export async function command(
           "INVALID_ACKNOWLEDGEMENT",
           "رسید ذخیره قابل بررسی نیست / Save acknowledgement could not be verified",
         );
-      mutationIntents.delete(fingerprint);
-      clearQueryCache();
-      window.dispatchEvent(new Event("lifeos:changed"));
+      if (mutationIntents.get(fingerprint) === intent)
+        mutationIntents.delete(fingerprint);
+      if (intent.sessionGeneration === sessionGeneration) {
+        clearQueryCache();
+        window.dispatchEvent(new Event("lifeos:changed"));
+      }
       return result;
     } catch (error) {
       // A lost acknowledgement may follow a successful database commit. Retain
@@ -174,7 +188,8 @@ export async function command(
         error.status !== 408 &&
         error.code !== "IDEMPOTENCY_IN_PROGRESS"
       ) {
-        mutationIntents.delete(fingerprint);
+        if (mutationIntents.get(fingerprint) === intent)
+          mutationIntents.delete(fingerprint);
         throw error;
       }
       throw new ApiError(
