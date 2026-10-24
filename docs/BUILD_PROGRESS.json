@@ -1,5 +1,22 @@
 {
+  "contract_hours_compact_ui": {
+    "status": "complete_live_verified",
+    "observed_at": "2026-10-24",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/11",
+    "release_commit": "1ad96e6c04c08862e2b31cbb0acdf4fb4ac8ed9d",
+    "production_url": "https://ramin-life-os.vercel.app/calendar?tab=work",
+    "scope": "Small weekly work-limit strip below the existing per-employer monthly totals. The stored private policies, canonical report and ChatGPT Web MCP connection are unchanged.",
+    "observed": {
+      "local": "PASS_typecheck_targeted_lint_format_security_scan_and_production_build",
+      "synthetic_browser": "PASS_one_focused_test_for_contractual_vs_personal_limits_week_selection_mobile_RTL_and_accessibility",
+      "production_deployment": "READY_at_canonical_alias_for_exact_release_commit;_health_HTTP_200",
+      "production_UI": "PASS_authenticated_Edge_readback_of_compact_work_limit_strip;_Jena_personal_alert_and_Seewiesen_contractual_cap_separately_labeled;_existing_monthly_metrics_present",
+      "code_scope": "Removed_duplicate_month_cards_period_trends_and_policy_editor_UI;_no_database_or_MCP_scope_change"
+    },
+    "privacy": "Only synthetic browser data and nonprivate release evidence are recorded in Git."
+  },
   "contract_hours_dashboard": {
+    "superseded_by": "contract_hours_compact_ui",
     "status": "complete_live_verified",
     "observed_at": "2026-10-24",
     "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/9",
