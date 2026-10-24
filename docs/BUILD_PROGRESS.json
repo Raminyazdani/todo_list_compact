@@ -1,4 +1,41 @@
 {
+  "chatgpt_web_mcp": {
+    "status": "complete_live_verified",
+    "verified_at": "2026-10-24",
+    "scope": "Personal ChatGPT Web plugin for Life OS tasks and projects; the old Google Drive task ledger is no longer the authoritative source for these records.",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/7",
+    "release_commit": "b706a6f793d45d804ec938924ce686a0cf48b6e5",
+    "production_url": "https://ramin-life-os.vercel.app/api/mcp",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/40099901271",
+    "implementation": "Canonical MCP missing-scope challenges request only the missing tool scope; owner and human-confirmation denials do not escalate grants. Next.js and high-severity production dependencies were updated before release.",
+    "granted_scopes": [
+      "openid",
+      "email",
+      "offline_access",
+      "profile",
+      "tasks:read",
+      "tasks:write",
+      "projects:read",
+      "projects:write"
+    ],
+    "excluded_scopes": "Files, calendar, work time, activity, backup and administration were not granted.",
+    "observed": {
+      "production_deployment_ready_and_canonical_alias_on_release_commit": true,
+      "production_health_and_protected_resource_preflight_passed": true,
+      "chatgpt_web_plugin_installed_and_oauth_primary_connected": true,
+      "chatgpt_web_work_whoami_called": true,
+      "chatgpt_web_work_task_search_called": true,
+      "task_search_total_in_web_and_direct_mcp_at_probe": 58,
+      "chatgpt_web_work_task_create_and_get_called": true,
+      "chatgpt_web_work_task_archive_called": true,
+      "direct_mcp_confirmed_test_task_archived_and_absent_from_active_search": true,
+      "test_task": "Synthetic task with no date, project or relationship. It remains archived with append-only audit history; no existing task was edited.",
+      "first_chat_immediately_after_connection_missed_tools": "A fresh Work chat with the plugin explicitly selected executed the real tools.",
+      "production_dependency_audit_high_or_critical_remaining": 0,
+      "full_github_ci": "PASS, including coverage, native PostgreSQL, browser/MCP, HTTP authorization and security checks."
+    },
+    "private_evidence_policy": "No owner IDs, user task rows or titles, OAuth clients, tokens, browser screenshots or chat links in Git."
+  },
   "inline_task_rows": {
     "status": "complete_live_verified",
     "requested_at": "2026-10-18",
