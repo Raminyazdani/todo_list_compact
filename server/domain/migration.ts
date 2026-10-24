@@ -27,6 +27,7 @@ export const BACKUP_TABLES = [
   "event_reminders",
   "time_entries",
   "time_drafts",
+  "work_contract_policies",
   "calendar_sources",
   "calendar_external_events",
   "calendar_mutation_intents",
@@ -387,6 +388,7 @@ export async function legacyImport(
 }
 const ADDITIVE_BACKUP_TABLES: readonly string[] = [
   "time_drafts",
+  "work_contract_policies",
   "calendar_sources",
   "calendar_external_events",
   "calendar_mutation_intents",

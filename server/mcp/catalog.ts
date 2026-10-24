@@ -174,6 +174,80 @@ const timeQuery = {
   task_id: id.optional(),
   ...page,
 };
+const contractMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+const weeklyPolicyMinutes = z.number().int().min(1).max(10_080);
+const monthlyPolicyMinutes = z.number().int().min(0).max(44_640);
+const policyLocalTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const nullablePolicyField = <T extends z.ZodType>(field: T) =>
+  field.nullable().optional();
+const contractPolicyInput = z
+  .object({
+    id: z.uuid().optional(),
+    employer: text(200),
+    effective_from: localDate,
+    effective_to: localDate.nullable().optional(),
+    weekly_contract_max_minutes: nullablePolicyField(weeklyPolicyMinutes),
+    weekly_personal_alert_minutes: nullablePolicyField(weeklyPolicyMinutes),
+    weekly_average_target_minutes: nullablePolicyField(weeklyPolicyMinutes),
+    average_window_months: nullablePolicyField(z.number().int().min(1).max(12)),
+    monthly_reference_minutes: nullablePolicyField(monthlyPolicyMinutes),
+    monthly_overrides: z.record(contractMonth, monthlyPolicyMinutes).optional(),
+    allowed_weekdays: z
+      .array(z.number().int().min(1).max(7))
+      .min(1)
+      .max(7)
+      .optional(),
+    local_window_start: nullablePolicyField(policyLocalTime),
+    local_window_end: nullablePolicyField(policyLocalTime),
+    timesheet_due: nullablePolicyField(
+      z
+        .object({
+          kind: z.enum(["calendar_day", "business_day"]),
+          day: z.number().int().min(1).max(31),
+        })
+        .strict(),
+    ),
+    source_label: text(200),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.effective_to && value.effective_to < value.effective_from)
+      context.addIssue({
+        code: "custom",
+        message: "Policy end date must not precede its start date",
+      });
+    if (
+      value.monthly_overrides &&
+      Object.keys(value.monthly_overrides).length > 36
+    )
+      context.addIssue({
+        code: "custom",
+        message: "At most 36 monthly overrides are supported",
+      });
+    if (
+      value.allowed_weekdays &&
+      new Set(value.allowed_weekdays).size !== value.allowed_weekdays.length
+    )
+      context.addIssue({ code: "custom", message: "Weekdays must be unique" });
+    if (
+      (value.local_window_start == null) !== (value.local_window_end == null) ||
+      (value.local_window_start &&
+        value.local_window_end &&
+        value.local_window_start >= value.local_window_end)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Supply one ordered local work window",
+      });
+    if (
+      value.timesheet_due?.kind === "business_day" &&
+      value.timesheet_due.day > 23
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Business-day due date must be at most 23",
+      });
+  });
 const timeImportData = object({
   format: z.literal("ramin-life-os-time/1"),
   timezone: zone,
@@ -414,6 +488,8 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
   time_entry_export: object(timeQuery),
   time_draft_list: object({ employer: title.optional(), ...page }),
   time_summary: object(timeQuery),
+  time_contract_policy_list: object({}),
+  time_contract_report: object({ month: contractMonth }),
   time_entry_import_preview: object({
     data: z.union([timeImportData, legacyTimeImportData]),
     timezone: zone.optional(),
@@ -663,6 +739,7 @@ export const WRITE_INPUT_SCHEMAS: Partial<Record<CommandName, z.ZodType>> = {
   }),
   time_entry_archive: object({ entry_id: id }),
   time_entry_import_commit: previewInput,
+  time_contract_policy_upsert: contractPolicyInput,
   preferences_update: object({ settings: jsonObject }),
   saved_view_create: object({ title, configuration: jsonObject }),
   saved_view_update: object({
@@ -764,16 +841,29 @@ const revisionCommands = new Set<CommandName>([
 export function writeSchema(command: CommandName) {
   const input = WRITE_INPUT_SCHEMAS[command];
   if (!input) throw new Error("Operation is not offered as an MCP write.");
-  return object({
+  const schema = object({
     input,
     operation_id: z.string().min(8).max(200),
-    expected_revision: revisionCommands.has(command)
-      ? z.number().int().positive()
-      : z.number().int().nonnegative().optional(),
+    expected_revision:
+      command === "time_contract_policy_upsert"
+        ? z.number().int().nonnegative()
+        : revisionCommands.has(command)
+          ? z.number().int().positive()
+          : z.number().int().nonnegative().optional(),
     ...(command === "task_dependency_waive_commit"
       ? { human_confirmation_id: z.string().uuid() }
       : {}),
   });
+  return command === "time_contract_policy_upsert"
+    ? schema.refine(
+        (value) =>
+          (value.input as { id?: string }).id
+            ? typeof value.expected_revision === "number" &&
+              value.expected_revision > 0
+            : value.expected_revision === 0,
+        "Create requires expected_revision 0; update requires the current positive revision",
+      )
+    : schema;
 }
 const HIDDEN_COMMANDS: readonly CommandName[] = [
   "legacy_import",
@@ -862,6 +952,12 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
     "Compensate the latest eligible owner work-interval change after revision checks. Original history is retained; a newer independent device edit must produce a conflict instead of being overwritten.",
   time_entry_export:
     "Page the complete owner work-log history and durable drafts for a recoverable JSON export. Preserve reporting policy and imported provenance; exports contain private user data and must never enter public Git.",
+  time_contract_policy_list:
+    "Read owner-bound employment policy versions and source labels. Rules are private time-scoped data; missing or unverified rules do not mean compliance.",
+  time_contract_report:
+    "Read a Berlin-local month and full Monday–Sunday weeks crossing its edges. Separate contractual limits, personal alerts, average targets and unknown checks; imported reported minutes retain their original accounting policy.",
+  time_contract_policy_upsert:
+    "Create or revise an owner-bound private work-contract policy with effective dates, source label, idempotency and expected revision. Do not infer legal violations from incomplete entry or contract data.",
   calendar_reminder_list:
     "List owner in-app reminders for local calendar events, optionally scoped to one exact event. No email or external calendar writes.",
   calendar_reminder_get:
@@ -1079,11 +1175,11 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
   calendar_delete_local_event:
     "Archive a local event; deleting a master also archives its moved overrides. External calendars remain read-only.",
   time_entry_create:
-    "Record actual worked instants and employer text. Overlapping active intervals are rejected.",
+    "Record actual worked instants and employer text. Show overlapping work and busy calendar events as warnings; preserve reporting policy for imported entries.",
   time_entry_update:
-    "Update one worked interval with its current revision; overlap detection excludes that same entry.",
+    "Update one worked interval with its current revision. Overlap warnings are derived separately and do not silently block saving.",
   time_summary:
-    "Sum actual elapsed minutes after interval clipping; adjacent intervals do not overlap.",
+    "Sum reported work minutes after interval clipping, preserving legacy imported accounting; adjacent intervals do not overlap.",
   file_register_external_link:
     "Register metadata for an HTTPS Google Drive/Docs reference; it does not upload, share, move or edit the original.",
   file_archive_preview:

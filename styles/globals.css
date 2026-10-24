@@ -307,6 +307,468 @@
 .work-month-panel {
   margin: 22px 0;
 }
+.contract-hours-panel {
+  margin: 22px 0;
+}
+.contract-hours-heading,
+.contract-selected-week-heading,
+.contract-threshold-line,
+.contract-month-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.contract-hours-heading {
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+.contract-hours-heading h2,
+.contract-selected-week h3 {
+  margin: 0;
+}
+.contract-hours-heading p {
+  margin-bottom: 0;
+}
+.contract-month-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-block: 16px;
+}
+.contract-month-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 16px;
+  text-align: start;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.contract-month-card:hover,
+.contract-month-card[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.contract-month-card:focus-visible,
+.contract-week-picker button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.contract-month-card-heading {
+  flex-wrap: wrap;
+}
+.contract-month-card-heading > strong {
+  font-size: 15px;
+}
+.contract-month-amount {
+  color: var(--accent);
+  font-size: clamp(24px, 3vw, 33px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  justify-self: start;
+}
+.contract-month-reference {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.contract-state-chip {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.contract-state-chip[data-tone="over"],
+.contract-threshold-result[data-tone="over"] {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+}
+.contract-state-chip[data-tone="review"],
+.contract-threshold-result[data-tone="review"],
+.contract-threshold-result[data-tone="unknown"],
+.contract-review-note {
+  color: var(--orange);
+}
+.contract-state-chip[data-tone="within"],
+.contract-threshold-result[data-tone="within"] {
+  color: var(--green);
+}
+.contract-week-picker {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 10px;
+  overscroll-behavior-inline: contain;
+}
+.contract-week-picker button {
+  display: grid;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-width: 174px;
+  padding: 10px 12px;
+  text-align: start;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.contract-week-picker button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+.contract-week-picker button span:last-child,
+.contract-selected-week time,
+.contract-selected-week b {
+  font-variant-numeric: tabular-nums;
+}
+.contract-selected-week {
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+.contract-selected-week-heading {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.contract-selected-week-heading h3 {
+  font-size: 15px;
+}
+.contract-selected-week-heading > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.contract-review-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.8;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--orange) 10%, var(--surface));
+}
+.contract-week-detail {
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.contract-week-detail h4 {
+  margin: 0 0 8px;
+}
+.contract-week-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.contract-week-amount strong {
+  color: var(--accent);
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+}
+.contract-week-amount span,
+.contract-threshold,
+.contract-information-note,
+.contract-unknown-note {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.contract-threshold {
+  margin-block: 12px;
+}
+.contract-threshold-line {
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 7px;
+}
+.contract-threshold-line span {
+  font-variant-numeric: tabular-nums;
+}
+.contract-threshold-result {
+  display: block;
+  margin-top: 5px;
+}
+.contract-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.contract-progress-track > span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  border-radius: inherit;
+}
+.contract-progress[data-tone="over"] .contract-progress-track > span {
+  background: var(--danger);
+}
+.contract-progress[data-tone="review"] .contract-progress-track > span,
+.contract-progress[data-tone="unknown"] .contract-progress-track > span,
+.contract-progress[data-tone="not_set"] .contract-progress-track > span {
+  background: var(--orange);
+}
+.contract-progress[data-tone="informational"] .contract-progress-track > span {
+  background: var(--accent);
+}
+.contract-threshold.personal .contract-progress-track > span {
+  background: var(--accent);
+}
+.contract-threshold.personal
+  .contract-progress[data-tone="over"]
+  .contract-progress-track
+  > span {
+  background: var(--orange);
+}
+.contract-information-note,
+.contract-unknown-note {
+  margin-block: 12px;
+  color: var(--muted);
+}
+.contract-rule-details {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.contract-rule-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.contract-rule-list {
+  display: grid;
+  gap: 9px;
+  margin: 14px 0;
+}
+.contract-rule-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.contract-rule-list dt {
+  min-width: 160px;
+  color: var(--muted);
+}
+.contract-rule-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.contract-issue-list {
+  display: grid;
+  gap: 7px;
+  padding-inline-start: 20px;
+}
+.contract-issue-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 12px;
+}
+.contract-not-computable {
+  margin: 16px 0 0;
+  line-height: 1.8;
+}
+.contract-period-insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-block: 14px;
+}
+.contract-period-card {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.contract-period-card[data-status="unknown"] {
+  border-color: color-mix(in srgb, var(--orange) 28%, var(--line));
+}
+.contract-period-card p {
+  margin: 0;
+}
+.contract-period-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.contract-period-heading span {
+  color: var(--accent);
+  font-size: 11px;
+}
+.contract-period-card[data-status="unknown"] .contract-period-heading span {
+  color: var(--orange);
+}
+.contract-period-values {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.contract-period-values b {
+  font-size: 19px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.contract-policy-editor {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+.contract-policy-editor > summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
+}
+.contract-policy-editor > summary:focus-visible,
+.contract-policy-form input:focus-visible,
+.contract-policy-form select:focus-visible,
+.contract-policy-form textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.contract-policy-editor > p {
+  line-height: 1.8;
+}
+.contract-policy-select {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-block: 14px;
+}
+.contract-policy-select .field {
+  min-width: min(320px, 100%);
+}
+.contract-policy-form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.contract-policy-form > p {
+  margin: 0;
+}
+.contract-policy-form .contract-dirty {
+  color: var(--orange);
+}
+.contract-policy-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.contract-policy-fields .field,
+.contract-policy-form > .field,
+.contract-override-row .field {
+  min-width: 0;
+}
+.contract-policy-fields input,
+.contract-policy-fields select,
+.contract-policy-form > .field textarea,
+.contract-override-row input {
+  width: 100%;
+}
+.contract-weekday-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.contract-weekday-fields legend {
+  color: var(--muted);
+  padding-inline: 5px;
+  font-size: 12px;
+}
+.contract-weekday-fields label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.contract-overrides {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.contract-override-row {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+.contract-override-row .field {
+  flex: 1 1 150px;
+}
+.contract-policy-form .warning {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.contract-personal-chip {
+  justify-self: start;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.contract-personal-chip[data-tone="over"] {
+  color: var(--orange);
+  font-weight: 700;
+}
+.contract-threshold.personal[data-tone="over"] {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--orange) 45%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--orange) 9%, var(--surface));
+}
+@media (max-width: 720px) {
+  .contract-month-cards {
+    grid-template-columns: 1fr;
+  }
+  .contract-period-insights {
+    grid-template-columns: 1fr;
+  }
+  .contract-hours-heading {
+    flex-wrap: wrap;
+  }
+  .contract-selected-week {
+    padding: 12px;
+  }
+  .contract-week-detail {
+    padding: 10px;
+  }
+  .contract-policy-fields {
+    grid-template-columns: 1fr;
+  }
+  .contract-policy-editor {
+    padding: 12px;
+  }
+}
 .work-month-scroll {
   overflow: auto;
   max-height: 78vh;

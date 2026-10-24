@@ -241,6 +241,107 @@ export interface TimeEntryDTO {
   overlap_entry_ids?: string[];
   warnings?: string[];
 }
+export interface WorkContractPolicyDTO {
+  id: string;
+  employer: string;
+  effective_from: string;
+  effective_to: string | null;
+  weekly_contract_max_minutes: number | null;
+  weekly_personal_alert_minutes: number | null;
+  weekly_average_target_minutes: number | null;
+  average_window_months: number | null;
+  monthly_reference_minutes: number | null;
+  monthly_overrides: Record<string, number>;
+  allowed_weekdays: number[];
+  local_window_start: string | null;
+  local_window_end: string | null;
+  timesheet_due: { kind: "calendar_day" | "business_day"; day: number } | null;
+  source_label: string;
+  revision: number;
+  updated_at: string;
+}
+export interface TimeContractIssueDTO {
+  code:
+    | "WEEKDAY_REVIEW"
+    | "LOCAL_WINDOW_REVIEW"
+    | "OUTSIDE_EFFECTIVE_TERM"
+    | "LEGACY_DURATION_REVIEW";
+  entry_id: string;
+  local_date: string;
+  starts_at: string;
+  ends_at: string;
+}
+export type TimeContractStatus =
+  "within" | "over" | "review" | "not_set" | "unknown";
+export interface TimeContractWeekDTO {
+  week_start: string;
+  week_end_exclusive: string;
+  minutes: number;
+  elapsed_minutes: number;
+  entry_count: number;
+  policy_id: string | null;
+  contract_limit_minutes: number | null;
+  contract_remaining_minutes: number | null;
+  contract_over_minutes: number;
+  contract_state: TimeContractStatus;
+  personal_alert_minutes: number | null;
+  personal_remaining_minutes: number | null;
+  personal_over_minutes: number;
+  personal_state: TimeContractStatus;
+  average_target_minutes: number | null;
+  weekday_review_count: number;
+  window_review_count: number;
+  out_of_term_review_count: number;
+  issues: TimeContractIssueDTO[];
+}
+export interface EmployerContractReportDTO {
+  employer: string;
+  policy: WorkContractPolicyDTO | null;
+  policies: WorkContractPolicyDTO[];
+  policy_status: "configured" | "missing" | "mixed";
+  monthly: {
+    minutes: number;
+    entry_count: number;
+    reference_minutes: number | null;
+    delta_minutes: number | null;
+  };
+  cumulative: {
+    from: string | null;
+    through_month: string;
+    months: number;
+    reported_minutes: number | null;
+    reference_minutes: number | null;
+    delta_minutes: number | null;
+    status: "informational" | "unknown";
+    reason: string | null;
+  };
+  average: {
+    window_months: number | null;
+    window_start: string | null;
+    window_end_exclusive: string;
+    reported_minutes: number | null;
+    recorded_average_minutes_per_week: number | null;
+    target_minutes_per_week: number | null;
+    status: "informational" | "unknown";
+    reason: string | null;
+  };
+  weeks: TimeContractWeekDTO[];
+}
+export interface TimeContractReportDTO {
+  month: string;
+  timezone: "Europe/Berlin";
+  week_starts_on: "monday";
+  reporting_basis: "entry_reporting_policy";
+  data_complete: true;
+  employers: EmployerContractReportDTO[];
+  combined_weeks: Array<{
+    week_start: string;
+    week_end_exclusive: string;
+    minutes: number;
+    elapsed_minutes: number;
+    review_over_20h: boolean;
+  }>;
+}
 export interface CalendarSourceDTO {
   source_id: string;
   calendar_id: string;
@@ -467,6 +568,7 @@ export const COMMAND_NAMES = [
   "time_entry_update",
   "time_entry_archive",
   "time_entry_import_commit",
+  "time_contract_policy_upsert",
   "preferences_update",
   "saved_view_create",
   "saved_view_update",
@@ -538,6 +640,8 @@ export const QUERY_NAMES = [
   "calendar_reminder_get",
   "time_entry_list",
   "time_summary",
+  "time_contract_policy_list",
+  "time_contract_report",
   "time_entry_import_preview",
   "get_activity",
   "search_all",

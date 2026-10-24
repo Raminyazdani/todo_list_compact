@@ -1,4 +1,19 @@
 {
+  "contract_hours_dashboard": {
+    "status": "implementation_verified_release_pending",
+    "observed_at": "2026-10-24",
+    "scope": "Interactive per-employer work-hours dashboard in the Life OS calendar work tab, with private time-scoped contract policies and conservative informational assessments.",
+    "implementation": "Full Berlin-local Monday–Sunday weeks, reported monthly totals, personal and contractual thresholds kept separate, period-to-date reference and rolling-average trends, source labels, review states for time-window/weekday/term and legacy elapsed/reporting differences, versioned policy edits and owner-bound audit.",
+    "observed": {
+      "local_format_lint_type_security_and_build": "PASS",
+      "local_unit_and_integration_tests": "PASS_646_tests_76_files_30_skipped",
+      "neon_isolated_clones": "PASS_additive_migration_rerun_and_existing_record_counts_preserved_on_both_local_target_and_actual_production_clone",
+      "public_test_data": "SYNTHETIC_ONLY",
+      "production_migration": "PENDING",
+      "production_policy_configuration_and_live_UI_API_readback": "PENDING"
+    },
+    "privacy": "Contract source files, actual policy values, owner identifiers, time-entry rows, connection strings, backups and real screenshots remain outside public Git."
+  },
   "chatgpt_web_mcp": {
     "status": "complete_live_verified",
     "verified_at": "2026-10-24",

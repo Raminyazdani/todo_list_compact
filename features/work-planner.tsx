@@ -19,6 +19,7 @@ import { useLocale } from "./locale";
 import { usePagedQuery, useQuery } from "./api";
 import type { CalendarAction } from "./calendar-workspace";
 import { TimeTransfer } from "./time-transfer";
+import { ContractHoursDashboard } from "./contract-hours-dashboard";
 import {
   entryLocal,
   localPoint,
@@ -339,6 +340,7 @@ export function WorkPlanner({
         </div>
       </div>
       <QueryState {...summary} retry={summary.refresh} />
+      <ContractHoursDashboard month={month} date={date} action={action} />
       <TimeTransfer from={from} to={to} month={month} action={action} />
       {error && (
         <p className="error" role="alert">

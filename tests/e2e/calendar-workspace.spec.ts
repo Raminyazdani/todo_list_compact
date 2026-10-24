@@ -6,6 +6,9 @@ import type {
   PageDTO,
   TimeEntryDTO,
   TimeDraftDTO,
+  TimeContractReportDTO,
+  TimeContractWeekDTO,
+  WorkContractPolicyDTO,
 } from "../../shared/contracts";
 
 const origin = process.env.E2E_BASE_URL ?? "http://localhost:3000";
@@ -747,4 +750,279 @@ test("Google_change_confirmation_shows_fresh_remote_before_and_personal_proposal
   await expect(confirmation).toContainText("Personal proposed notes");
   await expect(confirmation).toContainText("2086-05-15T11:00:00Z");
   await expect(confirmation).toContainText("2086-05-15T10:00:00Z");
+});
+
+test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", async ({
+  page,
+}) => {
+  const month = "2087-02";
+  const policyA: WorkContractPolicyDTO = {
+    id: "11111111-1111-4111-8111-111111111111",
+    employer: "Sample A",
+    effective_from: "2087-01-01",
+    effective_to: "2087-12-31",
+    weekly_contract_max_minutes: 480,
+    weekly_personal_alert_minutes: null,
+    weekly_average_target_minutes: null,
+    average_window_months: null,
+    monthly_reference_minutes: 960,
+    monthly_overrides: {},
+    allowed_weekdays: [],
+    local_window_start: null,
+    local_window_end: null,
+    timesheet_due: null,
+    source_label: "Synthetic source A",
+    revision: 1,
+    updated_at: "2087-01-01T00:00:00Z",
+  };
+  let policyB: WorkContractPolicyDTO = {
+    ...policyA,
+    id: "22222222-2222-4222-8222-222222222222",
+    employer: "Sample B",
+    weekly_contract_max_minutes: null,
+    weekly_personal_alert_minutes: 420,
+    weekly_average_target_minutes: 360,
+    average_window_months: 3,
+    source_label: "Synthetic source B",
+  };
+  const savedInputs: Record<string, unknown>[] = [];
+  const week = (employer: "A" | "B"): TimeContractWeekDTO => {
+    const contractual = employer === "A";
+    const minutes = contractual ? 600 : 480;
+    const personalLimit = policyB.weekly_personal_alert_minutes;
+    return {
+      week_start: "2087-01-26",
+      week_end_exclusive: "2087-02-02",
+      minutes,
+      elapsed_minutes: minutes,
+      entry_count: 2,
+      policy_id: contractual ? policyA.id : policyB.id,
+      contract_limit_minutes: contractual ? 480 : null,
+      contract_remaining_minutes: contractual ? 0 : null,
+      contract_over_minutes: contractual ? 120 : 0,
+      contract_state: contractual ? "over" : "not_set",
+      personal_alert_minutes: contractual ? null : personalLimit,
+      personal_remaining_minutes: contractual
+        ? null
+        : Math.max(0, personalLimit! - minutes),
+      personal_over_minutes: contractual
+        ? 0
+        : Math.max(0, minutes - personalLimit!),
+      personal_state: contractual
+        ? "not_set"
+        : minutes > personalLimit!
+          ? "over"
+          : "within",
+      average_target_minutes: contractual ? null : 360,
+      weekday_review_count: 0,
+      window_review_count: 0,
+      out_of_term_review_count: 0,
+      issues: [],
+    };
+  };
+  const report = (): TimeContractReportDTO => ({
+    month,
+    timezone: "Europe/Berlin",
+    week_starts_on: "monday",
+    reporting_basis: "entry_reporting_policy",
+    data_complete: true,
+    employers: [
+      {
+        employer: "Sample A",
+        policy: policyA,
+        policies: [policyA],
+        policy_status: "configured",
+        monthly: {
+          minutes: 540,
+          entry_count: 1,
+          reference_minutes: 960,
+          delta_minutes: -420,
+        },
+        cumulative: {
+          from: "2087-01-01",
+          through_month: month,
+          months: 2,
+          reported_minutes: 600,
+          reference_minutes: 1920,
+          delta_minutes: -1320,
+          status: "unknown",
+          reason: "OPEN_MONTH",
+        },
+        average: {
+          window_months: null,
+          window_start: null,
+          window_end_exclusive: "2087-03-01",
+          reported_minutes: null,
+          recorded_average_minutes_per_week: null,
+          target_minutes_per_week: null,
+          status: "unknown",
+          reason: "NO_AVERAGE_POLICY",
+        },
+        weeks: [week("A")],
+      },
+      {
+        employer: "Sample B",
+        policy: policyB,
+        policies: [policyB],
+        policy_status: "configured",
+        monthly: {
+          minutes: 480,
+          entry_count: 2,
+          reference_minutes: 960,
+          delta_minutes: -480,
+        },
+        cumulative: {
+          from: "2087-01-01",
+          through_month: month,
+          months: 2,
+          reported_minutes: 480,
+          reference_minutes: 1920,
+          delta_minutes: -1440,
+          status: "unknown",
+          reason: "OPEN_MONTH",
+        },
+        average: {
+          window_months: 3,
+          window_start: "2086-12-01",
+          window_end_exclusive: "2087-03-01",
+          reported_minutes: null,
+          recorded_average_minutes_per_week: null,
+          target_minutes_per_week: 360,
+          status: "unknown",
+          reason: "INCOMPLETE_POLICY_WINDOW",
+        },
+        weeks: [week("B")],
+      },
+    ],
+    combined_weeks: [
+      {
+        week_start: "2087-01-26",
+        week_end_exclusive: "2087-02-02",
+        minutes: 1080,
+        elapsed_minutes: 1080,
+        review_over_20h: false,
+      },
+    ],
+  });
+  await page.route("**/api/v1/query*", async (route) => {
+    const url = new URL(route.request().url());
+    const operation = url.searchParams.get("operation");
+    const input = JSON.parse(url.searchParams.get("input") ?? "{}");
+    if (operation === "time_contract_report" && input.month === month)
+      return route.fulfill({ json: { data: report() } });
+    if (operation === "time_contract_policy_list")
+      return route.fulfill({
+        json: {
+          data: { items: [policyA, policyB], total: 2, next_cursor: null },
+        },
+      });
+    return route.continue();
+  });
+  await page.route("**/api/v1/commands", async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.command !== "time_contract_policy_upsert") return route.continue();
+    expect(route.request().headers()["if-match"]).toBe("1");
+    savedInputs.push(body.input);
+    policyB = {
+      ...policyB,
+      weekly_personal_alert_minutes: Number(
+        body.input.weekly_personal_alert_minutes,
+      ),
+      source_label: String(body.input.source_label),
+      revision: 2,
+    };
+    return route.fulfill({
+      json: {
+        data: {
+          operation_id: "synthetic-operation",
+          audit_event_id: "synthetic-audit",
+          entity_id: policyB.id,
+          version: 2,
+          affected_task_ids: [],
+          readiness_changes: [],
+          changed_fields: [],
+          data: policyB,
+        },
+      },
+    });
+  });
+  await page.goto("/calendar?tab=work");
+  await expect(page.locator(".save-status")).toContainText("متصل به سرور", {
+    timeout: 30000,
+  });
+  await page.getByLabel("ماه", { exact: true }).fill("2087-02");
+  const dashboard = page.locator(".contract-hours-panel");
+  await expect(dashboard.locator(".contract-month-card")).toHaveCount(2);
+  const cardA = dashboard
+    .locator(".contract-month-card")
+    .filter({ hasText: "Sample A" });
+  const cardB = dashboard
+    .locator(".contract-month-card")
+    .filter({ hasText: "Sample B" });
+  await expect(cardA).toContainText("9:00");
+  await expect(dashboard.locator(".contract-week-picker")).toContainText(
+    "2087-01-26 – 2087-02-01",
+  );
+  await expect(dashboard.locator(".contract-week-detail")).toContainText(
+    "10:00",
+  );
+  await expect(dashboard.locator(".contract-week-detail")).toContainText(
+    "بیش از سقف: 2:00",
+  );
+  await expect(cardB).toContainText("هشدار شخصی این هفته");
+  await cardB.click();
+  await expect(dashboard.locator(".contract-week-detail")).toContainText(
+    "هشدار شخصی؛ قاعدهٔ قرارداد نیست",
+  );
+  await expect(dashboard.locator(".contract-week-detail")).toContainText(
+    "بیش از هشدار شخصی: 1:00",
+  );
+  await expect(dashboard.locator(".contract-period-insights")).toContainText(
+    "نیازمند دادهٔ کامل",
+  );
+  const editor = dashboard
+    .locator(".contract-policy-editor")
+    .filter({ hasText: "Sample B" });
+  await editor.locator("summary").click();
+  const source = editor
+    .locator(".contract-policy-form:visible")
+    .getByLabel("منبع قاعده یا بند قرارداد");
+  await source.fill("Synthetic unsaved edit");
+  await cardA.click();
+  await cardB.click();
+  await expect(source).toHaveValue("Synthetic unsaved edit");
+  await editor.getByLabel("نسخهٔ قاعده").selectOption("new");
+  await editor.getByLabel("نسخهٔ قاعده").selectOption(policyB.id);
+  await expect(source).toHaveValue("Synthetic unsaved edit");
+  await editor
+    .locator(".contract-policy-form:visible")
+    .getByLabel("هشدار شخصی هفتگی (ساعت:دقیقه)")
+    .fill("7:30");
+  await editor.getByRole("button", { name: "ذخیرهٔ قاعده" }).click();
+  await expect(editor).toContainText("قاعده ذخیره شد");
+  expect(savedInputs).toHaveLength(1);
+  expect(savedInputs[0].weekly_personal_alert_minutes).toBe(450);
+  expect(savedInputs[0].source_label).toBe("Synthetic unsaved edit");
+  await expect(cardB).toContainText("8:00 / 7:30");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  await cardB.scrollIntoViewIfNeeded();
+  await expect(cardB).toBeInViewport();
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(1);
+  for (const theme of ["dark", "light"]) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    const accessibility = await new AxeBuilder({ page })
+      .include(".contract-hours-panel")
+      .analyze();
+    expect(accessibility.violations).toEqual([]);
+  }
 });
