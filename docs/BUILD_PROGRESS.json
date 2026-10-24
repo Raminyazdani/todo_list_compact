@@ -1,7 +1,11 @@
 {
   "contract_hours_dashboard": {
-    "status": "implementation_verified_release_pending",
+    "status": "complete_live_verified",
     "observed_at": "2026-10-24",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/9",
+    "release_commit": "770ba76c0613330060180a96c26ea3288e88e3af",
+    "production_url": "https://ramin-life-os.vercel.app/calendar?tab=work",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/40108066500",
     "scope": "Interactive per-employer work-hours dashboard in the Life OS calendar work tab, with private time-scoped contract policies and conservative informational assessments.",
     "implementation": "Full Berlin-local Monday–Sunday weeks, reported monthly totals, personal and contractual thresholds kept separate, period-to-date reference and rolling-average trends, source labels, review states for time-window/weekday/term and legacy elapsed/reporting differences, versioned policy edits and owner-bound audit.",
     "observed": {
@@ -9,8 +13,13 @@
       "local_unit_and_integration_tests": "PASS_646_tests_76_files_30_skipped",
       "neon_isolated_clones": "PASS_additive_migration_rerun_and_existing_record_counts_preserved_on_both_local_target_and_actual_production_clone",
       "public_test_data": "SYNTHETIC_ONLY",
-      "production_migration": "PENDING",
-      "production_policy_configuration_and_live_UI_API_readback": "PENDING"
+      "full_github_ci": "PASS_including_coverage_real_PostgreSQL_browser_MCP_and_HTTP_authorization_token_expiry",
+      "production_target": "PASS_Vercel_direct_and_pooled_connections_match_the_actual_Neon_main_database",
+      "production_migration": "PASS_additive_migration_and_idempotent_rerun;_owner_task_and_work_entry_counts_preserved",
+      "private_backups": "PASS_pre_migration_and_post_configuration_encrypted_exports_with_decrypt_and_manifest_readback;_new_policy_table_included_in_post_export",
+      "production_policy_configuration_and_live_UI_API_readback": "PASS_two_owner_scoped_policies_created_through_canonical_domain_service;_idempotent_rerun_created_no_duplicates;_reported_monthly_totals_matched_existing_time_summary;_authenticated_production_UI_loaded_the_month_and_selected_week_from_the_query_path",
+      "production_visual_and_rule_check": "PASS_Life_OS_dark_theme_and_RTL;_Jena_personal_weekly_alert_explicitly_separate_from_contract_assessment;_Seewiesen_contractual_weekly_cap_displayed",
+      "production_deployment": "READY_at_canonical_alias_for_exact_release_commit"
     },
     "privacy": "Contract source files, actual policy values, owner identifiers, time-entry rows, connection strings, backups and real screenshots remain outside public Git."
   },
