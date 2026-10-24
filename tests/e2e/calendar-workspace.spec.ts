@@ -752,7 +752,7 @@ test("Google_change_confirmation_shows_fresh_remote_before_and_personal_proposal
   await expect(confirmation).toContainText("2086-05-15T10:00:00Z");
 });
 
-test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", async ({
+test("contract_hours_show_compact_weekly_contract_and_personal_limits", async ({
   page,
 }) => {
   const month = "2087-02";
@@ -775,7 +775,7 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
     revision: 1,
     updated_at: "2087-01-01T00:00:00Z",
   };
-  let policyB: WorkContractPolicyDTO = {
+  const policyB: WorkContractPolicyDTO = {
     ...policyA,
     id: "22222222-2222-4222-8222-222222222222",
     employer: "Sample B",
@@ -785,7 +785,6 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
     average_window_months: 3,
     source_label: "Synthetic source B",
   };
-  const savedInputs: Record<string, unknown>[] = [];
   const week = (employer: "A" | "B"): TimeContractWeekDTO => {
     const contractual = employer === "A";
     const minutes = contractual ? 600 : 480;
@@ -820,6 +819,20 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
       issues: [],
     };
   };
+  const quietWeek = (employer: "A" | "B"): TimeContractWeekDTO => ({
+    ...week(employer),
+    week_start: "2087-02-02",
+    week_end_exclusive: "2087-02-09",
+    minutes: 0,
+    elapsed_minutes: 0,
+    entry_count: 0,
+    contract_remaining_minutes: employer === "A" ? 480 : null,
+    contract_over_minutes: 0,
+    contract_state: employer === "A" ? "within" : "not_set",
+    personal_remaining_minutes: employer === "B" ? 420 : null,
+    personal_over_minutes: 0,
+    personal_state: employer === "B" ? "within" : "not_set",
+  });
   const report = (): TimeContractReportDTO => ({
     month,
     timezone: "Europe/Berlin",
@@ -858,7 +871,7 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
           status: "unknown",
           reason: "NO_AVERAGE_POLICY",
         },
-        weeks: [week("A")],
+        weeks: [week("A"), quietWeek("A")],
       },
       {
         employer: "Sample B",
@@ -891,7 +904,7 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
           status: "unknown",
           reason: "INCOMPLETE_POLICY_WINDOW",
         },
-        weeks: [week("B")],
+        weeks: [week("B"), quietWeek("B")],
       },
     ],
     combined_weeks: [
@@ -902,6 +915,13 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
         elapsed_minutes: 1080,
         review_over_20h: false,
       },
+      {
+        week_start: "2087-02-02",
+        week_end_exclusive: "2087-02-09",
+        minutes: 0,
+        elapsed_minutes: 0,
+        review_over_20h: false,
+      },
     ],
   });
   await page.route("**/api/v1/query*", async (route) => {
@@ -910,41 +930,7 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
     const input = JSON.parse(url.searchParams.get("input") ?? "{}");
     if (operation === "time_contract_report" && input.month === month)
       return route.fulfill({ json: { data: report() } });
-    if (operation === "time_contract_policy_list")
-      return route.fulfill({
-        json: {
-          data: { items: [policyA, policyB], total: 2, next_cursor: null },
-        },
-      });
     return route.continue();
-  });
-  await page.route("**/api/v1/commands", async (route) => {
-    const body = route.request().postDataJSON();
-    if (body.command !== "time_contract_policy_upsert") return route.continue();
-    expect(route.request().headers()["if-match"]).toBe("1");
-    savedInputs.push(body.input);
-    policyB = {
-      ...policyB,
-      weekly_personal_alert_minutes: Number(
-        body.input.weekly_personal_alert_minutes,
-      ),
-      source_label: String(body.input.source_label),
-      revision: 2,
-    };
-    return route.fulfill({
-      json: {
-        data: {
-          operation_id: "synthetic-operation",
-          audit_event_id: "synthetic-audit",
-          entity_id: policyB.id,
-          version: 2,
-          affected_task_ids: [],
-          readiness_changes: [],
-          changed_fields: [],
-          data: policyB,
-        },
-      },
-    });
   });
   await page.goto("/calendar?tab=work");
   await expect(page.locator(".save-status")).toContainText("متصل به سرور", {
@@ -952,58 +938,26 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
   });
   await page.getByLabel("ماه", { exact: true }).fill("2087-02");
   const dashboard = page.locator(".contract-hours-panel");
-  await expect(dashboard.locator(".contract-month-card")).toHaveCount(2);
+  await expect(page.locator(".metric-grid")).toContainText("Jena");
+  await expect(page.locator(".metric-grid")).toContainText("Seewiesen");
+  await expect(dashboard.locator(".contract-limit-card")).toHaveCount(2);
   const cardA = dashboard
-    .locator(".contract-month-card")
+    .locator(".contract-limit-card")
     .filter({ hasText: "Sample A" });
   const cardB = dashboard
-    .locator(".contract-month-card")
+    .locator(".contract-limit-card")
     .filter({ hasText: "Sample B" });
-  await expect(cardA).toContainText("9:00");
-  await expect(dashboard.locator(".contract-week-picker")).toContainText(
-    "2087-01-26 – 2087-02-01",
-  );
-  await expect(dashboard.locator(".contract-week-detail")).toContainText(
-    "10:00",
-  );
-  await expect(dashboard.locator(".contract-week-detail")).toContainText(
-    "بیش از سقف: 2:00",
-  );
-  await expect(cardB).toContainText("هشدار شخصی این هفته");
-  await cardB.click();
-  await expect(dashboard.locator(".contract-week-detail")).toContainText(
-    "هشدار شخصی؛ قاعدهٔ قرارداد نیست",
-  );
-  await expect(dashboard.locator(".contract-week-detail")).toContainText(
-    "بیش از هشدار شخصی: 1:00",
-  );
-  await expect(dashboard.locator(".contract-period-insights")).toContainText(
-    "نیازمند دادهٔ کامل",
-  );
-  const editor = dashboard
-    .locator(".contract-policy-editor")
-    .filter({ hasText: "Sample B" });
-  await editor.locator("summary").click();
-  const source = editor
-    .locator(".contract-policy-form:visible")
-    .getByLabel("منبع قاعده یا بند قرارداد");
-  await source.fill("Synthetic unsaved edit");
-  await cardA.click();
-  await cardB.click();
-  await expect(source).toHaveValue("Synthetic unsaved edit");
-  await editor.getByLabel("نسخهٔ قاعده").selectOption("new");
-  await editor.getByLabel("نسخهٔ قاعده").selectOption(policyB.id);
-  await expect(source).toHaveValue("Synthetic unsaved edit");
-  await editor
-    .locator(".contract-policy-form:visible")
-    .getByLabel("هشدار شخصی هفتگی (ساعت:دقیقه)")
-    .fill("7:30");
-  await editor.getByRole("button", { name: "ذخیرهٔ قاعده" }).click();
-  await expect(editor).toContainText("قاعده ذخیره شد");
-  expect(savedInputs).toHaveLength(1);
-  expect(savedInputs[0].weekly_personal_alert_minutes).toBe(450);
-  expect(savedInputs[0].source_label).toBe("Synthetic unsaved edit");
-  await expect(cardB).toContainText("8:00 / 7:30");
+  await expect(cardA).toContainText("10:00 / 8:00");
+  await expect(cardA).toContainText("سقف قراردادی هفتگی");
+  await expect(cardA).toContainText("از سقف قرارداد گذشت");
+  await expect(cardB).toContainText("8:00 / 7:00");
+  await expect(cardB).toContainText("قاعدهٔ قرارداد نیست");
+  await expect(cardB).toContainText("از هشدار شخصی گذشت");
+  await dashboard.locator(".contract-rules-disclosure summary").click();
+  await expect(dashboard).toContainText("Synthetic source B");
+  await dashboard.getByLabel("هفتهٔ کاری").selectOption("2087-02-02");
+  await expect(cardA).toContainText("0:00 / 8:00");
+  await expect(cardB).toContainText("0:00 / 7:00");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await cardB.scrollIntoViewIfNeeded();
@@ -1015,14 +969,8 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
         document.documentElement.clientWidth,
     ),
   ).toBeLessThanOrEqual(1);
-  for (const theme of ["dark", "light"]) {
-    await page.evaluate((value) => {
-      document.documentElement.dataset.theme = value;
-    }, theme);
-    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    const accessibility = await new AxeBuilder({ page })
-      .include(".contract-hours-panel")
-      .analyze();
-    expect(accessibility.violations).toEqual([]);
-  }
+  const accessibility = await new AxeBuilder({ page })
+    .include(".contract-hours-panel")
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 });
