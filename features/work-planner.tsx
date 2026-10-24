@@ -340,7 +340,7 @@ export function WorkPlanner({
         </div>
       </div>
       <QueryState {...summary} retry={summary.refresh} />
-      <ContractHoursDashboard month={month} date={date} action={action} />
+      <ContractHoursDashboard month={month} date={date} />
       <TimeTransfer from={from} to={to} month={month} action={action} />
       {error && (
         <p className="error" role="alert">
