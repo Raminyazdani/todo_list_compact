@@ -49,6 +49,8 @@ const modes = {
   calendar_reminder_get: "read",
   time_entry_list: "read",
   time_summary: "read",
+  time_contract_policy_list: "read",
+  time_contract_report: "read",
   time_entry_import_preview: "exclusive",
   get_activity: "read",
   search_all: "read",

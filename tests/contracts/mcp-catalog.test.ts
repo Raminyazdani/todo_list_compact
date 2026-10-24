@@ -139,6 +139,9 @@ describe("MCP advertised schemas against the real canonical PostgreSQL service",
       "calendar:write",
     ]);
     expect(tool("time_entry_import_preview").scopes).toEqual(["time:write"]);
+    expect(tool("time_contract_policy_list").scopes).toEqual(["time:read"]);
+    expect(tool("time_contract_report").scopes).toEqual(["time:read"]);
+    expect(tool("time_contract_policy_upsert").scopes).toEqual(["time:write"]);
     expect(tool("project_dependency_summary").scopes).toEqual([
       "projects:read",
       "tasks:read",
@@ -233,6 +236,44 @@ describe("MCP advertised schemas against the real canonical PostgreSQL service",
           ],
         },
       }).success,
+    ).toBe(false);
+    const policy = {
+      employer: "Synthetic Employer",
+      effective_from: "2027-01-01",
+      weekly_contract_max_minutes: 600,
+      source_label: "Synthetic agreement",
+    };
+    expect(
+      tool("time_contract_policy_upsert").schema.safeParse({
+        input: policy,
+        operation_id: randomUUID(),
+        expected_revision: 0,
+      }).success,
+    ).toBe(true);
+    expect(
+      tool("time_contract_policy_upsert").schema.safeParse({
+        input: { ...policy, allowed_weekdays: [1, 1] },
+        operation_id: randomUUID(),
+        expected_revision: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      tool("time_contract_policy_upsert").schema.safeParse({
+        input: { ...policy, hidden_task_preference: true },
+        operation_id: randomUUID(),
+        expected_revision: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      tool("time_contract_policy_upsert").schema.safeParse({
+        input: { ...policy, id: randomUUID() },
+        operation_id: randomUUID(),
+        expected_revision: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      tool("time_contract_report").schema.safeParse({ month: "2027-13" })
+        .success,
     ).toBe(false);
   });
   it("preserves Persian text and unset dates through create/update/status and exact accepted retry", async () => {

@@ -34,6 +34,7 @@ import { commitCalendarOccurrence } from "./calendar";
 import { commitTimeImport } from "./time-import";
 import { calendarSourceCommand } from "./calendar-sources";
 import { workCommand, workReporting } from "./work-log";
+import { workContractPolicyUpsert } from "./work-contracts";
 import { annotationFields, fileMetadata } from "./annotations";
 import {
   cancelEventReminders,
@@ -525,6 +526,8 @@ export async function resourceCommand(
     revision,
   );
   if (sourceChange) return sourceChange;
+  if (command === "time_contract_policy_upsert")
+    return workContractPolicyUpsert(tx, input, principal, revision);
   const workChange = await workCommand(tx, command, input, principal, revision);
   if (workChange) return workChange;
   if (command === "time_entry_import_commit")

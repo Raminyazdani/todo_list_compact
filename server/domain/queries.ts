@@ -44,6 +44,7 @@ import {
   cachedCalendarStatus,
 } from "./calendar-cache";
 import { workMinutes, workOverlapSummary } from "./work-log";
+import { timeContractReport, workContractPolicyList } from "./work-contracts";
 import { resolveAiConfiguration } from "../integrations/ai-guard";
 import { IN_APP_AI_ENABLED } from "../../shared/product-features";
 import { analyticsRange, analyticsTrends } from "./analytics";
@@ -290,6 +291,10 @@ export async function domainQuery(
   principal: Principal,
 ): Promise<unknown> {
   const owner = principal.ownerId;
+  if (operation === "time_contract_policy_list")
+    return workContractPolicyList(tx, principal);
+  if (operation === "time_contract_report")
+    return timeContractReport(tx, input, principal);
   if (operation === "time_entry_import_preview")
     return previewTimeImport(tx, input, principal);
   if (operation === "calendar_occurrence_reschedule_preview")
