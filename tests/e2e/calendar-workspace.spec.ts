@@ -950,7 +950,7 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
   await expect(page.locator(".save-status")).toContainText("متصل به سرور", {
     timeout: 30000,
   });
-  await page.getByLabel("تاریخ تقویم", { exact: true }).fill("2087-02-01");
+  await page.getByLabel("ماه", { exact: true }).fill("2087-02");
   const dashboard = page.locator(".contract-hours-panel");
   await expect(dashboard.locator(".contract-month-card")).toHaveCount(2);
   const cardA = dashboard
@@ -1006,6 +1006,7 @@ test("contract_hours_show_full_week_caps_personal_alert_and_keep_rule_edits", as
   await expect(cardB).toContainText("8:00 / 7:30");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  await cardB.scrollIntoViewIfNeeded();
   await expect(cardB).toBeInViewport();
   expect(
     await page.evaluate(
