@@ -1452,14 +1452,13 @@ function MonthlyWorkTimeline({
                         row,
                         startMinute,
                         endMinute,
-                        starts_at,
                         offset_label,
                         clock_change,
                       },
                       index,
                     ) => (
                       <div
-                        key={`${row.entry_id}:${starts_at}`}
+                        key={`${row.entry_id}:${day}:${offset_label}`}
                         className={`work-month-block ${row.employer === "Seewiesen" ? "seewiesen" : ""}`}
                         style={{
                           left: `${(startMinute / 1440) * 100}%`,

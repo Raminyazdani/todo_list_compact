@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ArrowUpRight, Fingerprint, LockKeyhole } from "lucide-react";
 import { authClient } from "@/server/auth/client";
 import { Button, Field } from "@/components/ui";
@@ -109,6 +110,11 @@ export default function Login() {
         <p className="login-note">
           این فضا فقط برای صاحب حساب است. ثبت‌نام عمومی فعال نیست.
         </p>
+        <nav className="login-public-links" aria-label="اطلاعات عمومی برنامه">
+          <Link href="/about">دربارهٔ برنامه</Link>
+          <Link href="/privacy">حریم خصوصی</Link>
+          <Link href="/terms">شرایط استفاده</Link>
+        </nav>
       </section>
     </main>
   );
