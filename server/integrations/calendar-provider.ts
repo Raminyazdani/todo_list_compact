@@ -126,10 +126,11 @@ async function authenticatedClient(principal: Principal, write = false) {
     user_id: string;
     scope: string | null;
     refresh_token_expires_at: string | null;
+    account_updated_at: string | null;
     provider_account_id?: string;
     grant_created_at?: string;
   }>(
-    `SELECT a.id,a."userId" AS user_id,a.scope,a."refreshTokenExpiresAt" AS refresh_token_expires_at,a."accountId" AS provider_account_id,a."createdAt" AS grant_created_at FROM account a JOIN "user" u ON u.id=a."userId"
+    `SELECT a.id,a."userId" AS user_id,a.scope,a."refreshTokenExpiresAt" AS refresh_token_expires_at,a."updatedAt" AS account_updated_at,a."accountId" AS provider_account_id,a."createdAt" AS grant_created_at FROM account a JOIN "user" u ON u.id=a."userId"
      WHERE a."providerId"='google' AND lower(u.email)=$1 AND ($2::text IS NULL OR u.id=$2) ORDER BY a."createdAt" LIMIT 1`,
     [
       process.env.OWNER_EMAIL?.toLowerCase(),
@@ -177,9 +178,16 @@ async function authenticatedClient(principal: Principal, write = false) {
       response.body?.error === "invalid_grant" ||
       response.body?.code === "INVALID_GRANT" ||
       response.body?.code === "ACCOUNT_NOT_FOUND";
+    const refreshExpiry = Date.parse(String(account.refresh_token_expires_at));
+    const lastAccountUpdate = Date.parse(String(account.account_updated_at));
+    // Better Auth can retain a Testing expiry when a later Production grant
+    // omits refresh_token_expires_in. An account update after that old expiry
+    // makes the timestamp insufficient proof that the current grant expired.
     const expiredRefreshToken =
-      !!account.refresh_token_expires_at &&
-      Date.parse(String(account.refresh_token_expires_at)) <= Date.now();
+      Number.isFinite(refreshExpiry) &&
+      refreshExpiry <= Date.now() &&
+      Number.isFinite(lastAccountUpdate) &&
+      lastAccountUpdate <= refreshExpiry;
     throw new DomainError(
       explicitRevocation || expiredRefreshToken
         ? "INSUFFICIENT_PERMISSIONS"

@@ -86,6 +86,23 @@ export function createAuth(bootstrap = false) {
     },
     rateLimit: { enabled: true, storage: "database", window: 60, max: 60 },
     databaseHooks: {
+      account: {
+        update: {
+          before: async (account) => {
+            // A fresh Google consent in Production omits refresh-token expiry.
+            // Better Auth otherwise retains the old seven-day Testing value.
+            if (
+              account.providerId === "google" &&
+              typeof account.accessToken === "string" &&
+              account.accessToken.length > 0 &&
+              typeof account.refreshToken === "string" &&
+              account.refreshToken.length > 0 &&
+              !Object.hasOwn(account, "refreshTokenExpiresAt")
+            )
+              return { data: { refreshTokenExpiresAt: null } };
+          },
+        },
+      },
       user: {
         create: {
           before: async (user) => {

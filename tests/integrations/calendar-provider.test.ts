@@ -308,6 +308,7 @@ describe("persistent calendar provider network boundary", () => {
           user_id: principal.actorId,
           scope: GOOGLE_CALENDAR_READ_SCOPE,
           refresh_token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+          account_updated_at: new Date(Date.now() - 120_000).toISOString(),
         },
       ],
     });
@@ -318,6 +319,22 @@ describe("persistent calendar provider network boundary", () => {
     expect(
       await syncCalendarSource(principal, source).catch(calendarProviderError),
     ).toMatchObject({ revoked: true, code: "GOOGLE_REFRESH_TOKEN_EXPIRED" });
+    mocks.query.mockResolvedValue({
+      rows: [
+        {
+          id: "synthetic-account",
+          user_id: principal.actorId,
+          scope: GOOGLE_CALENDAR_READ_SCOPE,
+          refresh_token_expires_at: new Date(
+            Date.now() - 120_000,
+          ).toISOString(),
+          account_updated_at: new Date(Date.now() - 60_000).toISOString(),
+        },
+      ],
+    });
+    expect(
+      await syncCalendarSource(principal, source).catch(calendarProviderError),
+    ).toMatchObject({ revoked: false, code: "GOOGLE_TOKEN_UNAVAILABLE" });
   });
 });
 describe("bounded cached master and exception expansion", () => {
