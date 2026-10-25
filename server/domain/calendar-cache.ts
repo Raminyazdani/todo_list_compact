@@ -7,6 +7,18 @@ import {
 import { calendarSources, sourceDTO } from "./calendar-sources";
 import { cleanRows, object, requireScope, type Input } from "./core";
 
+// Foreground synchronization runs every five minutes. Allow one cycle to finish
+// before treating a healthy, in-flight source as stale.
+const CALENDAR_STALE_AFTER_MS = 10 * 60_000;
+function sourceFresh(source: { status?: unknown; last_success_at?: unknown }) {
+  return (
+    (source.status === "connected" || source.status === "syncing") &&
+    !!source.last_success_at &&
+    Date.now() - Date.parse(String(source.last_success_at)) <=
+      CALENDAR_STALE_AFTER_MS
+  );
+}
+
 export async function cachedCalendarStatus(
   tx: SqlClient,
   principal: Principal,
@@ -91,18 +103,27 @@ export async function cachedCalendarEvents(
     }
   for (const source of sources) {
     const id = String(source.source_id),
-      lastSuccess = source.last_success_at
-        ? Date.parse(String(source.last_success_at))
-        : 0,
-      stale =
-        source.status !== "connected" || Date.now() - lastSuccess > 5 * 60000;
+      stale = !sourceFresh(source),
+      complete = object(source.coverage ?? {}).complete === true;
     if (source.status === "revoked" || source.status === "disconnected") {
-      warnings.push(id + ":ACCESS_REVOKED");
-      coverage.push({ source_id: id, complete: false });
+      warnings.push(id + ":" + String(source.last_error ?? "ACCESS_REVOKED"));
+      coverage.push({ source_id: id, complete: false, stale: true });
       continue;
     }
     if (stale)
-      warnings.push(id + ":" + String(source.last_error ?? "SOURCE_STALE"));
+      warnings.push(
+        id +
+          ":" +
+          String(
+            source.last_error ??
+              (source.status === "syncing"
+                ? "SOURCE_SYNC_IN_PROGRESS"
+                : source.status === "pending"
+                  ? "SOURCE_NOT_SYNCED"
+                  : "SOURCE_STALE"),
+          ),
+      );
+    if (!complete) warnings.push(id + ":SOURCE_COVERAGE_INCOMPLETE");
     try {
       const cached = (
         await tx.query<{ external_id: string; raw: Input }>(
@@ -124,7 +145,7 @@ export async function cachedCalendarEvents(
       );
       coverage.push({
         source_id: id,
-        complete: object(source.coverage ?? {}).complete === true,
+        complete,
         stale,
         last_success_at: source.last_success_at ?? null,
       });
@@ -212,14 +233,7 @@ export async function cachedCalendarAuxiliaryQuery(
             source.status !== "disconnected" &&
             source.coverage.complete === true,
         ),
-      fresh: items
-        .filter((source) => source.enabled)
-        .every(
-          (source) =>
-            source.status === "connected" &&
-            !!source.last_success_at &&
-            Date.now() - Date.parse(source.last_success_at) <= 5 * 60000,
-        ),
+      fresh: items.filter((source) => source.enabled).every(sourceFresh),
       status: items.some((source) => source.status === "syncing")
         ? "syncing"
         : "idle",

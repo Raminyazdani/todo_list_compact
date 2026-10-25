@@ -796,6 +796,113 @@ describe("Durable owner-bound calendar cache and provider receipts", () => {
       ),
     ).toMatchObject({ total: 0, complete: true });
   });
+  it("does_not_warn_for_a_recent_cache_during_sync_but_reports_incomplete_or_old_coverage", async () => {
+    const id = await source();
+    await seed(id, [event("personal")]);
+    await db.query(
+      "UPDATE calendar_sources SET last_success_at=now()-interval '6 minutes' WHERE owner_id=$1 AND source_id=$2",
+      [principal.ownerId, id],
+    );
+    const lease = await claim(id);
+    expect(
+      await service.query("calendar_events_query", range, principal),
+    ).toMatchObject({
+      source_warnings: [],
+      items: [{ sync_state: "synced" }],
+    });
+    await finish(id, lease, {
+      result: {
+        events: [],
+        deleted_ids: [],
+        replace: false,
+        checkpoint: { sync_token: "next" },
+        timezone: "Europe/Berlin",
+        complete: true,
+        coverage: { complete: false },
+      },
+    });
+    expect(
+      await service.query("calendar_events_query", range, principal),
+    ).toMatchObject({
+      complete: false,
+      source_warnings: [id + ":SOURCE_COVERAGE_INCOMPLETE"],
+    });
+    await db.query(
+      "UPDATE calendar_sources SET last_success_at=now()-interval '11 minutes' WHERE owner_id=$1 AND source_id=$2",
+      [principal.ownerId, id],
+    );
+    expect(
+      await service.query("calendar_events_query", range, principal),
+    ).toMatchObject({
+      source_warnings: [
+        id + ":SOURCE_STALE",
+        id + ":SOURCE_COVERAGE_INCOMPLETE",
+      ],
+      items: [{ sync_state: "stale" }],
+    });
+  });
+  it("manual_refresh_retries_ordinary_errors_without_bypassing_leases_or_provider_backoff", async () => {
+    const id = await source();
+    await seed(id, [event("personal")]);
+    await finish(id, await claim(id), {
+      error: { code: "SOURCE_READ_FAILED" },
+    });
+    network.sources = [
+      {
+        external_calendar_id: "primary",
+        title: "Synthetic Google",
+        timezone: "Europe/Berlin",
+        writable: true,
+        grant_fingerprint: "synthetic-grant",
+      },
+    ];
+    expect(
+      (await exec("calendar_sync_request", { source_ids: [id] })).data,
+    ).toMatchObject({ sync: { sources: [{ state: "deferred" }] } });
+    expect(
+      (
+        await exec("calendar_sync_request", {
+          source_ids: [id],
+          force: true,
+        })
+      ).data,
+    ).toMatchObject({ sync: { sources: [{ state: "connected" }] } });
+    const active = await claim(id);
+    expect(
+      (
+        await exec("calendar_sync_request", {
+          source_ids: [id],
+          force: true,
+        })
+      ).data,
+    ).toMatchObject({ sync: { sources: [{ state: "deferred" }] } });
+    await finish(id, active, {
+      error: { code: "SOURCE_RATE_LIMITED", retry_after_seconds: 600 },
+    });
+    expect(
+      (
+        await exec("calendar_sync_request", {
+          source_ids: [id],
+          force: true,
+        })
+      ).data,
+    ).toMatchObject({ sync: { sources: [{ state: "deferred" }] } });
+    await db.query(
+      "UPDATE calendar_sources SET next_attempt_at=NULL WHERE owner_id=$1 AND source_id=$2",
+      [principal.ownerId, id],
+    );
+    await finish(id, await claim(id), {
+      error: { code: "SOURCE_RETRY_AFTER", retry_after_seconds: 600 },
+    });
+    expect(
+      (
+        await exec("calendar_sync_request", {
+          source_ids: [id],
+          force: true,
+        })
+      ).data,
+    ).toMatchObject({ sync: { sources: [{ state: "deferred" }] } });
+  });
   it("a_revoked_source_cannot_be_claimed_or_revealed_by_foreground_retries", async () => {
     const id = await source();
     await seed(id, [event("synthetic-private-cached-event")]);
@@ -811,7 +918,10 @@ describe("Durable owner-bound calendar cache and provider receipts", () => {
     expect(claim.data).toMatchObject({ claimed: false });
     expect(
       await service.query("calendar_events_query", range, principal),
-    ).toMatchObject({ total: 0 });
+    ).toMatchObject({
+      total: 0,
+      source_warnings: [id + ":GOOGLE_SOURCE_ACCESS_REMOVED"],
+    });
     // Empty successful discovery and a repeated foreground request must not
     // turn authoritative access revocation into a visible stale snapshot.
     network.sources = [];

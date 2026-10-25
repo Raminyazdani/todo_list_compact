@@ -1875,6 +1875,16 @@ html[data-theme="light"] .time-block.personal {
   color: var(--orange);
   font-size: 12px;
 }
+.work-source-warning {
+  margin: 12px 0;
+}
+.work-source-warning ul {
+  margin: 6px 0;
+  padding-inline-start: 20px;
+}
+.work-source-warning li + li {
+  margin-top: 6px;
+}
 .spin {
   animation: spin 1s linear infinite;
 }

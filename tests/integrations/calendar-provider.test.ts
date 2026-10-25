@@ -216,6 +216,21 @@ describe("persistent calendar provider network boundary", () => {
       retry_after_seconds: 600,
     });
   });
+  it("preserves a provider Retry-After separately from ordinary read failures", async () => {
+    provider.mockResolvedValue(
+      Response.json(
+        { error: { message: "synthetic unavailable" } },
+        { status: 503, headers: { "Retry-After": "600" } },
+      ),
+    );
+    expect(
+      await syncCalendarSource(principal, source).catch(calendarProviderError),
+    ).toEqual({
+      code: "SOURCE_RETRY_AFTER",
+      revoked: false,
+      retry_after_seconds: 600,
+    });
+  });
   it.each(["accessNotConfigured", "serviceDisabled", "SERVICE_DISABLED"])(
     "classifies API-disabled reason %s as configuration, retaining last-good source access",
     async (reason) => {
@@ -278,14 +293,31 @@ describe("persistent calendar provider network boundary", () => {
     });
     expect(
       await syncCalendarSource(principal, source).catch(calendarProviderError),
-    ).toMatchObject({ revoked: false, code: "SOURCE_READ_FAILED" });
+    ).toMatchObject({ revoked: false, code: "GOOGLE_TOKEN_UNAVAILABLE" });
     mocks.accessToken.mockRejectedValue({
       statusCode: 401,
       body: { code: "INVALID_GRANT" },
     });
     expect(
       await syncCalendarSource(principal, source).catch(calendarProviderError),
-    ).toMatchObject({ revoked: true });
+    ).toMatchObject({ revoked: true, code: "GOOGLE_GRANT_REVOKED" });
+    mocks.query.mockResolvedValue({
+      rows: [
+        {
+          id: "synthetic-account",
+          user_id: principal.actorId,
+          scope: GOOGLE_CALENDAR_READ_SCOPE,
+          refresh_token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+        },
+      ],
+    });
+    mocks.accessToken.mockRejectedValue({
+      status: "BAD_REQUEST",
+      body: { code: "FAILED_TO_GET_ACCESS_TOKEN" },
+    });
+    expect(
+      await syncCalendarSource(principal, source).catch(calendarProviderError),
+    ).toMatchObject({ revoked: true, code: "GOOGLE_REFRESH_TOKEN_EXPIRED" });
   });
 });
 describe("bounded cached master and exception expansion", () => {
