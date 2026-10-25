@@ -213,23 +213,25 @@ function CalendarSources({ action }: { action: CalendarAction }) {
           </p>
         )}
       <div className="calendar-source-chips">
-        {sources.data?.items.map((source) => (
-          <span
-            className={`chip ${source.status === "error" || source.last_error ? "orange" : ""}`}
-            key={source.source_id}
-          >
-            {source.title} · {source.status ?? t("در انتظار", "Pending")} ·{" "}
-            {source.last_success_at
-              ? new Date(source.last_success_at).toLocaleString(
-                  language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
-                  { timeZone: "Europe/Berlin" },
-                )
-              : t("هنوز همگام نشده", "Not synced yet")}
-            {source.enabled &&
-              source.coverage.complete !== true &&
-              ` · ${t("پوشش ناقص", "Incomplete coverage")}`}
-          </span>
-        ))}
+        {sources.data?.items
+          .filter((source) => source.enabled)
+          .map((source) => (
+            <span
+              className={`chip ${source.status === "error" || source.last_error ? "orange" : ""}`}
+              key={source.source_id}
+            >
+              {source.title} · {source.status ?? t("در انتظار", "Pending")} ·{" "}
+              {source.last_success_at
+                ? new Date(source.last_success_at).toLocaleString(
+                    language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
+                    { timeZone: "Europe/Berlin" },
+                  )
+                : t("هنوز همگام نشده", "Not synced yet")}
+              {source.enabled &&
+                source.coverage.complete !== true &&
+                ` · ${t("پوشش ناقص", "Incomplete coverage")}`}
+            </span>
+          ))}
       </div>
       {!!unresolved.length && (
         <details className="calendar-pending-operations">

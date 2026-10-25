@@ -74,7 +74,7 @@ export function WorkPlanner({
   showExternal: boolean;
   onExternal: (show: boolean) => void;
 }) {
-  const { t } = useLocale();
+  const { t, language } = useLocale();
   const month = date.slice(0, 7),
     days = monthDays(month);
   const from = zonedLocalToInstant(`${days[0]}T00:00`, WORK_ZONE),
@@ -125,6 +125,98 @@ export function WorkPlanner({
     (event) => showExternal || event.provider === "local",
   );
   const conflicts = workConflicts(rows, eventRows, from, to);
+  const sourceWarnings = events.data?.source_warnings ?? [];
+  const sourceIssues = (events.data?.source_coverage ?? []).filter(
+    (coverage) =>
+      coverage.complete !== true ||
+      coverage.stale === true ||
+      coverage.unavailable === true,
+  );
+  function issueReason(
+    code: string,
+    status: string,
+    complete: boolean,
+    unavailable: boolean,
+  ) {
+    if (unavailable || code === "SELECTED_SOURCE_UNAVAILABLE")
+      return t(
+        "منبع انتخابی دیگر در دسترس یا فعال نیست؛ منبع دیگری انتخاب کن یا آن را از «مدیریت منابع» دوباره وصل کن.",
+        "The selected source is no longer available or enabled. Choose another source or reconnect it in Manage sources.",
+      );
+    if (code === "GOOGLE_TOKEN_UNAVAILABLE")
+      return t(
+        "مجوز Google در دسترس نیست؛ اتصال Google را در تنظیمات دوباره برقرار کن.",
+        "The Google grant is unavailable. Reconnect Google in Settings.",
+      );
+    if (code === "GOOGLE_REFRESH_TOKEN_EXPIRED")
+      return t(
+        "مجوز Google منقضی شده است؛ اتصال Google را در تنظیمات دوباره برقرار کن.",
+        "The Google grant has expired. Reconnect Google in Settings.",
+      );
+    if (
+      status === "revoked" ||
+      code === "ACCESS_REVOKED" ||
+      code === "GOOGLE_GRANT_REVOKED" ||
+      code === "GOOGLE_SOURCE_ACCESS_REMOVED"
+    )
+      return t(
+        "دسترسی این منبع قطع شده است؛ اتصال آن را دوباره برقرار کن.",
+        "Access to this source was revoked. Reconnect it.",
+      );
+    if (status === "syncing")
+      return t("همگام‌سازی در جریان است.", "Synchronization is in progress.");
+    if (code === "SOURCE_RATE_LIMITED")
+      return t(
+        "سرویس تقویم موقتاً درخواست‌ها را محدود کرده است؛ برنامه بعداً دوباره تلاش می‌کند.",
+        "The calendar service is temporarily rate limiting requests; the app will retry.",
+      );
+    if (code === "GOOGLE_CALENDAR_API_NOT_ENABLED")
+      return t(
+        "Google Calendar API برای این اتصال فعال نیست؛ تنظیمات Google Cloud را بررسی کن.",
+        "Google Calendar API is not enabled for this connection; check Google Cloud settings.",
+      );
+    if (code === "ICAL_TIMEOUT")
+      return t("فید iCal به‌موقع پاسخ نداد.", "The iCal feed timed out.");
+    if (code === "ICAL_HTTP_ERROR")
+      return t(
+        "سرور فید iCal پاسخ ناموفق داد.",
+        "The iCal feed returned an error.",
+      );
+    if (code.startsWith("ICAL_TRANSPORT_"))
+      return t(
+        "اتصال شبکه به فید iCal برقرار نشد.",
+        "The network connection to the iCal feed failed.",
+      );
+    if (code === "ICAL_FEED_TOO_LARGE" || code === "SOURCE_TOO_LARGE")
+      return t(
+        "حجم رویدادهای منبع از حد مجاز بیشتر است.",
+        "The source has too many events to synchronize.",
+      );
+    if (code === "CACHE_EXPANSION_FAILED")
+      return t(
+        "پردازش رویدادهای ذخیره‌شدهٔ این منبع ناموفق بود.",
+        "Stored events from this source could not be processed.",
+      );
+    if (code === "SOURCE_READ_FAILED" || status === "error")
+      return t(
+        "خواندن رویدادها از این منبع ناموفق بود.",
+        "Events could not be read from this source.",
+      );
+    if (status === "pending")
+      return t(
+        "نخستین همگام‌سازی این منبع هنوز کامل نشده است.",
+        "This source has not completed its first synchronization.",
+      );
+    if (!complete)
+      return t(
+        "پوشش رویدادهای این منبع هنوز کامل نشده است.",
+        "Event coverage for this source is incomplete.",
+      );
+    return t(
+      "آخرین همگام‌سازی این منبع به‌روز نیست.",
+      "This source has not synchronized recently.",
+    );
+  }
   async function tracked(
     name: Parameters<CalendarAction>[0],
     input: Record<string, unknown>,
@@ -350,13 +442,68 @@ export function WorkPlanner({
       <QueryState {...entries} retry={entries.refresh} />
       <QueryState {...drafts} retry={drafts.refresh} />
       <QueryState {...events} retry={events.refresh} />
-      {events.data?.source_warnings?.length ? (
-        <p className="warning" role="status">
-          {t(
-            "بخشی از منابع قدیمی یا ناقص است؛ تداخل‌های تقویم برای پوشش موجود محاسبه شده‌اند.",
-            "Some sources are stale or incomplete; calendar conflicts reflect available coverage.",
-          )}
-        </p>
+      {showExternal && sourceIssues.length > 0 ? (
+        <div className="warning work-source-warning" role="status">
+          <strong>
+            {t(
+              "وضعیت منابع مؤثر بر تداخل تقویم",
+              "Calendar sources affecting conflict coverage",
+            )}
+          </strong>
+          <ul>
+            {sourceIssues.map((coverage, index) => {
+              const source = sources.data?.items.find(
+                (item) => item.source_id === coverage.source_id,
+              );
+              const code =
+                sourceWarnings
+                  .find((warning) =>
+                    coverage.source_id
+                      ? warning.startsWith(`${coverage.source_id}:`)
+                      : warning === "SELECTED_SOURCE_UNAVAILABLE",
+                  )
+                  ?.slice(
+                    coverage.source_id ? coverage.source_id.length + 1 : 0,
+                  ) ?? String(source?.last_error ?? "");
+              const lastSuccess = String(
+                coverage.last_success_at ?? source?.last_success_at ?? "",
+              );
+              return (
+                <li key={coverage.source_id ?? `unavailable-${index}`}>
+                  <strong>
+                    {source?.title
+                      ? String(source.title)
+                      : t("منبع انتخابی", "Selected source")}
+                  </strong>
+                  {": "}
+                  {issueReason(
+                    code,
+                    String(source?.status ?? ""),
+                    coverage.complete,
+                    coverage.unavailable === true,
+                  )}{" "}
+                  {lastSuccess && !Number.isNaN(Date.parse(lastSuccess))
+                    ? t("آخرین همگام‌سازی موفق:", "Last successful sync:") +
+                      " " +
+                      new Date(lastSuccess).toLocaleString(
+                        language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
+                        { timeZone: WORK_ZONE },
+                      )
+                    : t(
+                        "هنوز همگام‌سازی موفقی ثبت نشده است.",
+                        "No successful synchronization has been recorded yet.",
+                      )}
+                </li>
+              );
+            })}
+          </ul>
+          <span>
+            {t(
+              "تداخل‌ها فقط از رویدادهای دریافت‌شده محاسبه شده‌اند. برای خطای موقت «تازه‌سازی تقویم‌ها» را بزن؛ برای قطع مجوز، اتصال را در تنظیمات دوباره برقرار کن.",
+              "Conflicts use only received events. Refresh calendars for temporary errors; reconnect the account in Settings if access is unavailable.",
+            )}
+          </span>
+        </div>
       ) : null}
       <MonthlyWorkTimeline
         days={days}

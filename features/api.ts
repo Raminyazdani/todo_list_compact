@@ -281,6 +281,13 @@ export function usePagedQuery<T>(
     key: string;
     data: import("@/shared/contracts").PageDTO<T> & {
       source_warnings?: string[];
+      source_coverage?: Array<{
+        source_id: string | null;
+        complete: boolean;
+        stale?: boolean;
+        unavailable?: boolean;
+        last_success_at?: string | null;
+      }>;
     };
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -302,6 +309,13 @@ export function usePagedQuery<T>(
       do {
         const page: import("@/shared/contracts").PageDTO<T> & {
           source_warnings?: string[];
+          source_coverage?: Array<{
+            source_id: string | null;
+            complete: boolean;
+            stale?: boolean;
+            unavailable?: boolean;
+            last_success_at?: string | null;
+          }>;
         } = await query(operation, {
           ...JSON.parse(inputKey),
           limit: 200,

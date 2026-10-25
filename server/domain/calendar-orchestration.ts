@@ -46,7 +46,7 @@ export async function runCalendarSynchronization(
         (
           await provider.execute(
             "sync_claim",
-            { source_id: sourceId },
+            { source_id: sourceId, force: input.force === true },
             trusted,
             { idempotencyKey: id("claim") },
           )

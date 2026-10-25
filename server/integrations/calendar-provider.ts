@@ -85,21 +85,25 @@ export function calendarProviderError(error: unknown) {
         ? { upstream_status: error.upstream_status, source_code: error.code }
         : {};
   const status = Number(details.upstream_status ?? 0);
+  const retryAfter = typeof details.retry_after_seconds === "number";
   return {
     code:
       status === 412
         ? "PROVIDER_REVISION_CONFLICT"
         : details.configuration_error
           ? "GOOGLE_CALENDAR_API_NOT_ENABLED"
-          : details.rate_limited
+          : details.rate_limited || status === 429
             ? "SOURCE_RATE_LIMITED"
-            : typeof details.source_code === "string"
-              ? details.source_code
-              : "SOURCE_READ_FAILED",
+            : retryAfter
+              ? "SOURCE_RETRY_AFTER"
+              : typeof details.source_code === "string"
+                ? details.source_code
+                : "SOURCE_READ_FAILED",
     revoked:
       ((status === 401 || status === 403 || status === 404) &&
         !details.rate_limited &&
-        !details.configuration_error) ||
+        !details.configuration_error &&
+        !retryAfter) ||
       (error instanceof DomainError &&
         error.code === "INSUFFICIENT_PERMISSIONS"),
     ...(typeof details.retry_after_seconds === "number"
@@ -121,10 +125,11 @@ async function authenticatedClient(principal: Principal, write = false) {
     id: string;
     user_id: string;
     scope: string | null;
+    refresh_token_expires_at: string | null;
     provider_account_id?: string;
     grant_created_at?: string;
   }>(
-    `SELECT a.id,a."userId" AS user_id,a.scope,a."accountId" AS provider_account_id,a."createdAt" AS grant_created_at FROM account a JOIN "user" u ON u.id=a."userId"
+    `SELECT a.id,a."userId" AS user_id,a.scope,a."refreshTokenExpiresAt" AS refresh_token_expires_at,a."accountId" AS provider_account_id,a."createdAt" AS grant_created_at FROM account a JOIN "user" u ON u.id=a."userId"
      WHERE a."providerId"='google' AND lower(u.email)=$1 AND ($2::text IS NULL OR u.id=$2) ORDER BY a."createdAt" LIMIT 1`,
     [
       process.env.OWNER_EMAIL?.toLowerCase(),
@@ -136,7 +141,7 @@ async function authenticatedClient(principal: Principal, write = false) {
     throw new DomainError(
       "INSUFFICIENT_PERMISSIONS",
       "Connect Google Calendar in Life OS.",
-      { awaiting_grant: true },
+      { awaiting_grant: true, source_code: "GOOGLE_GRANT_REQUIRED" },
       503,
     );
   const scopes = account.scope?.split(/[ ,]+/) ?? [];
@@ -147,7 +152,7 @@ async function authenticatedClient(principal: Principal, write = false) {
     throw new DomainError(
       "INSUFFICIENT_PERMISSIONS",
       "Reconnect Google Calendar with the required calendar permissions.",
-      {},
+      { source_code: "GOOGLE_CALENDAR_PERMISSION_MISSING" },
       403,
     );
   let token: { accessToken: string; scopes: string[] };
@@ -172,18 +177,34 @@ async function authenticatedClient(principal: Principal, write = false) {
       response.body?.error === "invalid_grant" ||
       response.body?.code === "INVALID_GRANT" ||
       response.body?.code === "ACCOUNT_NOT_FOUND";
+    const expiredRefreshToken =
+      !!account.refresh_token_expires_at &&
+      Date.parse(String(account.refresh_token_expires_at)) <= Date.now();
     throw new DomainError(
-      explicitRevocation ? "INSUFFICIENT_PERMISSIONS" : "UNSUPPORTED_OPERATION",
-      "Google Calendar token could not be obtained; retry or reconnect Google Calendar.",
-      explicitRevocation ? { upstream_status: 401 } : {},
-      explicitRevocation ? 403 : 503,
+      explicitRevocation || expiredRefreshToken
+        ? "INSUFFICIENT_PERMISSIONS"
+        : "UNSUPPORTED_OPERATION",
+      expiredRefreshToken
+        ? "Google Calendar refresh token has expired; reconnect Google Calendar."
+        : "Google Calendar token could not be obtained; retry or reconnect Google Calendar.",
+      {
+        ...(explicitRevocation || expiredRefreshToken
+          ? { upstream_status: 401 }
+          : {}),
+        source_code: expiredRefreshToken
+          ? "GOOGLE_REFRESH_TOKEN_EXPIRED"
+          : explicitRevocation
+            ? "GOOGLE_GRANT_REVOKED"
+            : "GOOGLE_TOKEN_UNAVAILABLE",
+      },
+      explicitRevocation || expiredRefreshToken ? 403 : 503,
     );
   }
   if (!required.every((scope) => token.scopes.includes(scope)))
     throw new DomainError(
       "INSUFFICIENT_PERMISSIONS",
       "Google Calendar permission is missing.",
-      {},
+      { source_code: "GOOGLE_CALENDAR_PERMISSION_MISSING" },
       403,
     );
   // Account identity and granted scope set are stable across access-token refreshes.

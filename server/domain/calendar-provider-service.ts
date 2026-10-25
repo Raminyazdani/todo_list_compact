@@ -308,14 +308,19 @@ async function providerAction(
       owner,
     );
     if (action === "sync_claim") {
+      const backoffActive =
+        source.next_attempt_at &&
+        Date.parse(String(source.next_attempt_at)) > Date.now();
+      const providerBackoff =
+        source.last_error === "SOURCE_RATE_LIMITED" ||
+        source.last_error === "SOURCE_RETRY_AFTER";
       if (
         !source.enabled ||
         source.status === "revoked" ||
         source.status === "disconnected" ||
         (source.lease_until &&
           Date.parse(String(source.lease_until)) > Date.now()) ||
-        (source.next_attempt_at &&
-          Date.parse(String(source.next_attempt_at)) > Date.now())
+        (backoffActive && (input.force !== true || providerBackoff))
       )
         return { claimed: false };
       const leaseId = id("LEASE");
