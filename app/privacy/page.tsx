@@ -14,6 +14,15 @@ export default function PrivacyPage() {
         Life OS فضای خصوصی صاحب حساب است. اتصال Google Calendar اختیاری است و
         فقط پس از موافقت شما فعال می‌شود.
       </p>
+      <p>
+        در فرایند ورود یا اتصال Google، نام، ایمیل و اطلاعات پایهٔ نمایهٔ Google
+        برای احراز هویت و پیوند حساب Google با حساب مالک Life OS استفاده می‌شود.
+      </p>
+      <p lang="en" dir="ltr">
+        In the Google sign-in or connection flow, basic Google profile
+        information, including name and email, is used to authenticate and link
+        the Google account to the Life OS owner account.
+      </p>
       <section>
         <h2>دسترسی به Google Calendar</h2>
         <p>
