@@ -20,8 +20,14 @@ export function PersistentTaskRowProvider({
 }) {
   const pathname = usePathname();
   const session = authClient.useSession();
-  const publicPage =
-    pathname === "/login" || pathname === "/sign-in" || pathname === "/consent";
+  const publicPage = [
+    "/login",
+    "/sign-in",
+    "/consent",
+    "/about",
+    "/privacy",
+    "/terms",
+  ].includes(pathname);
   const authDenied =
     !!session.error && [401, 403].includes(session.error.status);
   const actorId = session.data?.user.id;
