@@ -1,4 +1,25 @@
 {
+  "calendar_source_diagnostics": {
+    "status": "code_live_verified_google_reconnect_pending",
+    "observed_at": "2026-10-25",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/12",
+    "release_commit": "d1c9bfb171fd428b6ec384ab3c71b0598dfe87fc",
+    "production_url": "https://ramin-life-os.vercel.app/calendar?tab=work",
+    "observed": {
+      "cause": "Two enabled Google sources stopped synchronizing after their owner's sole Google OAuth refresh token expired; a read-only Production aggregate verified the recorded expiry without reading token contents. The Google OAuth app is External / Testing.",
+      "local_checks": "PASS_15_focused_tests_typecheck_targeted_lint_prettier_security_scan_and_production_build",
+      "manual_refresh": "PASS_force_retries_ordinary_backoff_while_preserving_active_lease_rate_limit_and_Retry_After",
+      "production_deployment": "READY_at_canonical_alias_for_exact_release_commit;_health_HTTP_200",
+      "production_UI": "PASS_authenticated_work_time_readback_names_each_affected_Google_source_and_says_the_grant_expired_with_last_success_time;_disabled_iCal_is_absent_from_active_status",
+      "conflict_limit": "Google events are hidden after authoritative access loss; conflict counts cover only available sources until reconnection."
+    },
+    "pending": [
+      "Complete Google OAuth Branding and publish the consent app after owner sign-in.",
+      "Reconnect Google in Life OS and verify new successful source timestamps and actual calendar events/conflicts.",
+      "Full GitHub PR CI is still running; targeted checks and Vercel deployment passed."
+    ],
+    "privacy": "No private source IDs, account identifiers, tokens, feed URLs, event rows, or real screenshots were committed."
+  },
   "contract_hours_compact_ui": {
     "status": "complete_live_verified",
     "observed_at": "2026-10-24",
