@@ -50,42 +50,74 @@ test.setTimeout(180000);
 // navigations must leave a quiet auth boundary instead of weakening that policy.
 const authIdleMilliseconds = 61000;
 const authCheckpointRequests = 25;
+// The app also has an owner read bucket (600/minute). Dashboard navigation
+// fans out into several API reads, including the new focus/capacity widgets.
+// Keep plenty of headroom for the largest single test before starting it.
+const readCheckpointRequests = 120;
 let authRequestsSinceIdle = 0;
 let totalBrowserSessionRequests = 0;
 let lastBrowserSessionRequestAt = 0;
 let maximumAuthCheckpointCount = 0;
+let readRequestsSinceIdle = 0;
+let totalReadRequests = 0;
+let lastReadRequestAt = 0;
+let maximumReadCheckpointCount = 0;
 let initialAuthIdleComplete = false;
 
+function noteOwnerRead(url: string, method: string) {
+  if (method !== "GET" || !new URL(url, origin).pathname.startsWith("/api/v1/"))
+    return;
+  readRequestsSinceIdle++;
+  totalReadRequests++;
+  lastReadRequestAt = Date.now();
+  maximumReadCheckpointCount = Math.max(
+    maximumReadCheckpointCount,
+    readRequestsSinceIdle,
+  );
+}
+
 async function authIdleBoundary(initial = false) {
-  if (!initial && authRequestsSinceIdle < authCheckpointRequests) return;
+  if (
+    !initial &&
+    authRequestsSinceIdle < authCheckpointRequests &&
+    readRequestsSinceIdle < readCheckpointRequests
+  )
+    return;
   if (initial) lastBrowserSessionRequestAt = Date.now();
   const startedAt = Date.now();
+  const lastRequestAt = Math.max(
+    lastBrowserSessionRequestAt,
+    lastReadRequestAt,
+  );
   console.log(
     "WORKFLOW_AUTH_IDLE",
     JSON.stringify({
-      reason: initial ? "initial_file_boundary" : "observed_request_budget",
+      reason: initial
+        ? "initial_file_boundary"
+        : authRequestsSinceIdle >= authCheckpointRequests
+          ? "observed_auth_budget"
+          : "observed_read_budget",
       requests_since_idle: authRequestsSinceIdle,
-      wait_ms: Math.max(
-        0,
-        lastBrowserSessionRequestAt + authIdleMilliseconds - startedAt,
-      ),
+      reads_since_idle: readRequestsSinceIdle,
+      wait_ms: Math.max(0, lastRequestAt + authIdleMilliseconds - startedAt),
     }),
   );
   for (;;) {
-    const remaining =
-      lastBrowserSessionRequestAt + authIdleMilliseconds - Date.now();
+    const remaining = lastRequestAt + authIdleMilliseconds - Date.now();
     if (remaining <= 0) break;
     await new Promise((resolve) =>
       setTimeout(resolve, Math.min(remaining, 30000)),
     );
   }
   authRequestsSinceIdle = 0;
+  readRequestsSinceIdle = 0;
   console.log(
     "WORKFLOW_AUTH_IDLE",
     JSON.stringify({
       reason: "idle_boundary_complete",
       waited_ms: Date.now() - startedAt,
       total_session_requests: totalBrowserSessionRequests,
+      total_read_requests: totalReadRequests,
     }),
   );
 }
@@ -95,6 +127,8 @@ async function safeGet(
   url: string,
 ): Promise<APIResponse> {
   try {
+    // APIRequestContext traffic is separate from BrowserContext request events.
+    noteOwnerRead(url, "GET");
     return await request.get(url);
   } catch {
     throw new Error(
@@ -1670,18 +1704,22 @@ test.beforeEach(async ({ request, context, page }, testInfo) => {
     "Actual redeploy proof requires the explicitly configured coordinator script.",
   );
   context.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
     if (
-      !["GET", "POST"].includes(request.method()) ||
-      new URL(request.url()).pathname !== "/api/auth/get-session"
-    )
-      return;
-    authRequestsSinceIdle++;
-    totalBrowserSessionRequests++;
-    lastBrowserSessionRequestAt = Date.now();
-    maximumAuthCheckpointCount = Math.max(
-      maximumAuthCheckpointCount,
-      authRequestsSinceIdle,
-    );
+      ["GET", "POST"].includes(request.method()) &&
+      path === "/api/auth/get-session"
+    ) {
+      authRequestsSinceIdle++;
+      totalBrowserSessionRequests++;
+      lastBrowserSessionRequestAt = Date.now();
+      maximumAuthCheckpointCount = Math.max(
+        maximumAuthCheckpointCount,
+        authRequestsSinceIdle,
+      );
+    }
+    // A BrowserContext request fires once per visible request. The separate
+    // APIRequestContext above is counted only by safeGet, never here.
+    noteOwnerRead(request.url(), request.method());
   });
   // Prior files share the IP bucket. Establish the first boundary here, within
   // the existing 180s test budget; beforeAll has a separate 60s hook budget.
@@ -1718,6 +1756,9 @@ test.afterEach(() => {
       requests_since_idle: authRequestsSinceIdle,
       max_checkpoint_count: maximumAuthCheckpointCount,
       total_session_requests: totalBrowserSessionRequests,
+      read_requests_since_idle: readRequestsSinceIdle,
+      max_read_checkpoint_count: maximumReadCheckpointCount,
+      total_read_requests: totalReadRequests,
     }),
   );
 });
