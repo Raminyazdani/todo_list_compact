@@ -113,6 +113,7 @@ export function CalendarWorkspace({
 /** Provider traffic is explicitly foreground only. Cache reads have no provider side effects. */
 function CalendarSources({ action }: { action: CalendarAction }) {
   const { t, language } = useLocale();
+  const params = useSearchParams();
   const sources = useQuery<{
     items: CalendarSourceDTO[];
     complete?: boolean;
@@ -138,7 +139,9 @@ function CalendarSources({ action }: { action: CalendarAction }) {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [configure, setConfigure] = useState(false);
+  const [configure, setConfigure] = useState(
+    params.get("manage_sources") === "1",
+  );
   const inFlight = useRef(false);
   async function sync(force: boolean) {
     if (inFlight.current || document.visibilityState !== "visible") return;
@@ -146,7 +149,14 @@ function CalendarSources({ action }: { action: CalendarAction }) {
     setBusy(true);
     setError("");
     try {
-      await action("calendar_sync_request", { force });
+      const result = await action("calendar_sync_request", { force });
+      if (!result)
+        setError(
+          t(
+            "تازه‌سازی تأیید نشد. داده‌های قبلی حفظ شده‌اند؛ دوباره تلاش کن و وضعیت هر منبع را بررسی کن.",
+            "Refresh was not confirmed. Cached events remain available; retry and check each source status.",
+          ),
+        );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -217,16 +227,38 @@ function CalendarSources({ action }: { action: CalendarAction }) {
           .filter((source) => source.enabled)
           .map((source) => (
             <span
-              className={`chip ${source.status === "error" || source.last_error ? "orange" : ""}`}
+              className={`chip ${source.status === "error" || source.last_error || source.fresh === false ? "orange" : ""}`}
               key={source.source_id}
             >
-              {source.title} · {source.status ?? t("در انتظار", "Pending")} ·{" "}
+              {source.title} · {sourceStatusLabel(source.status, t)} ·{" "}
               {source.last_success_at
-                ? new Date(source.last_success_at).toLocaleString(
+                ? t("آخرین دریافت موفق:", "Last successful sync:") +
+                  " " +
+                  new Date(source.last_success_at).toLocaleString(
                     language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
                     { timeZone: "Europe/Berlin" },
                   )
                 : t("هنوز همگام نشده", "Not synced yet")}
+              {source.last_error &&
+                ` · ${sourceErrorLabel(source.last_error, t)}`}
+              {source.last_error === "SOURCE_CONFIG_UNREADABLE" && (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => setConfigure(true)}
+                  >
+                    {t("بازکردن مدیریت منابع", "Open Manage sources")}
+                  </button>
+                </>
+              )}
+              {source.fresh === false &&
+                !source.last_error &&
+                ` · ${t("این داده برای محاسبهٔ کامل تداخل تازه نیست؛ تازه‌سازی کن.", "This data is not fresh enough for complete conflict coverage; refresh it.")}`}
+              {source.next_attempt_at &&
+                !Number.isNaN(Date.parse(source.next_attempt_at)) &&
+                ` · ${t("امکان تلاش دوباره از این زمان، هنگام استفاده از برنامه:", "Retry allowed after this time while the app is open:")} ${new Date(source.next_attempt_at).toLocaleString(language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB", { timeZone: "Europe/Berlin" })}`}
               {source.enabled &&
                 source.coverage.complete !== true &&
                 ` · ${t("پوشش ناقص", "Incomplete coverage")}`}
@@ -379,5 +411,69 @@ function CalendarSources({ action }: { action: CalendarAction }) {
         )}
       </Modal>
     </section>
+  );
+}
+
+function sourceStatusLabel(
+  status: string,
+  t: (fa: string, en: string) => string,
+) {
+  switch (status) {
+    case "connected":
+      return t("متصل", "Connected");
+    case "syncing":
+      return t("در حال همگام‌سازی", "Syncing");
+    case "pending":
+      return t("در انتظار نخستین همگام‌سازی", "Awaiting first sync");
+    case "error":
+      return t("خطا در آخرین تلاش", "Last attempt failed");
+    case "revoked":
+      return t("دسترسی قطع شده", "Access removed");
+    default:
+      return t("نیازمند بررسی", "Needs review");
+  }
+}
+
+function sourceErrorLabel(code: string, t: (fa: string, en: string) => string) {
+  if (code === "SOURCE_CONFIG_UNREADABLE")
+    return t(
+      "تنظیمات این منبع قابل خواندن نیست؛ آن را در مدیریت منابع دوباره تنظیم کن.",
+      "This source's settings cannot be read; reconfigure it in Manage sources.",
+    );
+  if (
+    [
+      "GOOGLE_GRANT_REVOKED",
+      "GOOGLE_REFRESH_TOKEN_EXPIRED",
+      "GOOGLE_TOKEN_UNAVAILABLE",
+      "GOOGLE_SOURCE_ACCESS_REMOVED",
+    ].includes(code)
+  )
+    return t(
+      "مجوز Google در دسترس نیست؛ از تنظیمات دوباره وصل کن.",
+      "Google permission is unavailable; reconnect in Settings.",
+    );
+  if (code === "SOURCE_RATE_LIMITED" || code === "SOURCE_RETRY_AFTER")
+    return t(
+      "سرویس موقتاً درخواست‌ها را محدود کرده؛ هنگام استفاده از برنامه دوباره بررسی می‌شود.",
+      "The provider is temporarily rate limiting requests; the app will check again while open.",
+    );
+  if (code === "ICAL_TIMEOUT")
+    return t(
+      "فید iCal به‌موقع پاسخ نداد؛ دوباره تلاش کن.",
+      "The iCal feed timed out; retry.",
+    );
+  if (code === "ICAL_HTTP_ERROR" || code.startsWith("ICAL_TRANSPORT_"))
+    return t(
+      "دریافت فید iCal ناموفق بود؛ نشانی و دسترسی فید را بررسی کن.",
+      "The iCal feed could not be fetched; check its address and access.",
+    );
+  if (code === "GOOGLE_CALENDAR_API_NOT_ENABLED")
+    return t(
+      "Google Calendar API برای این اتصال فعال نیست.",
+      "Google Calendar API is not enabled for this connection.",
+    );
+  return t(
+    "آخرین دریافت ناموفق بود؛ جزئیات منبع را بررسی و دوباره تلاش کن.",
+    "The last fetch failed; inspect the source and retry.",
   );
 }

@@ -35,6 +35,56 @@ export interface Change {
   affected: string[];
   reason?: string | null;
 }
+/** A parent can close only after every task in its hierarchy is Done. */
+async function requireCompletedDescendants(
+  tx: SqlClient,
+  principal: Principal,
+  parentId: string,
+) {
+  const incomplete = await tx.query<{
+    task_id: string;
+    title: string;
+    status: string;
+    archived_at: string | null;
+    incomplete_count: number;
+  }>(
+    `WITH RECURSIVE descendants(task_id,title,status,archived_at,depth,path) AS (
+      SELECT task_id,title,status,archived_at,1,ARRAY[task_id]::text[]
+      FROM tasks WHERE owner_id=$1 AND parent_task_id=$2
+      UNION ALL
+      SELECT child.task_id,child.title,child.status,child.archived_at,
+             parent.depth+1,parent.path||child.task_id
+      FROM tasks child JOIN descendants parent ON child.parent_task_id=parent.task_id
+      WHERE child.owner_id=$1 AND NOT child.task_id=ANY(parent.path)
+    )
+    SELECT task_id,title,status,archived_at,
+           count(*) OVER()::integer AS incomplete_count
+    FROM descendants WHERE status<>'Done'
+    ORDER BY depth,task_id LIMIT 10`,
+    [principal.ownerId, parentId],
+  );
+  if (!incomplete.rows.length) return;
+  const canRead =
+    principal.scopes.includes("tasks:read") ||
+    principal.scopes.includes("admin:manage");
+  throw new DomainError(
+    "TASK_BLOCKED",
+    "Complete every descendant subtask before marking the parent Done.",
+    canRead
+      ? {
+          reason: "SUBTASKS_INCOMPLETE",
+          incomplete_descendant_count: incomplete.rows[0].incomplete_count,
+          incomplete_descendants: incomplete.rows.map((row) => ({
+            task_id: row.task_id,
+            title: row.title,
+            status: row.status,
+            archived: row.archived_at !== null,
+          })),
+        }
+      : { reason: "SUBTASKS_INCOMPLETE" },
+    409,
+  );
+}
 export async function createTask(
   tx: SqlClient,
   input: Input,
@@ -205,6 +255,8 @@ async function updateTask(
   if (command === "task_archive")
     updates.archived_at = new Date().toISOString();
   if (command === "task_restore") updates.archived_at = null;
+  if (updates.status === "Done" && before.status !== "Done")
+    await requireCompletedDescendants(tx, principal, taskId);
   if (
     updates.status &&
     (updates.status === "In progress" || updates.status === "Done") &&

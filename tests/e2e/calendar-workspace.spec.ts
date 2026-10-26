@@ -752,6 +752,258 @@ test("Google_change_confirmation_shows_fresh_remote_before_and_personal_proposal
   await expect(confirmation).toContainText("2086-05-15T10:00:00Z");
 });
 
+test("stale_calendar_source_and_failed_refresh_show_precise_persistent_status", async ({
+  page,
+}) => {
+  const sourceId = "synthetic-stale-ical";
+  await page.route("**/api/v1/query*", async (route) => {
+    const url = new URL(route.request().url());
+    const payload =
+      route.request().method() === "POST"
+        ? route.request().postDataJSON()
+        : null;
+    const operation = payload?.operation ?? url.searchParams.get("operation");
+    if (operation === "calendar_sync_status") {
+      await route.fulfill({
+        json: {
+          data: {
+            items: [
+              {
+                source_id: sourceId,
+                calendar_id: sourceId,
+                provider: "ical",
+                title: "Synthetic Holidays",
+                timezone: "Europe/Berlin",
+                writable: false,
+                enabled: true,
+                revision: 1,
+                status: "connected",
+                last_success_at: "2026-10-24T08:00:00Z",
+                last_error: null,
+                fresh: false,
+                next_attempt_at: "2026-10-26T12:00:00Z",
+                coverage: { complete: true },
+              },
+              {
+                source_id: "synthetic-broken-feed",
+                calendar_id: "synthetic-broken-feed",
+                provider: "ical",
+                title: "Synthetic Broken Feed",
+                timezone: "Europe/Berlin",
+                writable: false,
+                enabled: true,
+                revision: 1,
+                status: "error",
+                last_success_at: null,
+                last_error: "SOURCE_CONFIG_UNREADABLE",
+                fresh: false,
+                next_attempt_at: null,
+                coverage: { complete: false },
+              },
+            ],
+            complete: false,
+            status: "idle",
+          },
+        },
+      });
+      return;
+    }
+    if (operation === "calendar_events_query") {
+      await route.fulfill({
+        json: {
+          data: {
+            items: [],
+            total: 0,
+            next_cursor: null,
+            source_warnings: [`${sourceId}:SOURCE_STALE`],
+            source_coverage: [
+              {
+                source_id: sourceId,
+                complete: true,
+                stale: true,
+                last_success_at: "2026-10-24T08:00:00Z",
+              },
+            ],
+          },
+        },
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route("**/api/v1/commands", async (route) => {
+    const payload = route.request().postDataJSON();
+    if (payload.command !== "calendar_sync_request") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 503,
+      json: {
+        error: { code: "SOURCE_READ_FAILED", message: "Synthetic outage" },
+      },
+    });
+  });
+  await page.goto("/calendar");
+  await expect(page.locator(".calendar-source-status .error")).toContainText(
+    "تازه‌سازی تأیید نشد",
+  );
+  await expect(page.locator(".calendar-source-chips")).toContainText(
+    "Synthetic Holidays",
+  );
+  await expect(page.locator(".calendar-source-chips")).toContainText(
+    "این داده برای محاسبهٔ کامل تداخل تازه نیست",
+  );
+  await expect(page.locator(".calendar-source-chips")).toContainText(
+    "امکان تلاش دوباره از این زمان، هنگام استفاده از برنامه",
+  );
+  await expect(page.locator(".calendar-source-chips")).toContainText(
+    "تنظیمات این منبع قابل خواندن نیست",
+  );
+  await page.getByRole("button", { name: "بازکردن مدیریت منابع" }).click();
+  await expect(page.getByRole("dialog", { name: "منابع تقویم" })).toBeVisible();
+  await expect(page.locator("p.warning[role='status']")).toContainText(
+    "تازگی، دسترسی یا پوشش بعضی منابع مشکل دارد",
+  );
+});
+
+test("daily_focus_refreshes_stale_source_and_reloads_capacity_after_confirmation", async ({
+  page,
+}) => {
+  let refreshed = false;
+  let noSources = false;
+  let reconnectOnly = false;
+  let automaticAttempts = 0;
+  await page.route("**/api/v1/query*", async (route) => {
+    const url = new URL(route.request().url());
+    const payload =
+      route.request().method() === "POST"
+        ? route.request().postDataJSON()
+        : null;
+    const operation = payload?.operation ?? url.searchParams.get("operation");
+    if (operation !== "daily_capacity_preview") {
+      await route.continue();
+      return;
+    }
+    const input =
+      payload?.input ?? JSON.parse(url.searchParams.get("input") ?? "{}");
+    const date = String(input.date ?? "2026-10-26");
+    await route.fulfill({
+      json: {
+        data: {
+          date,
+          period: input.period ?? "day",
+          timezone: "Europe/Berlin",
+          from_date: date,
+          to_date_exclusive: date,
+          focus: {
+            open_selected_task_count: 0,
+            closed_selected_task_count: 0,
+            archived_selected_task_count: 0,
+            registered_estimate_minutes: 0,
+            unknown_estimate_task_ids: [],
+            repeated_task_ids: [],
+          },
+          calendar: {
+            access: "granted",
+            source_count: noSources ? 0 : 1,
+            busy_minutes: 0,
+            complete: refreshed,
+            fresh: refreshed,
+            source_warnings: refreshed
+              ? []
+              : [
+                  `synthetic-source:${reconnectOnly ? "GOOGLE_GRANT_REVOKED" : "SOURCE_STALE"}`,
+                ],
+            source_issues: refreshed
+              ? []
+              : [
+                  {
+                    source_title: "Synthetic Holidays",
+                    code: reconnectOnly
+                      ? "GOOGLE_GRANT_REVOKED"
+                      : "SOURCE_STALE",
+                    status: "connected",
+                    last_success_at: "2026-10-24T08:00:00Z",
+                    next_attempt_at: "2026-10-26T12:00:00Z",
+                    action: reconnectOnly ? "reconnect" : "refresh",
+                  },
+                ],
+          },
+          work: { access: "granted", occupied_minutes: 0, entry_count: 0 },
+          known_busy_minutes: 0,
+          busy_coverage: refreshed ? "complete" : "partial",
+        },
+      },
+    });
+  });
+  await page.route("**/api/v1/commands", async (route) => {
+    const payload = route.request().postDataJSON();
+    if (payload.command !== "calendar_sync_request") {
+      await route.continue();
+      return;
+    }
+    if (payload.input.force !== true) {
+      automaticAttempts++;
+      await route.fulfill({
+        status: 503,
+        json: {
+          error: { code: "SOURCE_READ_FAILED", message: "Synthetic outage" },
+        },
+      });
+      return;
+    }
+    refreshed = true;
+    await route.fulfill({
+      json: {
+        data: {
+          operation_id: "synthetic-refresh",
+          audit_event_id: "synthetic-audit",
+          entity_id: "synthetic-owner",
+          version: 1,
+          affected_task_ids: [],
+          readiness_changes: [],
+          changed_fields: [],
+          data: {},
+        },
+      },
+    });
+  });
+  await page.goto("/");
+  const focus = page.getByRole("region", { name: "تمرکز امروز" });
+  await expect(focus).toContainText("Synthetic Holidays");
+  await expect(focus).toContainText("آخرین دریافت موفق");
+  await expect(focus).toContainText(
+    "امکان تلاش دوباره از این زمان، هنگام استفاده از برنامه",
+  );
+  await expect(focus.locator(".daily-capacity .error")).toContainText(
+    "تازه‌سازی تقویم تأیید نشد",
+  );
+  expect(automaticAttempts).toBe(1);
+  await focus.getByRole("button", { name: "تازه‌سازی تقویم‌ها" }).click();
+  await expect(focus.locator(".daily-capacity .warning")).toHaveCount(0);
+  await expect(focus.locator(".daily-capacity .error")).toHaveCount(0);
+  await expect(focus).toContainText("پوشش منابع متصل کامل است");
+  noSources = true;
+  await focus.getByRole("button", { name: "هفته", exact: true }).click();
+  await expect(focus).toContainText("هیچ منبع تقویم خارجی فعالی نیست");
+  await expect(focus).not.toContainText("پوشش منابع متصل کامل است");
+  await expect(
+    focus.getByRole("link", { name: "مدیریت منابع تقویم" }),
+  ).toHaveAttribute("href", "/calendar");
+  await expect(
+    focus.getByRole("link", { name: "تنظیم اتصال Google" }),
+  ).toHaveAttribute("href", "/settings");
+  noSources = false;
+  reconnectOnly = true;
+  refreshed = false;
+  await page.reload();
+  await expect(focus).toContainText("مجوز «Synthetic Holidays» در دسترس نیست");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.waitForTimeout(200);
+  expect(automaticAttempts).toBe(1);
+});
+
 test("contract_hours_show_compact_weekly_contract_and_personal_limits", async ({
   page,
 }) => {

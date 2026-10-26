@@ -455,7 +455,12 @@ export function RowSaveStatus({ draft }: { draft: RowDraft }) {
       data-save-state={draft.state}
       role="status"
     >
-      {names[draft.state]}
+      {draft.errorCode === "SUBTASKS_INCOMPLETE"
+        ? t(
+            "زیرکارهای ناتمام؛ ابتدا آن‌ها را انجام بده",
+            "Unfinished subtasks; complete them first",
+          )
+        : names[draft.state]}
     </span>
   );
 }

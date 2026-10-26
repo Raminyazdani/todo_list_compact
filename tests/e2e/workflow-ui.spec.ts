@@ -3262,7 +3262,7 @@ test("task_tree_bulk_collapse_expand_applies_to_visible_branches_after_filter_ch
       parent_task_id: parent.entity_id,
     });
     if (group === "A") {
-      await mutate(request, "task_create", {
+      const grandchild = await mutate(request, "task_create", {
         title: `${prefix} A grandchild`,
         parent_task_id: child.entity_id,
         priority: "Urgent",
@@ -3270,8 +3270,8 @@ test("task_tree_bulk_collapse_expand_applies_to_visible_branches_after_filter_ch
       await mutate(
         request,
         "task_complete",
-        { task_id: child.entity_id },
-        (await readTask(request, child.entity_id)).revision,
+        { task_id: grandchild.entity_id },
+        (await readTask(request, grandchild.entity_id)).revision,
       );
     }
   }
@@ -3299,7 +3299,7 @@ test("task_tree_bulk_collapse_expand_applies_to_visible_branches_after_filter_ch
     /2 (زیرکار در این صفحه|subtasks on this page)/,
   );
   await expect(firstSummary).toContainText(/1 (انجام‌شده|done)/);
-  await expect(firstSummary).toContainText(/1 (فوریِ باز|open urgent)/);
+  await expect(firstSummary).toContainText(/0 (فوریِ باز|open urgent)/);
   await firstParent
     .getByRole("button", { name: /^(بازکردن شاخهٔ|Expand branch)/ })
     .click();
@@ -3325,6 +3325,67 @@ test("task_tree_bulk_collapse_expand_applies_to_visible_branches_after_filter_ch
   await expect(treeRows).toHaveCount(2);
   await expandAll.click();
   await expect(treeRows).toHaveCount(5);
+});
+
+test("parent_completion_explains_unfinished_descendants_without_override_then_succeeds", async ({
+  page,
+  request,
+}) => {
+  const prefix = `E2E-${crypto.randomUUID().slice(0, 8)} parent gate`;
+  const parent = await mutate(request, "task_create", {
+    title: `${prefix} parent`,
+  });
+  const child = await mutate(request, "task_create", {
+    title: `${prefix} child`,
+    parent_task_id: parent.entity_id,
+  });
+  const grandchild = await mutate(request, "task_create", {
+    title: `${prefix} grandchild`,
+    parent_task_id: child.entity_id,
+  });
+  await page.goto(
+    `/tasks?${new URLSearchParams({ search: prefix, view: "list" })}`,
+  );
+  await page.locator(`[data-task-id="${parent.entity_id}"]`).click();
+  const parentDialog = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: `${prefix} parent`, exact: true }),
+  });
+  await parentDialog.getByRole("button", { name: "تکمیل کار" }).click();
+  const blocked = page.getByRole("dialog", { name: "زیرکارهای ناتمام" });
+  await expect(blocked).toContainText("2 زیرکار ناتمام");
+  await expect(blocked).toContainText(`${prefix} child`);
+  await expect(blocked).toContainText(`${prefix} grandchild`);
+  await expect(
+    blocked.getByRole("textbox", { name: "دلیل تصمیم شما" }),
+  ).toHaveCount(0);
+  expect((await readTask(request, parent.entity_id)).status).not.toBe("Done");
+  await mutate(
+    request,
+    "task_complete",
+    { task_id: grandchild.entity_id },
+    (await readTask(request, grandchild.entity_id)).revision,
+  );
+  await mutate(
+    request,
+    "task_complete",
+    { task_id: child.entity_id },
+    (await readTask(request, child.entity_id)).revision,
+  );
+  await page.reload();
+  await page.locator(`[data-task-id="${parent.entity_id}"]`).click();
+  await page
+    .getByRole("dialog")
+    .filter({
+      has: page.getByRole("heading", {
+        name: `${prefix} parent`,
+        exact: true,
+      }),
+    })
+    .getByRole("button", { name: "تکمیل کار" })
+    .click();
+  await expect
+    .poll(async () => (await readTask(request, parent.entity_id)).status)
+    .toBe("Done");
 });
 
 test("filtered_tree_keeps_missing_parent_context_and_opens_the_actual_parent", async ({

@@ -432,6 +432,174 @@ describe("Canonical graph and independent checklist invariants", () => {
     });
     expect((await get(a.task_id)).status).toBe("Inbox");
   });
+  it("parent_completion_requires_every_direct_child_done_for_UI_and_MCP", async () => {
+    const parent = await task("Parent"),
+      child = await task("Child", { parent_task_id: parent.task_id });
+    const before = await get(parent.task_id);
+    for (const channel of ["UI", "MCP"] as const)
+      await expect(
+        service.execute(
+          "task_complete",
+          { task_id: parent.task_id, override_reason: "try to skip child" },
+          { ...principal, channel },
+          { idempotencyKey: randomUUID(), expectedRevision: before.revision },
+        ),
+      ).rejects.toMatchObject({
+        code: "TASK_BLOCKED",
+        status: 409,
+        details: {
+          reason: "SUBTASKS_INCOMPLETE",
+          incomplete_descendant_count: 1,
+          incomplete_descendants: [
+            {
+              task_id: child.task_id,
+              title: "Child",
+              status: "Inbox",
+              archived: false,
+            },
+          ],
+        },
+      });
+    await expect(
+      exec(
+        "task_update",
+        { task_id: parent.task_id, status: "Done" },
+        before.revision,
+      ),
+    ).rejects.toMatchObject({
+      code: "TASK_BLOCKED",
+      details: { reason: "SUBTASKS_INCOMPLETE" },
+    });
+    expect((await get(parent.task_id)).status).toBe("Inbox");
+    await finish(child);
+    await finish(parent);
+    expect((await get(parent.task_id)).status).toBe("Done");
+  });
+  it("write_only_task_client_does_not_receive_descendant_details", async () => {
+    const parent = await task("Parent"),
+      child = await task("Private child title", {
+        parent_task_id: parent.task_id,
+      });
+    const error = await service
+      .execute(
+        "task_complete",
+        { task_id: parent.task_id },
+        { ...principal, channel: "MCP", scopes: ["tasks:write"] },
+        {
+          idempotencyKey: randomUUID(),
+          expectedRevision: parent.revision,
+        },
+      )
+      .then(
+        () => null,
+        (cause: unknown) => cause,
+      );
+    expect(error).toMatchObject({ code: "TASK_BLOCKED", status: 409 });
+    expect((error as { details: unknown }).details).toEqual({
+      reason: "SUBTASKS_INCOMPLETE",
+    });
+    expect(JSON.stringify(error)).not.toContain(child.task_id);
+    expect(JSON.stringify(error)).not.toContain("Private child title");
+    expect((await get(parent.task_id)).status).toBe("Inbox");
+  });
+  it("parent_completion_checks_nested_cancelled_and_archived_descendants", async () => {
+    const parent = await task("Parent"),
+      branch = await task("Branch", { parent_task_id: parent.task_id }),
+      leaf = await task("Leaf", { parent_task_id: branch.task_id });
+    await finish(leaf);
+    await finish(branch);
+    await exec(
+      "task_update",
+      { task_id: leaf.task_id, status: "Cancelled" },
+      (await get(leaf.task_id)).revision,
+    );
+    await exec(
+      "task_archive",
+      { task_id: leaf.task_id },
+      (await get(leaf.task_id)).revision,
+    );
+    await expect(finish(parent)).rejects.toMatchObject({
+      code: "TASK_BLOCKED",
+      details: {
+        reason: "SUBTASKS_INCOMPLETE",
+        incomplete_descendant_count: 1,
+        incomplete_descendants: [
+          {
+            task_id: leaf.task_id,
+            status: "Cancelled",
+            archived: true,
+          },
+        ],
+      },
+    });
+    await exec(
+      "task_restore",
+      { task_id: leaf.task_id },
+      (await get(leaf.task_id)).revision,
+    );
+    await exec(
+      "task_reopen",
+      { task_id: leaf.task_id },
+      (await get(leaf.task_id)).revision,
+    );
+    await finish(leaf);
+    await finish(parent);
+    expect((await get(parent.task_id)).status).toBe("Done");
+  });
+  it("batch_parent_completion_failure_rolls_back_other_task_changes", async () => {
+    const parent = await task("Parent"),
+      child = await task("Child", { parent_task_id: parent.task_id }),
+      other = await task("Other");
+    const preview = (await service.query(
+      "task_batch_preview",
+      {
+        actions: [
+          { command: "task_complete", input: { task_id: other.task_id } },
+          { command: "task_complete", input: { task_id: parent.task_id } },
+        ],
+      },
+      principal,
+    )) as PreviewDTO;
+    await expect(
+      exec("task_batch_commit", { preview_id: preview.preview_id }),
+    ).rejects.toMatchObject({
+      code: "TASK_BLOCKED",
+      details: { reason: "SUBTASKS_INCOMPLETE" },
+    });
+    expect((await get(other.task_id)).status).toBe("Inbox");
+    expect((await get(parent.task_id)).status).toBe("Inbox");
+    expect((await get(child.task_id)).status).toBe("Inbox");
+  });
+  it("batch_preview_warns_at_parent_action_without_reordering_the_batch", async () => {
+    const parent = await task("Parent"),
+      child = await task("Child", { parent_task_id: parent.task_id });
+    const preview = (actions: Input[]) =>
+      service.query(
+        "task_batch_preview",
+        { actions },
+        principal,
+      ) as Promise<PreviewDTO>;
+    const parentFirst = await preview([
+      { command: "task_complete", input: { task_id: parent.task_id } },
+      { command: "task_complete", input: { task_id: child.task_id } },
+    ]);
+    expect(parentFirst.warnings).toContain(
+      `SUBTASKS_INCOMPLETE:${parent.task_id}`,
+    );
+    const childFirst = await preview([
+      { command: "task_complete", input: { task_id: child.task_id } },
+      {
+        command: "task_update",
+        input: { task_id: parent.task_id, status: "Done" },
+      },
+    ]);
+    expect(childFirst.warnings).not.toContain(
+      `SUBTASKS_INCOMPLETE:${parent.task_id}`,
+    );
+    await exec("task_batch_commit", { preview_id: childFirst.preview_id });
+    expect((await get(parent.task_id)).status).toBe("Done");
+    expect((await get(child.task_id)).status).toBe("Done");
+  });
   it("parent_child_dependency_deadlock_rejected", async () => {
     const a = await task("A"),
       b = await task("B", { parent_task_id: a.task_id });
@@ -568,13 +736,26 @@ describe("Canonical graph and independent checklist invariants", () => {
     const a = await task("A"),
       b = await task("B");
     await dependency(a, [b]);
+    const child = await task("B child", { parent_task_id: b.task_id });
     const revision = (await get(a.task_id)).revision;
     const preview = (await service.query(
       "task_completion_impact_preview",
       { task_id: b.task_id },
       principal,
-    )) as { unblocks: { task_id: string }[] };
+    )) as {
+      unblocks: { task_id: string }[];
+      subtask_gate: {
+        all_descendants_done: boolean;
+        incomplete_descendant_count: number;
+        incomplete_descendants: { task_id: string; status: string }[];
+      };
+    };
     expect(preview.unblocks.map((t) => t.task_id)).toEqual([a.task_id]);
+    expect(preview.subtask_gate).toMatchObject({
+      all_descendants_done: false,
+      incomplete_descendant_count: 1,
+      incomplete_descendants: [{ task_id: child.task_id, status: "Inbox" }],
+    });
     expect((await get(a.task_id)).revision).toBe(revision);
     expect((await get(b.task_id)).status).toBe("Inbox");
   });

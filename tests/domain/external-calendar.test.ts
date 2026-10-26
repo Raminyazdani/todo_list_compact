@@ -169,9 +169,12 @@ async function source(
 }
 async function claim(sourceId: string) {
   return (
-    await internal().execute("sync_claim", { source_id: sourceId }, trusted(), {
-      idempotencyKey: randomUUID(),
-    })
+    await internal().execute(
+      "sync_claim",
+      { source_id: sourceId, force: true },
+      trusted(),
+      { idempotencyKey: randomUUID() },
+    )
   ).data as Record<string, unknown>;
 }
 async function finish(
@@ -234,6 +237,81 @@ afterAll(async () => {
   await db.close?.();
 });
 describe("Durable owner-bound calendar cache and provider receipts", () => {
+  it("calendar_operation_status_uses_stable_owner_bound_keyset_pages", async () => {
+    const sourceId = await source();
+    const insert = (intentId: string, createdAt: string) =>
+      db.query(
+        "INSERT INTO calendar_mutation_intents(intent_id,owner_id,source_id,source_generation,action,external_event_id,payload,created_at) VALUES($1,$2,$3,1,'create',$1,'{}'::jsonb,$4::timestamptz)",
+        [intentId, principal.ownerId, sourceId, createdAt],
+      );
+    for (let index = 0; index < 5; index++)
+      await insert("INTENT-page-" + index, "2030-01-01T00:00:00.123456Z");
+    const read = (input: Record<string, unknown>, actor = principal) =>
+      service.query("calendar_operation_status", input, actor) as Promise<{
+        items: { intent_id: string }[];
+        next_cursor: string | null;
+      }>;
+    const first = await read({ limit: 2 });
+    expect(first.items.map((item) => item.intent_id)).toEqual([
+      "INTENT-page-4",
+      "INTENT-page-3",
+    ]);
+    expect(first.next_cursor).toBeTruthy();
+    await insert("INTENT-newer", "2030-01-02T00:00:00Z");
+    const second = await read({ limit: 2, cursor: first.next_cursor });
+    expect(second.items.map((item) => item.intent_id)).toEqual([
+      "INTENT-page-2",
+      "INTENT-page-1",
+    ]);
+    const third = await read({ limit: 2, cursor: second.next_cursor });
+    expect(third.items.map((item) => item.intent_id)).toEqual([
+      "INTENT-page-0",
+    ]);
+    expect(third.next_cursor).toBeNull();
+    expect(
+      await read({ operation_id: "INTENT-page-1", limit: 1 }),
+    ).toMatchObject({
+      items: [{ intent_id: "INTENT-page-1" }],
+      next_cursor: null,
+    });
+    await expect(
+      read(
+        { limit: 2, cursor: first.next_cursor },
+        {
+          ...principal,
+          ownerId: "foreign-synthetic-owner",
+        },
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(
+      read({ operation_id: "INTENT-page-1", cursor: first.next_cursor }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+  it("calendar_operation_status_pages_past_the_old_200_intent_cap", async () => {
+    const sourceId = await source();
+    await db.query(
+      "INSERT INTO calendar_mutation_intents(intent_id,owner_id,source_id,source_generation,action,external_event_id,payload,created_at) SELECT 'INTENT-boundary-'||lpad(n::text,3,'0'),$1,$2,1,'create','event-'||n,'{}'::jsonb,'2030-01-01T00:00:00.123456Z'::timestamptz FROM generate_series(0,200) n",
+      [principal.ownerId, sourceId],
+    );
+    const first = (await service.query(
+      "calendar_operation_status",
+      { limit: 200 },
+      principal,
+    )) as { items: { intent_id: string }[]; next_cursor: string | null };
+    expect(first.items).toHaveLength(200);
+    expect(first.next_cursor).toBeTruthy();
+    const second = (await service.query(
+      "calendar_operation_status",
+      { limit: 200, cursor: first.next_cursor },
+      principal,
+    )) as typeof first;
+    expect(second.items).toHaveLength(1);
+    expect(second.next_cursor).toBeNull();
+    expect(
+      new Set([...first.items, ...second.items].map((item) => item.intent_id))
+        .size,
+    ).toBe(201);
+  });
   it("calendar_queries_are_pure_cache_reads_and_unclassified_free_events_do_not_block", async () => {
     const id = await source();
     await seed(id, [
@@ -328,6 +406,172 @@ describe("Durable owner-bound calendar cache and provider receipts", () => {
     expect(
       JSON.stringify(await service.query("get_activity", {}, principal)),
     ).not.toContain("https://calendar.example.test");
+  });
+  it("provider_state_avoids_loading_cached_events_and_sync_status_filters_requested_sources", async () => {
+    const google = await source();
+    await seed(google, [event("synthetic-cached")]);
+    const ical = await exec("calendar_source_configure", {
+      provider: "ical",
+      title: "Synthetic second source",
+      url: "https://calendar.example.test/private/synthetic.ics",
+    });
+    const state = await internal().state(trusted());
+    expect(state.sources).toHaveLength(2);
+    expect(state.sources.every((row) => !("events" in row))).toBe(true);
+    const filtered = (await service.query(
+      "calendar_sync_status",
+      { source_ids: [ical.entity_id] },
+      principal,
+    )) as { items: { source_id: string }[]; total: number };
+    expect(filtered.total).toBe(1);
+    expect(filtered.items.map((row) => row.source_id)).toEqual([
+      ical.entity_id,
+    ]);
+    expect(
+      await service.query(
+        "calendar_sync_status",
+        { source_ids: ["synthetic-foreign-source"] },
+        principal,
+      ),
+    ).toMatchObject({
+      items: [],
+      total: 0,
+      complete: false,
+      fresh: false,
+      unavailable_source_count: 1,
+      source_warnings: ["SELECTED_SOURCE_UNAVAILABLE"],
+    });
+    await expect(
+      service.query(
+        "calendar_sync_status",
+        { source_ids: "invalid" },
+        principal,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+  it("one_unreadable_private_feed_config_does_not_block_a_healthy_google_source", async () => {
+    const google = await source();
+    const ical = await exec("calendar_source_configure", {
+      provider: "ical",
+      title: "Synthetic unreadable feed",
+      url: "https://calendar.example.test/private/synthetic.ics",
+    });
+    await db.query(
+      "UPDATE calendar_sources SET encrypted_config='synthetic-corrupt-ciphertext' WHERE owner_id=$1 AND source_id=$2",
+      [principal.ownerId, ical.entity_id],
+    );
+    expect((await internal().state(trusted())).sources).toHaveLength(2);
+    network.sources = [
+      {
+        external_calendar_id: "primary",
+        title: "Synthetic Google",
+        timezone: "Europe/Berlin",
+        writable: true,
+        grant_fingerprint: "synthetic-grant",
+      },
+    ];
+    network.calls = 0;
+    const result = await exec("calendar_sync_request", {
+      source_ids: [google, ical.entity_id],
+      force: true,
+    });
+    expect(result.data).toMatchObject({
+      sync: {
+        sources: expect.arrayContaining([
+          expect.objectContaining({
+            source_id: google,
+            state: "connected",
+          }),
+          expect.objectContaining({
+            source_id: ical.entity_id,
+            state: "error",
+            reason: "SOURCE_CONFIG_UNREADABLE",
+          }),
+        ]),
+      },
+    });
+    expect(network.calls).toBe(2); // discovery and Google fetch; no feed fetch
+    const status = await service.query("calendar_sync_status", {}, principal);
+    expect(status).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          source_id: ical.entity_id,
+          status: "error",
+          last_error: "SOURCE_CONFIG_UNREADABLE",
+        }),
+      ]),
+    });
+    expect(JSON.stringify(status)).not.toContain(
+      "synthetic-corrupt-ciphertext",
+    );
+    expect(JSON.stringify(status)).not.toContain("/private/synthetic.ics");
+    expect(
+      await service.query(
+        "daily_capacity_preview",
+        { date: "2030-01-01" },
+        principal,
+      ),
+    ).toMatchObject({
+      calendar: {
+        source_issues: expect.arrayContaining([
+          expect.objectContaining({
+            source_title: "Synthetic unreadable feed",
+            code: "SOURCE_CONFIG_UNREADABLE",
+            action: "inspect",
+          }),
+        ]),
+      },
+    });
+  });
+  it("one_unreadable_source_does_not_block_delivery_of_another_pending_calendar_change", async () => {
+    network.sources = ["bad", "good"].map((external_calendar_id) => ({
+      external_calendar_id,
+      title: external_calendar_id,
+      timezone: "Europe/Berlin",
+      writable: true,
+      grant_fingerprint: "synthetic-grant",
+    }));
+    const discovered = await internal().execute(
+      "discover",
+      { sources: network.sources },
+      trusted(),
+      { idempotencyKey: randomUUID() },
+    );
+    const [bad, good] = (discovered.data as { source_ids: string[] })
+      .source_ids;
+    await db.query(
+      "UPDATE calendar_sources SET encrypted_config='synthetic-corrupt-ciphertext' WHERE owner_id=$1 AND source_id=$2",
+      [principal.ownerId, bad],
+    );
+    const badIntent = `INT-${randomUUID()}`,
+      goodIntent = `INT-${randomUUID()}`,
+      payload = JSON.stringify({
+        title: "Synthetic personal event",
+        starts_at: "2030-01-01T10:00:00Z",
+        ends_at: "2030-01-01T11:00:00Z",
+      });
+    await db.query(
+      "INSERT INTO calendar_mutation_intents(intent_id,owner_id,source_id,source_generation,action,external_event_id,payload) VALUES($1,$2,$3,1,'create','bad-event',$4::jsonb),($5,$2,$6,1,'create','good-event',$4::jsonb)",
+      [badIntent, principal.ownerId, bad, payload, goodIntent, good],
+    );
+    await exec("calendar_sync_request", { force: true });
+    const rows = (
+      await db.query<{
+        intent_id: string;
+        state: string;
+        last_error: string | null;
+      }>(
+        "SELECT intent_id,state,last_error FROM calendar_mutation_intents WHERE owner_id=$1 ORDER BY intent_id",
+        [principal.ownerId],
+      )
+    ).rows;
+    expect(rows.find((row) => row.intent_id === badIntent)).toMatchObject({
+      state: "pending",
+      last_error: "SOURCE_CONFIG_UNREADABLE",
+    });
+    expect(rows.find((row) => row.intent_id === goodIntent)).toMatchObject({
+      state: "confirmed",
+    });
   });
   it("all_pages_are_available_and_source_selection_has_no_200_event_truncation", async () => {
     const id = await source();
@@ -841,6 +1085,185 @@ describe("Durable owner-bound calendar cache and provider receipts", () => {
       items: [{ sync_state: "stale" }],
     });
   });
+  it("foreground_refresh_skips_recent_sources_then_retries_after_interval_without_duplicate_provider_calls", async () => {
+    const id = await source();
+    await seed(id, [event("personal")]);
+    network.sources = [
+      {
+        external_calendar_id: "primary",
+        title: "Synthetic Google",
+        timezone: "Europe/Berlin",
+        writable: true,
+        grant_fingerprint: "synthetic-grant",
+      },
+    ];
+    network.calls = 0;
+    const redundantClaim = await internal().execute(
+      "sync_claim",
+      { source_id: id },
+      trusted(),
+      { idempotencyKey: randomUUID() },
+    );
+    expect(redundantClaim.data).toMatchObject({ claimed: false });
+    expect(
+      (await exec("calendar_sync_request", { source_ids: [id] })).data,
+    ).toMatchObject({
+      sync: { sources: [{ state: "deferred", reason: "RECENTLY_SYNCED" }] },
+    });
+    expect(network.calls).toBe(0);
+    await db.query(
+      "UPDATE calendar_sources SET last_success_at=now()-interval '6 minutes' WHERE owner_id=$1 AND source_id=$2",
+      [principal.ownerId, id],
+    );
+    await exec("calendar_sync_request", { source_ids: [id] });
+    expect(network.calls).toBe(2);
+    await exec("calendar_sync_request", { source_ids: [id] });
+    expect(network.calls).toBe(2);
+    await exec("calendar_sync_request", { source_ids: [id], force: true });
+    expect(network.calls).toBe(4);
+  });
+  it("concurrent_foreground_refreshes_share_one_provider_request", async () => {
+    const id = await source();
+    network.sources = [
+      {
+        external_calendar_id: "primary",
+        title: "Synthetic Google",
+        timezone: "Europe/Berlin",
+        writable: true,
+        grant_fingerprint: "synthetic-grant",
+      },
+    ];
+    let release!: () => void, entered!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+      reached = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+    network.block = async () => {
+      entered();
+      await barrier;
+    };
+    const first = exec("calendar_sync_request", { source_ids: [id] });
+    await reached;
+    let secondFinished = false;
+    const second = exec("calendar_sync_request", {
+      source_ids: [id],
+    }).finally(() => {
+      secondFinished = true;
+    });
+    try {
+      let commands = 0;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const count = await db.query<{ count: number }>(
+          "SELECT count(*)::integer AS count FROM idempotency_operations WHERE owner_id=$1 AND command='calendar_sync_request'",
+          [principal.ownerId],
+        );
+        commands = count.rows[0].count;
+        if (commands === 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(commands).toBe(2);
+      expect(secondFinished).toBe(false);
+      expect(network.calls).toBe(2); // one discovery and one source fetch
+    } finally {
+      release();
+      await Promise.allSettled([first, second]);
+      network.block = null;
+    }
+    const results = await Promise.all([first, second]);
+    expect(results[0].data).toMatchObject({
+      sync: { sources: [{ source_id: id, state: "connected" }] },
+    });
+    expect(results[1].data).toMatchObject({
+      sync: { sources: [{ source_id: id, state: "connected" }] },
+    });
+    expect(network.calls).toBe(2);
+  });
+  it("provider_backoff_skips_google_discovery_even_for_manual_refresh_and_keeps_ical_independent", async () => {
+    const google = await source();
+    await seed(google, [event("personal")]);
+    await finish(google, await claim(google), {
+      error: { code: "SOURCE_RATE_LIMITED", retry_after_seconds: 600 },
+    });
+    network.sources = [
+      {
+        external_calendar_id: "primary",
+        title: "Synthetic Google",
+        timezone: "Europe/Berlin",
+        writable: true,
+        grant_fingerprint: "synthetic-grant",
+      },
+    ];
+    network.calls = 0;
+    const limited = await exec("calendar_sync_request", {
+      source_ids: [google],
+      force: true,
+    });
+    expect(limited.data).toMatchObject({
+      sync: {
+        sources: [{ source_id: google, state: "deferred" }],
+        warnings: ["SOURCE_RATE_LIMITED"],
+      },
+    });
+    expect(network.calls).toBe(0);
+
+    const ical = await exec("calendar_source_configure", {
+      provider: "ical",
+      title: "Synthetic independent feed",
+      url: "https://calendar.example.test/private/synthetic.ics",
+    });
+    const mixed = await exec("calendar_sync_request", {
+      source_ids: [google, ical.entity_id],
+      force: true,
+    });
+    expect(mixed.data).toMatchObject({
+      sync: {
+        sources: expect.arrayContaining([
+          expect.objectContaining({ source_id: google, state: "deferred" }),
+          expect.objectContaining({
+            source_id: ical.entity_id,
+            state: "connected",
+          }),
+        ]),
+        warnings: ["SOURCE_RATE_LIMITED"],
+      },
+    });
+    expect(network.calls).toBe(1); // iCal only; Google discovery and fetch paused
+
+    await db.query(
+      "UPDATE calendar_sources SET next_attempt_at=now()-interval '1 second' WHERE owner_id=$1 AND source_id=$2",
+      [principal.ownerId, google],
+    );
+    network.calls = 0;
+    expect(
+      (
+        await exec("calendar_sync_request", {
+          source_ids: [google],
+          force: true,
+        })
+      ).data,
+    ).toMatchObject({
+      sync: { sources: [{ source_id: google, state: "connected" }] },
+    });
+    expect(network.calls).toBe(2); // discovery resumes after provider backoff
+
+    await finish(google, await claim(google), {
+      error: { code: "SOURCE_RETRY_AFTER", retry_after_seconds: 600 },
+    });
+    network.calls = 0;
+    expect(
+      (
+        await exec("calendar_sync_request", {
+          source_ids: [google],
+          force: true,
+        })
+      ).data,
+    ).toMatchObject({
+      sync: { warnings: ["SOURCE_RETRY_AFTER"] },
+    });
+    expect(network.calls).toBe(0);
+  });
   it("manual_refresh_retries_ordinary_errors_without_bypassing_leases_or_provider_backoff", async () => {
     const id = await source();
     await seed(id, [event("personal")]);
@@ -1083,7 +1506,7 @@ describe("Durable owner-bound calendar cache and provider receipts", () => {
     await seed(ids[0], [event("first-event")]);
     await seed(ids[1], [event("second-event")]);
     network.fail = ["first"];
-    const result = await exec("calendar_sync_request", {});
+    const result = await exec("calendar_sync_request", { force: true });
     expect(result.data).toMatchObject({
       sync: {
         sources: expect.arrayContaining([

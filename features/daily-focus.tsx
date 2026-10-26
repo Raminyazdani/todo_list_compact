@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
 import type {
@@ -30,7 +30,7 @@ export function DailyFocus({
   action: Action;
   onOpen: (taskId: string) => void;
 }) {
-  const { t } = useLocale();
+  const { t, language } = useLocale();
   const focus = useQuery<DailyFocusDTO>("daily_focus_get", { date });
   const inbox = useQuery<PageDTO<TaskDTO>>("task_search", {
     status: "Inbox",
@@ -55,6 +55,69 @@ export function DailyFocus({
     date,
     period: capacityPeriod,
   });
+  const syncInFlight = useRef(false);
+  const lastSyncAttempt = useRef(0);
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
+  const [calendarSyncError, setCalendarSyncError] = useState("");
+  const reconnectOnly =
+    !!capacity.data?.calendar.source_issues.length &&
+    capacity.data.calendar.source_issues.every(
+      (issue) => issue.action === "reconnect",
+    );
+  async function syncCalendar(force: boolean) {
+    if (document.visibilityState !== "visible" || syncInFlight.current) return;
+    if (!force && Date.now() - lastSyncAttempt.current < 5 * 60_000) return;
+    syncInFlight.current = true;
+    lastSyncAttempt.current = Date.now();
+    setSyncingCalendar(true);
+    setCalendarSyncError("");
+    try {
+      const result = await action("calendar_sync_request", { force });
+      if (!result) {
+        setCalendarSyncError(
+          t(
+            "تازه‌سازی تقویم تأیید نشد. رویدادهای قبلی نمایش داده می‌شوند؛ دوباره تلاش کن یا وضعیت منابع را در تقویم ببین.",
+            "Calendar refresh was not confirmed. Previously cached events remain visible; retry or check sources in Calendar.",
+          ),
+        );
+      }
+    } catch (cause) {
+      setCalendarSyncError(
+        cause instanceof Error
+          ? cause.message
+          : t("تازه‌سازی تقویم ناموفق بود.", "Calendar refresh failed."),
+      );
+    } finally {
+      syncInFlight.current = false;
+      setSyncingCalendar(false);
+      capacity.refresh();
+    }
+  }
+  const foregroundSync = useEffectEvent(() => {
+    void syncCalendar(false);
+  });
+  useEffect(() => {
+    if (
+      capacity.data?.calendar.access !== "granted" ||
+      !capacity.data.calendar.source_count ||
+      reconnectOnly
+    )
+      return;
+    const refresh = () => foregroundSync();
+    refresh();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 5 * 60_000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.clearInterval(timer);
+    };
+  }, [
+    capacity.data?.calendar.access,
+    capacity.data?.calendar.source_count,
+    reconnectOnly,
+  ]);
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchTerm(search.trim()), 250);
     return () => window.clearTimeout(timer);
@@ -388,20 +451,31 @@ export function DailyFocus({
               </span>
             </div>
             <p className="small muted">
-              {capacity.data.busy_coverage === "complete"
-                ? t(
-                    "پوشش منابع متصل کامل است.",
-                    "Connected sources have complete coverage.",
-                  )
-                : capacity.data.busy_coverage === "partial"
+              {capacity.data.calendar.access === "granted" &&
+              capacity.data.calendar.source_count === 0
+                ? capacity.data.work.access === "granted"
                   ? t(
-                      "پوشش منابع ناقص است؛ عدد مشغولی فقط بخش شناخته‌شده را نشان می‌دهد.",
-                      "Source coverage is partial; busy time shows known intervals only.",
+                      "هیچ منبع تقویم خارجی فعالی نیست؛ عدد مشغولی فقط از رویدادهای محلی و ساعات کار ثبت‌شده محاسبه شده است.",
+                      "No external calendar source is active; busy time uses only local events and recorded work intervals.",
                     )
                   : t(
-                      "پوشش مشغولی نامشخص است؛ از این عدد برای تصمیم قطعی استفاده نکن.",
-                      "Busy coverage is unknown; do not treat this as a complete load.",
-                    )}
+                      "هیچ منبع تقویم خارجی فعالی نیست؛ عدد مشغولی فقط از رویدادهای محلیِ در دسترس محاسبه شده است.",
+                      "No external calendar source is active; busy time uses only available local events.",
+                    )
+                : capacity.data.busy_coverage === "complete"
+                  ? t(
+                      "پوشش منابع متصل کامل است.",
+                      "Connected sources have complete coverage.",
+                    )
+                  : capacity.data.busy_coverage === "partial"
+                    ? t(
+                        "پوشش منابع ناقص است؛ عدد مشغولی فقط بخش شناخته‌شده را نشان می‌دهد.",
+                        "Source coverage is partial; busy time shows known intervals only.",
+                      )
+                    : t(
+                        "پوشش مشغولی نامشخص است؛ از این عدد برای تصمیم قطعی استفاده نکن.",
+                        "Busy coverage is unknown; do not treat this as a complete load.",
+                      )}
               {capacity.data.focus.unknown_estimate_task_ids.length > 0 && (
                 <>
                   {" "}
@@ -433,14 +507,30 @@ export function DailyFocus({
                 </>
               )}
             </p>
+            {capacity.data.calendar.access === "granted" &&
+              capacity.data.calendar.source_count === 0 && (
+                <p className="small muted">
+                  <Link href="/calendar" className="text-link">
+                    {t("مدیریت منابع تقویم", "Manage calendar sources")}
+                  </Link>{" "}
+                  ·{" "}
+                  <Link href="/settings" className="text-link">
+                    {t("تنظیم اتصال Google", "Google connection settings")}
+                  </Link>
+                </p>
+              )}
             {capacity.data.calendar.source_issues.length > 0 && (
-              <div className="warning small">
-                <p>
+              <div className="warning small" role="status">
+                <ul>
                   {capacity.data.calendar.source_issues
                     .slice(0, 2)
-                    .map((issue) => capacityIssueLabel(issue, t))
-                    .join(" · ")}
-                </p>
+                    .map((issue, index) => (
+                      <li key={`${issue.source_title}-${issue.code}-${index}`}>
+                        {capacityIssueLabel(issue, t)}{" "}
+                        {capacityIssueDetail(issue, t, language)}
+                      </li>
+                    ))}
+                </ul>
                 {capacity.data.calendar.source_issues.length > 2 && (
                   <details>
                     <summary>
@@ -456,13 +546,52 @@ export function DailyFocus({
                           <li
                             key={`${issue.source_title}-${issue.code}-${index}`}
                           >
-                            {capacityIssueLabel(issue, t)}
+                            {capacityIssueLabel(issue, t)}{" "}
+                            {capacityIssueDetail(issue, t, language)}
                           </li>
                         ))}
                     </ul>
                   </details>
                 )}
+                <div className="form-actions">
+                  <Button
+                    disabled={syncingCalendar}
+                    onClick={() => void syncCalendar(true)}
+                  >
+                    {syncingCalendar
+                      ? t("در حال تازه‌سازی…", "Refreshing…")
+                      : t("تازه‌سازی تقویم‌ها", "Refresh calendars")}
+                  </Button>
+                  <Link
+                    href={
+                      capacity.data.calendar.source_issues.some(
+                        (issue) => issue.code === "SOURCE_CONFIG_UNREADABLE",
+                      )
+                        ? "/calendar?manage_sources=1"
+                        : "/calendar"
+                    }
+                    className="text-link"
+                  >
+                    {capacity.data.calendar.source_issues.some(
+                      (issue) => issue.code === "SOURCE_CONFIG_UNREADABLE",
+                    )
+                      ? t("مدیریت منابع", "Manage sources")
+                      : t("جزئیات منابع", "Source details")}
+                  </Link>
+                  {capacity.data.calendar.source_issues.some(
+                    (issue) => issue.action === "reconnect",
+                  ) && (
+                    <Link href="/settings" className="text-link">
+                      {t("تنظیمات اتصال", "Connection settings")}
+                    </Link>
+                  )}
+                </div>
               </div>
+            )}
+            {calendarSyncError && (
+              <p className="error small" role="alert">
+                {calendarSyncError}
+              </p>
             )}
           </>
         )}
@@ -476,8 +605,11 @@ function formatMinutes(minutes: number): string {
   return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")}`;
 }
 
+type CapacityIssue =
+  DailyCapacityPreviewDTO["calendar"]["source_issues"][number];
+
 function capacityIssueLabel(
-  issue: { source_title: string; code: string },
+  issue: CapacityIssue,
   t: (fa: string, en: string) => string,
 ): string {
   const source =
@@ -499,16 +631,74 @@ function capacityIssueLabel(
         `${source} is still syncing.`,
       );
     case "SOURCE_STALE":
-      return t(`اطلاعات «${source}» قدیمی است.`, `${source} has stale data.`);
+      return t(
+        `رویدادهای «${source}» پس از آخرین دریافت موفق تازه نشده‌اند؛ رویدادهای جدید ممکن است در تداخل‌ها نباشند.`,
+        `Events from ${source} have not refreshed since the last successful sync; newer events may be missing from conflicts.`,
+      );
+    case "SOURCE_RATE_LIMITED":
+    case "SOURCE_RETRY_AFTER":
+      return t(
+        `سرویس «${source}» موقتاً درخواست تازه را محدود کرده است.`,
+        `The provider for ${source} is temporarily rate limiting refreshes.`,
+      );
+    case "GOOGLE_GRANT_REQUIRED":
+    case "GOOGLE_GRANT_REVOKED":
+    case "GOOGLE_REFRESH_TOKEN_EXPIRED":
+    case "GOOGLE_CALENDAR_PERMISSION_MISSING":
+    case "ACCESS_REVOKED":
+      return t(
+        `مجوز «${source}» در دسترس نیست؛ اتصال را در تنظیمات دوباره برقرار کن.`,
+        `Permission for ${source} is unavailable; reconnect it in Settings.`,
+      );
+    case "GOOGLE_SOURCE_ACCESS_REMOVED":
+      return t(
+        `«${source}» دیگر در حساب Google متصل در دسترس نیست.`,
+        `${source} is no longer accessible in the connected Google account.`,
+      );
+    case "GOOGLE_TOKEN_UNAVAILABLE":
+      return t(
+        `دریافت مجوز موقت Google برای «${source}» ناموفق بود؛ دوباره تلاش کن.`,
+        `The temporary Google token for ${source} could not be obtained; retry.`,
+      );
+    case "GOOGLE_CALENDAR_API_NOT_ENABLED":
+      return t(
+        `Google Calendar API برای «${source}» فعال نیست؛ تنظیمات Google Cloud را بررسی کن.`,
+        `Google Calendar API is not enabled for ${source}; check Google Cloud settings.`,
+      );
+    case "ICAL_TIMEOUT":
+      return t(
+        `فید «${source}» به‌موقع پاسخ نداد.`,
+        `The feed for ${source} timed out.`,
+      );
+    case "ICAL_HTTP_ERROR":
+      return t(
+        `سرور فید «${source}» پاسخ موفق نداد؛ نشانی و دسترسی فید را بررسی کن.`,
+        `The feed for ${source} returned an error; check its address and access.`,
+      );
+    case "ICAL_TRANSPORT_ERROR":
+      return t(
+        `ارتباط شبکه با فید «${source}» برقرار نشد.`,
+        `The network connection to ${source} failed.`,
+      );
+    case "ICAL_FEED_TOO_LARGE":
+      return t(
+        `فید «${source}» از حد مجاز بزرگ‌تر است.`,
+        `The feed for ${source} exceeds the supported size.`,
+      );
+    case "SOURCE_CONFIG_UNREADABLE":
+      return t(
+        `تنظیمات «${source}» قابل خواندن نیست؛ آن را در مدیریت منابع دوباره تنظیم کن.`,
+        `Settings for ${source} cannot be read; reconfigure it in Manage sources.`,
+      );
+    case "SOURCE_READ_FAILED":
+      return t(
+        `خواندن «${source}» ناموفق بود؛ رویدادهای سالم قبلی حفظ شده‌اند.`,
+        `Reading ${source} failed; previously cached events remain available.`,
+      );
     case "CACHE_EXPANSION_FAILED":
       return t(
         `خواندن داده‌های «${source}» ناموفق بود.`,
         `Stored events from ${source} could not be read.`,
-      );
-    case "ACCESS_REVOKED":
-      return t(
-        `دسترسی «${source}» قطع شده است.`,
-        `Access to ${source} was revoked.`,
       );
     case "SELECTED_SOURCE_UNAVAILABLE":
       return t(
@@ -521,4 +711,47 @@ function capacityIssueLabel(
         `${source} needs a connection check.`,
       );
   }
+}
+
+function capacityIssueDetail(
+  issue: CapacityIssue,
+  t: (fa: string, en: string) => string,
+  language: string,
+): string {
+  const details: string[] = [];
+  const format = (value: string) =>
+    new Date(value).toLocaleString(
+      language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
+      { timeZone: "Europe/Berlin" },
+    );
+  if (issue.last_success_at && !Number.isNaN(Date.parse(issue.last_success_at)))
+    details.push(
+      t("آخرین دریافت موفق:", "Last successful sync:") +
+        " " +
+        format(issue.last_success_at),
+    );
+  else
+    details.push(
+      t(
+        "هنوز دریافت موفقی ثبت نشده است.",
+        "No successful sync has been recorded yet.",
+      ),
+    );
+  if (issue.next_attempt_at && !Number.isNaN(Date.parse(issue.next_attempt_at)))
+    details.push(
+      t(
+        "امکان تلاش دوباره از این زمان، هنگام استفاده از برنامه:",
+        "Retry allowed after this time while the app is open:",
+      ) +
+        " " +
+        format(issue.next_attempt_at),
+    );
+  else if (issue.action === "wait")
+    details.push(
+      t(
+        "وضعیت هنگام استفاده از برنامه دوباره بررسی می‌شود.",
+        "The status will be checked again while the app is open.",
+      ),
+    );
+  return details.join(" · ");
 }

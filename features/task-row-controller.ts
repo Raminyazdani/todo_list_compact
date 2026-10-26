@@ -549,10 +549,20 @@ export class TaskRowController {
                 : info.code === "TASK_BLOCKED"
                   ? "blocked"
                   : "error";
+          const incompleteSubtasks =
+            info.code === "TASK_BLOCKED" &&
+            info.details.reason === "SUBTASKS_INCOMPLETE";
+          const count = info.details.incomplete_descendant_count;
+          const countText =
+            typeof count === "number" && Number.isInteger(count)
+              ? ` (${count})`
+              : "";
           this.updateDraft(job.key, {
             state,
-            error: info.message,
-            errorCode: info.code,
+            error: incompleteSubtasks
+              ? `همهٔ زیرکارها باید پیش از تکمیل کار مادر انجام شوند${countText}. / Complete every descendant subtask before marking the parent Done${countText}.`
+              : info.message,
+            errorCode: incompleteSubtasks ? "SUBTASKS_INCOMPLETE" : info.code,
           });
           if (state === "unconfirmed") break;
           queue.shift();

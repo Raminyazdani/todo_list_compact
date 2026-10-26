@@ -327,8 +327,30 @@ export async function createPreview(
         }));
         payload.actions = actions;
       } else actions = array(input.actions, 100);
+      const statusByTask = new Map(
+        data.tasks.map((task) => [task.task_id, task.status]),
+      );
+      const childrenByParent = new Map<string, string[]>();
+      for (const task of data.tasks) {
+        if (!task.parent_task_id) continue;
+        const children = childrenByParent.get(task.parent_task_id) ?? [];
+        children.push(task.task_id);
+        childrenByParent.set(task.parent_task_id, children);
+      }
+      const hasIncompleteDescendant = (parentId: string) => {
+        const pending = [...(childrenByParent.get(parentId) ?? [])];
+        const seen = new Set<string>();
+        while (pending.length) {
+          const taskId = pending.pop()!;
+          if (seen.has(taskId)) continue;
+          seen.add(taskId);
+          if (statusByTask.get(taskId) !== "Done") return true;
+          pending.push(...(childrenByParent.get(taskId) ?? []));
+        }
+        return false;
+      };
       for (const action of actions) {
-        choice(action, "command", [
+        const actionCommand = choice(action, "command", [
           "task_update",
           "task_complete",
           "task_reopen",
@@ -337,8 +359,35 @@ export async function createPreview(
         ]);
         const actionInput = object(action.input);
         const task = addTask(text(actionInput, "task_id"));
-        if (action.command === "task_complete" && task.blocked_by.length)
+        if (actionCommand === "task_complete" && task.blocked_by.length)
           warnings.push(`TASK_BLOCKED:${task.task_id}`);
+        const nextStatus =
+          actionCommand === "task_complete"
+            ? "Done"
+            : actionCommand === "task_reopen"
+              ? choice(
+                  actionInput,
+                  "status",
+                  ["Inbox", "Next", "In progress", "Waiting"],
+                  "Next",
+                )
+              : actionCommand === "task_update" && "status" in actionInput
+                ? choice(actionInput, "status", [
+                    "Inbox",
+                    "Next",
+                    "In progress",
+                    "Waiting",
+                    "Done",
+                    "Cancelled",
+                  ])
+                : null;
+        if (
+          nextStatus === "Done" &&
+          statusByTask.get(task.task_id) !== "Done" &&
+          hasIncompleteDescendant(task.task_id)
+        )
+          warnings.push(`SUBTASKS_INCOMPLETE:${task.task_id}`);
+        if (nextStatus) statusByTask.set(task.task_id, nextStatus);
       }
       break;
     }

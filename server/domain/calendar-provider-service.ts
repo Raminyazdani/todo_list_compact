@@ -22,6 +22,7 @@ import {
   decryptCalendarConfig,
   sourceDTO,
 } from "./calendar-sources";
+import { sourceRecentlySynchronized } from "./calendar-cache";
 
 export type CalendarProviderAction =
   | "discover"
@@ -60,13 +61,7 @@ function trusted(principal: Principal) {
       403,
     );
 }
-async function sourceState(
-  tx: SqlClient,
-  owner: string,
-  row: Input,
-): Promise<
-  Input & { config: Input; events: { external_id: string; raw: Input }[] }
-> {
+function sourceState(owner: string, row: Input): Input & { config: Input } {
   return {
     ...row,
     config: decryptCalendarConfig(
@@ -74,12 +69,6 @@ async function sourceState(
       String(row.source_id),
       row.encrypted_config,
     ),
-    events: (
-      await tx.query<{ external_id: string; raw: Input }>(
-        "SELECT external_id,raw FROM calendar_external_events WHERE owner_id=$1 AND source_id=$2 ORDER BY external_id",
-        [owner, row.source_id],
-      )
-    ).rows,
   };
 }
 /** Internal server-only lifecycle. Never expose this object through REST or MCP. */
@@ -88,11 +77,9 @@ export function createCalendarProviderService(database: Database) {
     async state(principal: Principal) {
       trusted(principal);
       return database.transaction(principal.ownerId, async (tx) => ({
-        sources: await Promise.all(
-          (await calendarSources(tx, principal.ownerId)).map((row) =>
-            sourceState(tx, principal.ownerId, row),
-          ),
-        ),
+        // Listing sources must not decrypt an unrelated private feed. Only a
+        // claimed source needs its config, so one bad feed cannot block others.
+        sources: await calendarSources(tx, principal.ownerId),
         intents: cleanRows(
           (
             await tx.query<Input>(
@@ -158,7 +145,7 @@ export function createCalendarProviderService(database: Database) {
               replayed: true,
               data: {
                 ...data,
-                source: await sourceState(tx, principal.ownerId, source),
+                source: sourceState(principal.ownerId, source),
               },
             };
           }
@@ -320,9 +307,24 @@ async function providerAction(
         source.status === "disconnected" ||
         (source.lease_until &&
           Date.parse(String(source.lease_until)) > Date.now()) ||
+        (input.force !== true && sourceRecentlySynchronized(source)) ||
         (backoffActive && (input.force !== true || providerBackoff))
       )
         return { claimed: false };
+      let providerSource: ReturnType<typeof sourceState>;
+      try {
+        providerSource = sourceState(owner, source);
+      } catch {
+        await tx.query(
+          "UPDATE calendar_sources SET status='error',last_error='SOURCE_CONFIG_UNREADABLE',next_attempt_at=now()+interval '1 hour',updated_at=now() WHERE owner_id=$1 AND source_id=$2",
+          [owner, source.source_id],
+        );
+        return {
+          claimed: false,
+          state: "error",
+          reason: "SOURCE_CONFIG_UNREADABLE",
+        };
+      }
       const leaseId = id("LEASE");
       await tx.query(
         "UPDATE calendar_sources SET lease_id=$3,lease_until=now()+interval '120 seconds',status='syncing',updated_at=now() WHERE owner_id=$1 AND source_id=$2",
@@ -333,7 +335,7 @@ async function providerAction(
         lease_id: leaseId,
         generation: source.generation,
         cache_revision: source.cache_revision,
-        source: await sourceState(tx, owner, source),
+        source: providerSource,
       };
     }
     if (
@@ -469,6 +471,26 @@ async function providerAction(
         Date.parse(String(intent.next_attempt_at)) > Date.now())
     )
       return { claimed: false };
+    let providerSource: ReturnType<typeof sourceState>;
+    try {
+      providerSource = sourceState(owner, source);
+    } catch {
+      // The intent has not been sent. Keep it pending so a repaired source can
+      // resume the same idempotent operation; isolate this failure from others.
+      await tx.query(
+        "UPDATE calendar_mutation_intents SET last_error='SOURCE_CONFIG_UNREADABLE',next_attempt_at=now()+interval '1 hour',revision=revision+1,updated_at=now() WHERE owner_id=$1 AND intent_id=$2",
+        [owner, intent.intent_id],
+      );
+      await tx.query(
+        "UPDATE calendar_sources SET status='error',last_error='SOURCE_CONFIG_UNREADABLE',next_attempt_at=now()+interval '1 hour',updated_at=now() WHERE owner_id=$1 AND source_id=$2",
+        [owner, source.source_id],
+      );
+      return {
+        claimed: false,
+        state: "pending",
+        reason: "SOURCE_CONFIG_UNREADABLE",
+      };
+    }
     const leaseId = id("LEASE"),
       priorState =
         intent.state === "sending" ? "uncertain" : String(intent.state);
@@ -480,7 +502,7 @@ async function providerAction(
       claimed: true,
       lease_id: leaseId,
       generation: source.generation,
-      source: await sourceState(tx, owner, source),
+      source: providerSource,
       intent: {
         ...intent,
         operation_id: intent.intent_id,

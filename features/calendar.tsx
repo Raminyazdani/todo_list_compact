@@ -522,8 +522,8 @@ export function CalendarView({
       {!!events.data?.source_warnings?.length && (
         <p role="status" className="warning">
           {t(
-            "بخشی از منابع خارجی قابل خواندن نیست؛ رویدادهای محلی حفظ شده‌اند. اتصال‌ها و وضعیت منبع را در تنظیمات بررسی کن.",
-            "Some external sources could not be read; local events remain available. Check connections and source status in Settings.",
+            "تازگی، دسترسی یا پوشش بعضی منابع مشکل دارد. رویدادهای نمایش‌داده‌شده از داده‌های موجودند؛ زمان آخرین دریافت و وضعیت هر منبع را در بالای تقویم بررسی کن.",
+            "Some sources have a freshness, access, or coverage issue. Displayed events use available data; check each source's last sync and status above the calendar.",
           )}
         </p>
       )}
