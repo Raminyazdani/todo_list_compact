@@ -1,6 +1,9 @@
 {
   "calendar_freshness_parent_completion_2026_10_26": {
-    "status": "implementation_verified_locally_ci_and_live_pending",
+    "status": "released_ci_and_live_health_verified_foreground_refresh_pending",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/17",
+    "release_commit": "4e8545547dcaa424457b1f4903ff5514df21ad26",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/40415815279",
     "scope": "Bounded foreground refresh and per-source calendar diagnostics; independent source failure isolation; owner-bound calendar operation pagination; parent Done gate for all unfinished descendants across shared UI/REST/MCP service.",
     "baseline_observed": {
       "production_cache": "Read-only Production SQL showed two enabled Google sources connected with complete coverage and no recorded source errors, but their last successful sync was older than the 10-minute cache freshness threshold while Home did not refresh sources.",
@@ -20,11 +23,17 @@
       "coverage": "PASS 676 tests, 30 explicit skips, 90.97% statements, 86.79% branches, 93.2% functions and 91.51% lines.",
       "production_build": "PASS Next.js 16.4.3 optimized build."
     },
+    "release_verification": {
+      "ci": "PASS pull request checks for the release code, including PostgreSQL integration, authenticated browser/MCP, HTTP security and Vercel Preview.",
+      "production": "PASS Vercel Production deployment is READY and the canonical alias resolves to the release commit; public /api/health reports ok and authenticated Life OS MCP system_health reports ok with PostgreSQL connected and backup verified.",
+      "calendar_source_readback": "Read-only Production SQL after release: two enabled Google sources are connected, no source errors are recorded, and neither has refreshed within 10 minutes; both last succeeded at 2026-10-26 17:06 UTC. No foreground visit was observed after release.",
+      "task_data": "The only pre-existing Done parent with incomplete children found in a read-only Production consistency check was an explicitly synthetic graph fixture; no real task data was changed."
+    },
     "pending": [
-      "Isolated CI PostgreSQL, authenticated browser/MCP and HTTP security run for the exact proposed commit.",
-      "Production deployment, canonical health/MCP readback and foreground calendar refresh observation after release."
+      "Observe authenticated Production foreground calendar refresh and updated per-source status after an app visit. Windows Computer Use stopped this turn because it could not establish the browser URL with sufficient policy confidence; no further browser input was attempted.",
+      "Life OS ChatGPT MCP connection has task/project scope only and rejects calendar reads without reauthentication for calendar:read; the connection was not expanded."
     ],
-    "known_limit": "Foreground sync intentionally does not run when the application is closed. A newly connected Google account with no discovered source is first discovered from the Calendar workspace or explicit refresh, and Home states when no external source is active."
+    "known_limit": "Foreground sync intentionally does not run when the application is closed. Until an app visit triggers it, the two Production Google caches can remain stale. A newly connected Google account with no discovered source is first discovered from the Calendar workspace or explicit refresh, and Home states when no external source is active."
   },
   "life_os_focus_and_navigation_2026_10_26": {
     "status": "released_live_api_mcp_verified_browser_session_pending",
