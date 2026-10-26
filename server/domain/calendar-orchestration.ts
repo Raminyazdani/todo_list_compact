@@ -9,7 +9,10 @@ import {
   type CalendarProviderSource,
 } from "../integrations/calendar-provider";
 import { createCalendarProviderService } from "./calendar-provider-service";
+import { sourceRecentlySynchronized } from "./calendar-cache";
 import { id, object, type Input } from "./core";
+
+const foregroundSyncs = new Map<string, Promise<Input>>();
 
 /** Provider I/O is deliberately called only AFTER the canonical transaction. */
 export async function runCalendarSynchronization(
@@ -17,18 +20,106 @@ export async function runCalendarSynchronization(
   principal: Principal,
   input: Input = {},
 ) {
+  if (input.force === true)
+    return runCalendarSynchronizationOnce(database, principal, input);
+  // In-process coalescing avoids duplicate discovery requests from simultaneous
+  // foreground listeners. Durable source leases still protect other instances.
+  const key = JSON.stringify([
+    principal.ownerId,
+    principal.actorId,
+    principal.channel,
+    [...(Array.isArray(input.source_ids) ? input.source_ids : [])].sort(),
+  ]);
+  const existing = foregroundSyncs.get(key);
+  if (existing) return existing;
+  const run = runCalendarSynchronizationOnce(database, principal, input);
+  foregroundSyncs.set(key, run);
+  try {
+    return await run;
+  } finally {
+    if (foregroundSyncs.get(key) === run) foregroundSyncs.delete(key);
+  }
+}
+
+async function runCalendarSynchronizationOnce(
+  database: Database,
+  principal: Principal,
+  input: Input,
+) {
   const provider = createCalendarProviderService(database),
     trusted: Principal = { ...principal, channel: "system" },
     warnings: string[] = [];
+  const known = (
+      await database.query<{
+        source_id: string;
+        provider: string;
+        status: string;
+        last_error: string | null;
+        next_attempt_at: string | null;
+        last_success_at: string | null;
+        coverage: unknown;
+      }>(
+        "SELECT source_id,provider,status,last_error,next_attempt_at,last_success_at,coverage FROM calendar_sources WHERE owner_id=$1 AND enabled=true",
+        [principal.ownerId],
+      )
+    ).rows,
+    requestedIds = Array.isArray(input.source_ids) ? input.source_ids : null,
+    selectedKnown = requestedIds
+      ? known.filter((source) => requestedIds.includes(source.source_id))
+      : known;
+  if (input.force !== true) {
+    if (
+      selectedKnown.length > 0 &&
+      selectedKnown.every(sourceRecentlySynchronized) &&
+      (!requestedIds || selectedKnown.length === requestedIds.length)
+    ) {
+      await deliverCalendarChanges(database, principal);
+      return {
+        sources: selectedKnown.map((source) => ({
+          source_id: source.source_id,
+          state: "deferred",
+          reason: "RECENTLY_SYNCED",
+        })),
+        warnings,
+      };
+    }
+  }
+  const selectedGoogle = selectedKnown.filter(
+      (source) => source.provider === "google_calendar",
+    ),
+    requestedKnownSourcesOnly =
+      !requestedIds || selectedKnown.length === requestedIds.length,
+    providerBackoff =
+      selectedGoogle.length > 0 &&
+      requestedKnownSourcesOnly &&
+      selectedGoogle.every(
+        (source) =>
+          ["SOURCE_RATE_LIMITED", "SOURCE_RETRY_AFTER"].includes(
+            source.last_error ?? "",
+          ) &&
+          !!source.next_attempt_at &&
+          Date.parse(String(source.next_attempt_at)) > Date.now(),
+      ),
+    icalOnlySelection =
+      !!requestedIds &&
+      requestedKnownSourcesOnly &&
+      selectedKnown.length > 0 &&
+      selectedGoogle.length === 0;
+  if (providerBackoff)
+    warnings.push(
+      ...new Set(selectedGoogle.map((source) => String(source.last_error))),
+    );
   let discoveryError: ReturnType<typeof calendarProviderError> | null = null;
-  try {
-    const sources = await discoverGoogleCalendars(principal);
-    await provider.execute("discover", { sources }, trusted, {
-      idempotencyKey: id("discover"),
-    });
-  } catch (error) {
-    discoveryError = calendarProviderError(error);
-    warnings.push(discoveryError.code);
+  if (!providerBackoff && !icalOnlySelection) {
+    try {
+      const sources = await discoverGoogleCalendars(principal);
+      await provider.execute("discover", { sources }, trusted, {
+        idempotencyKey: id("discover"),
+      });
+    } catch (error) {
+      discoveryError = calendarProviderError(error);
+      warnings.push(discoveryError.code);
+    }
   }
   const state = await provider.state(trusted),
     selected = Array.isArray(input.source_ids) ? input.source_ids : null,
@@ -53,7 +144,11 @@ export async function runCalendarSynchronization(
         ).data,
       );
       if (!claim.claimed) {
-        results.push({ source_id: sourceId, state: "deferred" });
+        results.push({
+          source_id: sourceId,
+          state: claim.state ?? "deferred",
+          reason: claim.reason ?? null,
+        });
         continue;
       }
       const finish: Input = {
@@ -91,6 +186,7 @@ export async function runCalendarSynchronization(
       source_id: result.source_id,
       state: result.state ?? "deferred",
       ignored: result.ignored ?? false,
+      ...(result.reason ? { reason: result.reason } : {}),
     })),
     warnings,
   };

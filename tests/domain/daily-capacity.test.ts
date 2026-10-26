@@ -215,19 +215,58 @@ describe("read-only daily and weekly capacity preview", () => {
     );
     const incomplete = await preview({ date: "2026-10-25", period: "day" });
     expect(incomplete).toMatchObject({
-      calendar: { complete: false, fresh: false },
+      calendar: { complete: false, fresh: false, source_count: 1 },
       busy_coverage: "partial",
       known_busy_minutes: 270,
     });
     expect(incomplete.calendar.source_warnings).toContain(
       "پوشش رویدادهای «Synthetic incomplete source» ناقص است.",
     );
-    expect(incomplete.calendar.source_issues).toContainEqual({
-      source_title: "Synthetic incomplete source",
-      code: "SOURCE_COVERAGE_INCOMPLETE",
-    });
+    expect(incomplete.calendar.source_issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source_title: "Synthetic incomplete source",
+          code: "SOURCE_COVERAGE_INCOMPLETE",
+          status: "pending",
+          last_success_at: null,
+          next_attempt_at: null,
+          action: "refresh",
+        }),
+      ]),
+    );
     expect(incomplete.calendar.source_warnings.join(" ")).not.toContain(
       sourceId,
+    );
+    await db.query(
+      "UPDATE calendar_sources SET status='connected',coverage='{\"complete\":true}'::jsonb,last_success_at=now()-interval '11 minutes' WHERE owner_id=$1 AND source_id=$2",
+      [owner, sourceId],
+    );
+    const stale = await preview({ date: "2026-10-25", period: "day" });
+    expect(stale.calendar.source_issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "SOURCE_STALE",
+          status: "connected",
+          action: "refresh",
+          last_success_at: expect.any(String),
+          next_attempt_at: null,
+        }),
+      ]),
+    );
+    await db.query(
+      "UPDATE calendar_sources SET status='error',last_error='SOURCE_RATE_LIMITED',next_attempt_at=now()+interval '5 minutes' WHERE owner_id=$1 AND source_id=$2",
+      [owner, sourceId],
+    );
+    const limited = await preview({ date: "2026-10-25", period: "day" });
+    expect(limited.calendar.source_issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "SOURCE_RATE_LIMITED",
+          status: "error",
+          action: "wait",
+          next_attempt_at: expect.any(String),
+        }),
+      ]),
     );
   });
 

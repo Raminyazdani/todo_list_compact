@@ -1195,10 +1195,39 @@ export async function domainQuery(
   if (operation === "task_completion_impact_preview") {
     const task = taskFromSnapshot(data, text(input, "task_id"));
     const reachable = downstreamIds(data, task.task_id);
+    const children = new Map<string, typeof data.tasks>();
+    for (const item of data.tasks) {
+      if (!item.parent_task_id) continue;
+      const list = children.get(item.parent_task_id) ?? [];
+      list.push(item);
+      children.set(item.parent_task_id, list);
+    }
+    const pending = [...(children.get(task.task_id) ?? [])],
+      seen = new Set<string>(),
+      incompleteDescendants: typeof data.tasks = [];
+    while (pending.length) {
+      const item = pending.pop()!;
+      if (seen.has(item.task_id)) continue;
+      seen.add(item.task_id);
+      if (item.status !== "Done") incompleteDescendants.push(item);
+      pending.push(...(children.get(item.task_id) ?? []));
+    }
     return {
       task_id: task.task_id,
       revision: task.revision,
       blocked_by: task.blocked_by,
+      subtask_gate: {
+        all_descendants_done: incompleteDescendants.length === 0,
+        incomplete_descendant_count: incompleteDescendants.length,
+        incomplete_descendants: incompleteDescendants
+          .slice(0, 10)
+          .map((item) => ({
+            task_id: item.task_id,
+            title: item.title,
+            status: item.status,
+            archived: item.archived_at !== null,
+          })),
+      },
       unblocks: data.tasks
         .filter(
           (t) =>

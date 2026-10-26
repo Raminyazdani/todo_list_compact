@@ -172,6 +172,9 @@ function WorkspaceContent({
     input: Record<string, unknown>;
     revision?: number;
     message: string;
+    reason?: string;
+    incompleteCount?: number;
+    incompleteDescendants?: { taskId: string; title: string; status: string }[];
   } | null>(null);
   const [saving, setSaving] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -216,9 +219,36 @@ function WorkspaceContent({
         showToast(t("تغییر ذخیره شد", "Change saved"));
         return result;
       } catch (error) {
-        if (error instanceof ApiError && error.code === "TASK_BLOCKED")
-          setBlocked({ name, input, revision, message: error.message });
-        else
+        if (error instanceof ApiError && error.code === "TASK_BLOCKED") {
+          const details = error.details;
+          const descendants = Array.isArray(details.incomplete_descendants)
+            ? details.incomplete_descendants
+                .filter(
+                  (row) =>
+                    row &&
+                    typeof row === "object" &&
+                    typeof row.task_id === "string" &&
+                    typeof row.title === "string",
+                )
+                .map((row) => ({
+                  taskId: String(row.task_id),
+                  title: String(row.title),
+                  status: String(row.status ?? ""),
+                }))
+            : [];
+          setBlocked({
+            name,
+            input,
+            revision,
+            message: error.message,
+            reason: String(details.reason ?? ""),
+            incompleteCount:
+              typeof details.incomplete_descendant_count === "number"
+                ? details.incomplete_descendant_count
+                : undefined,
+            incompleteDescendants: descendants,
+          });
+        } else
           showToast(
             error instanceof Error ? error.message : String(error),
             true,
@@ -695,62 +725,112 @@ function WorkspaceContent({
           <pre className="preview-json">{JSON.stringify(preview, null, 2)}</pre>
         </Modal>
         <Modal
-          title={t("پیش‌نیازهای ناتمام", "Unfinished prerequisites")}
+          title={
+            blocked?.reason === "SUBTASKS_INCOMPLETE"
+              ? t("زیرکارهای ناتمام", "Unfinished subtasks")
+              : t("پیش‌نیازهای ناتمام", "Unfinished prerequisites")
+          }
           open={!!blocked}
           onOpenChange={(value) => {
             if (!value) setBlocked(null);
           }}
         >
-          {blocked && (
-            <>
-              <p>{blocked.message}</p>
-              <p className="warning">
+          {blocked?.reason === "SUBTASKS_INCOMPLETE" ? (
+            <div>
+              <p>
                 {t(
-                  "ادامه دادن با پیش‌نیاز ناتمام فقط با تصمیم صریح شما و ثبت دلیل ممکن است.",
-                  "Proceeding with unfinished prerequisites requires your explicit decision and a recorded reason.",
+                  "برای تکمیل کار مادر، ابتدا همهٔ زیرکارهای آن را انجام بده. ثبت استثنا برای این قاعده ممکن نیست.",
+                  "Complete every descendant subtask before marking the parent Done. This rule has no override.",
                 )}
               </p>
-              <form
-                className="form-grid"
-                onSubmit={async (event) => {
-                  event.preventDefault();
-                  const reason = new FormData(event.currentTarget).get(
-                    "reason",
-                  );
-                  const result = await action(
-                    blocked.name,
-                    { ...blocked.input, override_reason: reason },
-                    blocked.revision,
-                  );
-                  if (result) {
-                    window.dispatchEvent(
-                      new CustomEvent("lifeos:blocked-task-ack", {
-                        detail: {
-                          taskId: String(blocked.input.task_id),
-                          status:
-                            blocked.name === "task_complete"
-                              ? "Done"
-                              : String(blocked.input.status),
-                          revision: blocked.revision,
-                          result,
-                        },
-                      }),
-                    );
-                    setBlocked(null);
-                  }
-                }}
-              >
-                <Field label={t("دلیل تصمیم شما", "Your reason")}>
-                  <textarea required name="reason" minLength={3} />
-                </Field>
-                <Button variant="danger" type="submit">
+              {blocked.incompleteCount !== undefined && (
+                <p className="small muted">
                   {t(
-                    "تأیید استثنا و ثبت در تاریخچه",
-                    "Confirm override and record in history",
+                    `${blocked.incompleteCount} زیرکار ناتمام`,
+                    `${blocked.incompleteCount} unfinished subtasks`,
                   )}
-                </Button>
-              </form>
-            </>
+                </p>
+              )}
+              {!!blocked.incompleteDescendants?.length && (
+                <ul>
+                  {blocked.incompleteDescendants.map((descendant) => (
+                    <li key={descendant.taskId}>
+                      <Button
+                        onClick={() => {
+                          setTaskId(descendant.taskId);
+                          setBlocked(null);
+                        }}
+                      >
+                        {descendant.title}
+                      </Button>{" "}
+                      <span className="small muted">{descendant.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {blocked.incompleteCount !== undefined &&
+                blocked.incompleteCount >
+                  (blocked.incompleteDescendants?.length ?? 0) && (
+                  <p className="small muted">
+                    {t(
+                      "موارد دیگر را در فهرست کارها ببین.",
+                      "See the remaining subtasks in the task list.",
+                    )}
+                  </p>
+                )}
+            </div>
+          ) : (
+            blocked && (
+              <>
+                <p>{blocked.message}</p>
+                <p className="warning">
+                  {t(
+                    "ادامه دادن با پیش‌نیاز ناتمام فقط با تصمیم صریح شما و ثبت دلیل ممکن است.",
+                    "Proceeding with unfinished prerequisites requires your explicit decision and a recorded reason.",
+                  )}
+                </p>
+                <form
+                  className="form-grid"
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    const reason = new FormData(event.currentTarget).get(
+                      "reason",
+                    );
+                    const result = await action(
+                      blocked.name,
+                      { ...blocked.input, override_reason: reason },
+                      blocked.revision,
+                    );
+                    if (result) {
+                      window.dispatchEvent(
+                        new CustomEvent("lifeos:blocked-task-ack", {
+                          detail: {
+                            taskId: String(blocked.input.task_id),
+                            status:
+                              blocked.name === "task_complete"
+                                ? "Done"
+                                : String(blocked.input.status),
+                            revision: blocked.revision,
+                            result,
+                          },
+                        }),
+                      );
+                      setBlocked(null);
+                    }
+                  }}
+                >
+                  <Field label={t("دلیل تصمیم شما", "Your reason")}>
+                    <textarea required name="reason" minLength={3} />
+                  </Field>
+                  <Button variant="danger" type="submit">
+                    {t(
+                      "تأیید استثنا و ثبت در تاریخچه",
+                      "Confirm override and record in history",
+                    )}
+                  </Button>
+                </form>
+              </>
+            )
           )}
         </Modal>
         {toast && (

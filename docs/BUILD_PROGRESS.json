@@ -1,4 +1,31 @@
 {
+  "calendar_freshness_parent_completion_2026_10_26": {
+    "status": "implementation_verified_locally_ci_and_live_pending",
+    "scope": "Bounded foreground refresh and per-source calendar diagnostics; independent source failure isolation; owner-bound calendar operation pagination; parent Done gate for all unfinished descendants across shared UI/REST/MCP service.",
+    "baseline_observed": {
+      "production_cache": "Read-only Production SQL showed two enabled Google sources connected with complete coverage and no recorded source errors, but their last successful sync was older than the 10-minute cache freshness threshold while Home did not refresh sources.",
+      "production_runtime_error_group": "Vercel 7-day grouped errors showed 33 pg concurrent client.query deprecation warnings on commands. The source-state transaction issued parallel reads for multiple sources.",
+      "private_data": "Only sanitized source count/status/timing and grouped error code were inspected; no private source identifiers, feed URLs, event rows, task titles, tokens, or secrets are recorded here."
+    },
+    "implemented": [
+      "Daily Focus refreshes active calendar sources on foreground entry/return/5-minute use with bounded duplicate suppression, read-after-refresh, manual retry and exact source issue cause, last success and retry eligibility. No-source and reconnect-only states avoid futile automatic writes.",
+      "Calendar view retains prior cache during failures, shows source-specific status and persistent refresh errors, and no longer describes stale-but-readable data as unreadable.",
+      "Provider sync avoids unnecessary repeated Google discovery, observes provider backoff, keeps iCal independent, and isolates unreadable encrypted source configuration and pending intents from healthy sources.",
+      "Calendar status honors selected source IDs and unavailable selections; operation status uses owner-bound stable keyset pages including results beyond 200.",
+      "All direct and nested descendants must be Done before a parent can transition to Done; override cannot bypass this gate. Batch and impact previews report it, while write-only clients receive no descendant metadata."
+    ],
+    "local_verification": {
+      "format_lint_type_security": "PASS Prettier, ESLint, TypeScript and public-safety scan across 369 public files with zero failures.",
+      "dependency_audit": "PASS no high-severity production dependency finding; 2 low and 4 moderate reported.",
+      "coverage": "PASS 676 tests, 30 explicit skips, 90.97% statements, 86.79% branches, 93.2% functions and 91.51% lines.",
+      "production_build": "PASS Next.js 16.4.3 optimized build."
+    },
+    "pending": [
+      "Isolated CI PostgreSQL, authenticated browser/MCP and HTTP security run for the exact proposed commit.",
+      "Production deployment, canonical health/MCP readback and foreground calendar refresh observation after release."
+    ],
+    "known_limit": "Foreground sync intentionally does not run when the application is closed. A newly connected Google account with no discovered source is first discovered from the Calendar workspace or explicit refresh, and Home states when no external source is active."
+  },
   "life_os_focus_and_navigation_2026_10_26": {
     "status": "released_live_api_mcp_verified_browser_session_pending",
     "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/16",

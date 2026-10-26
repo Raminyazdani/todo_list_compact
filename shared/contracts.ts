@@ -148,11 +148,19 @@ export interface DailyCapacityPreviewDTO {
   };
   calendar: {
     access: "granted" | "not_granted";
+    source_count: number | null;
     busy_minutes: number | null;
     complete: boolean | null;
     fresh: boolean | null;
     source_warnings: string[];
-    source_issues: { source_title: string; code: string }[];
+    source_issues: {
+      source_title: string;
+      code: string;
+      status?: string;
+      last_success_at?: string | null;
+      next_attempt_at?: string | null;
+      action?: "refresh" | "reconnect" | "wait" | "inspect";
+    }[];
   };
   work: {
     access: "granted" | "not_granted";
@@ -392,6 +400,8 @@ export interface CalendarSourceDTO {
   status: string;
   last_success_at: string | null;
   last_error: string | null;
+  fresh?: boolean;
+  next_attempt_at?: string | null;
   coverage: Record<string, JsonValue>;
 }
 export interface TimeDraftDTO {

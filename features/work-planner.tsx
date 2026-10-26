@@ -167,8 +167,8 @@ export function WorkPlanner({
       return t("همگام‌سازی در جریان است.", "Synchronization is in progress.");
     if (code === "SOURCE_RATE_LIMITED")
       return t(
-        "سرویس تقویم موقتاً درخواست‌ها را محدود کرده است؛ برنامه بعداً دوباره تلاش می‌کند.",
-        "The calendar service is temporarily rate limiting requests; the app will retry.",
+        "سرویس تقویم موقتاً درخواست‌ها را محدود کرده است؛ هنگام استفاده از برنامه دوباره بررسی می‌شود.",
+        "The calendar service is temporarily rate limiting requests; the app will check again while open.",
       );
     if (code === "GOOGLE_CALENDAR_API_NOT_ENABLED")
       return t(

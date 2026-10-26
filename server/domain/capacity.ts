@@ -20,6 +20,7 @@ interface Availability {
   complete: boolean;
   fresh: boolean;
   source_warnings: string[];
+  source_coverage?: unknown[];
 }
 
 /** Union clipped intervals: overlapping sources count only once. */
@@ -55,34 +56,104 @@ async function readableCalendarWarnings(
   warnings: string[],
 ): Promise<{
   messages: string[];
-  issues: { source_title: string; code: string }[];
+  issues: {
+    source_title: string;
+    code: string;
+    status?: string;
+    last_success_at?: string | null;
+    next_attempt_at?: string | null;
+    action?: "refresh" | "reconnect" | "wait" | "inspect";
+  }[];
 }> {
   if (!warnings.length) return { messages: [], issues: [] };
-  const sources = await tx.query<{ source_id: string; title: string }>(
-      "SELECT source_id,title FROM calendar_sources WHERE owner_id=$1",
+  const sources = await tx.query<{
+      source_id: string;
+      title: string;
+      status: string;
+      last_success_at: string | null;
+      next_attempt_at: string | null;
+    }>(
+      "SELECT source_id,title,status,last_success_at,next_attempt_at FROM calendar_sources WHERE owner_id=$1",
       [ownerId],
     ),
-    names = new Map(
-      sources.rows.map((source) => [source.source_id, source.title]),
-    );
+    byId = new Map(sources.rows.map((source) => [source.source_id, source]));
+  const known = new Set([
+    "SOURCE_COVERAGE_INCOMPLETE",
+    "SOURCE_NOT_SYNCED",
+    "SOURCE_SYNC_IN_PROGRESS",
+    "SOURCE_STALE",
+    "CACHE_EXPANSION_FAILED",
+    "ACCESS_REVOKED",
+    "SOURCE_READ_FAILED",
+    "SOURCE_RATE_LIMITED",
+    "SOURCE_RETRY_AFTER",
+    "GOOGLE_GRANT_REQUIRED",
+    "GOOGLE_GRANT_REVOKED",
+    "GOOGLE_REFRESH_TOKEN_EXPIRED",
+    "GOOGLE_CALENDAR_PERMISSION_MISSING",
+    "GOOGLE_CALENDAR_API_NOT_ENABLED",
+    "GOOGLE_TOKEN_UNAVAILABLE",
+    "GOOGLE_SOURCE_ACCESS_REMOVED",
+    "ICAL_TIMEOUT",
+    "ICAL_HTTP_ERROR",
+    "ICAL_FEED_TOO_LARGE",
+    "SOURCE_CONFIG_UNREADABLE",
+  ]);
+  const safeDate = (value: unknown) => {
+    const parsed = Date.parse(String(value));
+    return value && Number.isFinite(parsed)
+      ? new Date(parsed).toISOString()
+      : null;
+  };
   const issues = warnings.map((warning) => {
     if (warning === "SELECTED_SOURCE_UNAVAILABLE")
-      return { source_title: "", code: "SELECTED_SOURCE_UNAVAILABLE" };
+      return {
+        source_title: "",
+        code: "SELECTED_SOURCE_UNAVAILABLE",
+        action: "inspect" as const,
+      };
     const separator = warning.indexOf(":"),
       sourceId = separator < 0 ? "" : warning.slice(0, separator),
-      code = separator < 0 ? warning : warning.slice(separator + 1),
-      title = names.get(sourceId) ?? "منبع تقویم";
-    const known = [
-      "SOURCE_COVERAGE_INCOMPLETE",
-      "SOURCE_NOT_SYNCED",
-      "SOURCE_SYNC_IN_PROGRESS",
-      "SOURCE_STALE",
-      "CACHE_EXPANSION_FAILED",
-      "ACCESS_REVOKED",
-    ];
+      rawCode = separator < 0 ? warning : warning.slice(separator + 1),
+      code = known.has(rawCode)
+        ? rawCode
+        : rawCode.startsWith("ICAL_TRANSPORT_")
+          ? "ICAL_TRANSPORT_ERROR"
+          : "SOURCE_ERROR",
+      source = byId.get(sourceId),
+      action = [
+        "ACCESS_REVOKED",
+        "GOOGLE_GRANT_REQUIRED",
+        "GOOGLE_GRANT_REVOKED",
+        "GOOGLE_REFRESH_TOKEN_EXPIRED",
+        "GOOGLE_CALENDAR_PERMISSION_MISSING",
+        "GOOGLE_SOURCE_ACCESS_REMOVED",
+      ].includes(code)
+        ? ("reconnect" as const)
+        : [
+              "SOURCE_SYNC_IN_PROGRESS",
+              "SOURCE_RATE_LIMITED",
+              "SOURCE_RETRY_AFTER",
+            ].includes(code)
+          ? ("wait" as const)
+          : [
+                "CACHE_EXPANSION_FAILED",
+                "SOURCE_ERROR",
+                "SELECTED_SOURCE_UNAVAILABLE",
+                "GOOGLE_CALENDAR_API_NOT_ENABLED",
+                "ICAL_HTTP_ERROR",
+                "ICAL_FEED_TOO_LARGE",
+                "SOURCE_CONFIG_UNREADABLE",
+              ].includes(code)
+            ? ("inspect" as const)
+            : ("refresh" as const);
     return {
-      source_title: title,
-      code: known.includes(code) ? code : "SOURCE_ERROR",
+      source_title: source?.title ?? "منبع تقویم",
+      code,
+      status: source?.status ?? "unknown",
+      last_success_at: safeDate(source?.last_success_at),
+      next_attempt_at: safeDate(source?.next_attempt_at),
+      action,
     };
   });
   return {
@@ -99,6 +170,32 @@ async function readableCalendarWarnings(
           return `همگام‌سازی «${title}» هنوز کامل نشده است.`;
         case "SOURCE_STALE":
           return `اطلاعات «${title}» قدیمی است.`;
+        case "SOURCE_RATE_LIMITED":
+        case "SOURCE_RETRY_AFTER":
+          return `سرویس «${title}» فعلاً درخواست تازه را محدود کرده است.`;
+        case "GOOGLE_GRANT_REQUIRED":
+        case "GOOGLE_GRANT_REVOKED":
+        case "GOOGLE_REFRESH_TOKEN_EXPIRED":
+        case "GOOGLE_CALENDAR_PERMISSION_MISSING":
+          return `مجوز Google برای «${title}» نیاز به اتصال دوباره دارد.`;
+        case "GOOGLE_SOURCE_ACCESS_REMOVED":
+          return `تقویم «${title}» دیگر در حساب متصل در دسترس نیست.`;
+        case "GOOGLE_CALENDAR_API_NOT_ENABLED":
+          return `Google Calendar API برای «${title}» فعال نیست.`;
+        case "GOOGLE_TOKEN_UNAVAILABLE":
+          return `دریافت مجوز موقت Google برای «${title}» ناموفق بود.`;
+        case "ICAL_TIMEOUT":
+          return `دریافت فید «${title}» به‌موقع پاسخ نداد.`;
+        case "ICAL_HTTP_ERROR":
+          return `سرور فید «${title}» پاسخ موفق نداد.`;
+        case "ICAL_FEED_TOO_LARGE":
+          return `فید «${title}» از حد مجاز بزرگ‌تر است.`;
+        case "SOURCE_CONFIG_UNREADABLE":
+          return `تنظیمات منبع «${title}» قابل خواندن نیست؛ منبع را دوباره تنظیم کنید.`;
+        case "ICAL_TRANSPORT_ERROR":
+          return `ارتباط شبکه با فید «${title}» برقرار نشد.`;
+        case "SOURCE_READ_FAILED":
+          return `خواندن منبع «${title}» ناموفق بود؛ دادهٔ سالم قبلی حفظ شده است.`;
         case "CACHE_EXPANSION_FAILED":
           return `خواندن داده‌های ذخیره‌شدهٔ «${title}» ناموفق بود.`;
         case "ACCESS_REVOKED":
@@ -200,6 +297,7 @@ export async function dailyCapacityPreview(
     },
     calendar: {
       access: calendarAllowed ? "granted" : "not_granted",
+      source_count: calendar?.source_coverage?.length ?? 0,
       busy_minutes: calendar ? unionMinutes(calendar.busy, from, to) : null,
       complete: calendar?.complete ?? null,
       fresh: calendar?.fresh ?? null,
