@@ -761,17 +761,19 @@ test("row_smoke_global_settings_apply_to_all_parent_and_child_rows_and_persist_a
     await expect(
       field(second, child.task_id, "priority").getByRole("button"),
     ).toHaveCount(0);
-    await second.getByRole("button", { name: "tree", exact: true }).click();
+    await second
+      .getByRole("button", { name: /^(نمای درختی|Tree view)$/ })
+      .click();
     await expect(field(second, parent.task_id, "due_date")).toBeVisible();
     // Tree retains its own common layout; both levels use it.
     await expect(field(second, child.task_id, "due_date")).toBeVisible();
     const parentBranch = row(second, parent.task_id).locator("..");
     await parentBranch
-      .getByRole("button", { name: "Expand/collapse", exact: true })
+      .getByRole("button", { name: /^(Collapse branch|بستن شاخهٔ)/ })
       .click();
     await expect(row(second, child.task_id)).toHaveCount(0);
     await parentBranch
-      .getByRole("button", { name: "Expand/collapse", exact: true })
+      .getByRole("button", { name: /^(Expand branch|بازکردن شاخهٔ)/ })
       .click();
     await expect(row(second, child.task_id)).toBeVisible();
     await second

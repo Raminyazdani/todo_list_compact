@@ -2031,6 +2031,36 @@ html[data-theme="light"] .time-block.personal {
 .tree-row > .task-row {
   flex: 1;
 }
+.tree-row > .icon-button,
+.tree-toggle-spacer {
+  flex: 0 0 30px;
+}
+.tree-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--raised);
+}
+.tree-toolbar > span {
+  margin-inline-end: auto;
+}
+.tree-branch-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 14px 8px;
+  padding-inline-start: 44px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.tree-branch-summary .has-urgent {
+  color: var(--danger);
+}
 .graph-section {
   border: 1px solid var(--line);
   border-radius: 11px;

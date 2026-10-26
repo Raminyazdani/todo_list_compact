@@ -439,6 +439,26 @@ describe("Canonical graph and independent checklist invariants", () => {
       code: "DEPENDENCY_CYCLE",
     });
   });
+  it("reparent_rejects_hard_gate_between_new_ancestor_and_nested_child", async () => {
+    const newParent = await task("New parent"),
+      branch = await task("Branch"),
+      nestedChild = await task("Nested child", {
+        parent_task_id: branch.task_id,
+      });
+    await dependency(newParent, [nestedChild]);
+
+    await expect(
+      service.query(
+        "subtask_reparent_preview",
+        { task_id: branch.task_id, parent_task_id: newParent.task_id },
+        principal,
+      ),
+    ).rejects.toMatchObject({ code: "DEPENDENCY_CYCLE" });
+    expect((await get(branch.task_id)).parent_task_id).toBeNull();
+    expect((await get(nestedChild.task_id)).parent_task_id).toBe(
+      branch.task_id,
+    );
+  });
   it("template_clone_remaps_child_and_dependency_ids", async () => {
     const template = await exec("task_template_create", {
       title: "Synthetic branches",

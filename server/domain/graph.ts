@@ -46,8 +46,11 @@ export async function validateHierarchy(
       "HIERARCHY_DEPTH",
       "Maximum supported hierarchy depth is 12.",
     );
-  const children = await tx.query<{ depth: number }>(
-    `WITH RECURSIVE descendants(task_id,depth,path) AS (SELECT task_id,1,ARRAY[task_id] FROM tasks WHERE task_id=$1 AND owner_id=$2 UNION ALL SELECT t.task_id,d.depth+1,d.path||t.task_id FROM tasks t JOIN descendants d ON t.parent_task_id=d.task_id WHERE t.owner_id=$2 AND NOT t.task_id=ANY(d.path)) SELECT max(depth)::integer depth FROM descendants`,
+  const children = await tx.query<{
+    task_ids: string[] | null;
+    depth: number | null;
+  }>(
+    `WITH RECURSIVE descendants(task_id,depth,path) AS (SELECT task_id,1,ARRAY[task_id] FROM tasks WHERE task_id=$1 AND owner_id=$2 UNION ALL SELECT t.task_id,d.depth+1,d.path||t.task_id FROM tasks t JOIN descendants d ON t.parent_task_id=d.task_id WHERE t.owner_id=$2 AND NOT t.task_id=ANY(d.path)) SELECT array_agg(task_id) task_ids,max(depth)::integer depth FROM descendants`,
     [taskId, ownerId],
   );
   if (result.rows.length + (children.rows[0]?.depth ?? 1) > 12)
@@ -57,13 +60,15 @@ export async function validateHierarchy(
     );
   const data = await snapshot(tx, ownerId);
   const edges = data.dependencies.filter((e) => e.mode === "hard");
+  const subtree = new Set([taskId, ...(children.rows[0]?.task_ids ?? [])]);
+  const ancestors = new Set(result.rows.map((parent) => parent.task_id));
   if (
     edges.some(
       (e) =>
-        (e.dependent_task_id === taskId &&
-          result.rows.some((p) => p.task_id === e.prerequisite_task_id)) ||
-        (e.prerequisite_task_id === taskId &&
-          result.rows.some((p) => p.task_id === e.dependent_task_id)),
+        (subtree.has(e.dependent_task_id) &&
+          ancestors.has(e.prerequisite_task_id)) ||
+        (subtree.has(e.prerequisite_task_id) &&
+          ancestors.has(e.dependent_task_id)),
     )
   )
     throw new DomainError(

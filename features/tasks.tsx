@@ -501,19 +501,20 @@ function TaskExplorerContent({
         </div>
         <div className="icon-group">
           {[
-            ["list", List],
-            ["board", LayoutGrid],
-            ["tree", ListTree],
-            ["graph", Network],
-            ["timeline", GitBranch],
-          ].map(([value, Icon]) => {
+            ["list", List, t("نمای فهرستی", "List view")],
+            ["board", LayoutGrid, t("نمای ستونی", "Board view")],
+            ["tree", ListTree, t("نمای درختی", "Tree view")],
+            ["graph", Network, t("نمای گراف", "Graph view")],
+            ["timeline", GitBranch, t("نمای خط زمانی", "Timeline view")],
+          ].map(([value, Icon, label]) => {
             const IconComponent = Icon as typeof List;
             return (
               <button
                 key={String(value)}
                 className={view === value ? "active" : ""}
-                aria-label={String(value)}
-                title={String(value)}
+                aria-label={String(label)}
+                aria-pressed={view === value}
+                title={String(label)}
                 onClick={() => {
                   setView(String(value));
                   setActiveSavedViewId("");
@@ -943,7 +944,55 @@ function TaskTree({
   action: Action;
 }) {
   const { t } = useLocale();
-  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const [collapseAll, setCollapseAll] = useState(false);
+  const [branchOverrides, setBranchOverrides] = useState<
+    Record<string, boolean>
+  >({});
+  const taskIds = new Set(tasks.map((task) => task.task_id));
+  const parentIds = new Set(
+    tasks
+      .map((task) => task.parent_task_id)
+      .filter((id): id is string => id !== null && taskIds.has(id)),
+  );
+  const childrenByParent = new Map<string, TaskDTO[]>();
+  for (const task of tasks) {
+    if (!task.parent_task_id) continue;
+    const siblings = childrenByParent.get(task.parent_task_id) ?? [];
+    siblings.push(task);
+    childrenByParent.set(task.parent_task_id, siblings);
+  }
+  function branchSummary(id: string) {
+    const seen = new Set([id]);
+    const pending = [...(childrenByParent.get(id) ?? [])];
+    const summary = { total: 0, done: 0, urgent: 0 };
+    while (pending.length) {
+      const child = pending.pop()!;
+      if (seen.has(child.task_id)) continue;
+      seen.add(child.task_id);
+      summary.total++;
+      if (child.status === "Done") summary.done++;
+      if (
+        child.priority === "Urgent" &&
+        child.status !== "Done" &&
+        child.status !== "Cancelled" &&
+        !child.archived_at
+      )
+        summary.urgent++;
+      pending.push(...(childrenByParent.get(child.task_id) ?? []));
+    }
+    return summary;
+  }
+  const isCollapsed = (id: string) => branchOverrides[id] ?? collapseAll;
+  function toggleBranch(id: string) {
+    setBranchOverrides((current) => ({
+      ...current,
+      [id]: !(current[id] ?? collapseAll),
+    }));
+  }
+  function setAllBranches(collapsed: boolean) {
+    setCollapseAll(collapsed);
+    setBranchOverrides({});
+  }
   function branch(parentId: string | null, depth: number): React.ReactNode {
     return tasks
       .filter(
@@ -952,34 +1001,54 @@ function TaskTree({
           (parentId === null &&
             !tasks.some((parent) => parent.task_id === task.parent_task_id)),
       )
-      .map((task) => (
-        <div key={task.task_id} style={{ marginInlineStart: depth ? 20 : 0 }}>
-          <div className="tree-row">
-            <button
-              className="icon-button"
-              aria-label="Expand/collapse"
-              onClick={() =>
-                setCollapsed((ids) =>
-                  ids.includes(task.task_id)
-                    ? ids.filter((id) => id !== task.task_id)
-                    : [...ids, task.task_id],
-                )
-              }
-            >
-              {collapsed.includes(task.task_id) ? (
-                <ChevronLeft size={16} />
+      .map((task) => {
+        const hasVisibleChildren = parentIds.has(task.task_id);
+        const collapsed = isCollapsed(task.task_id);
+        const summary = hasVisibleChildren ? branchSummary(task.task_id) : null;
+        return (
+          <div key={task.task_id} style={{ marginInlineStart: depth ? 20 : 0 }}>
+            <div className="tree-row">
+              {hasVisibleChildren ? (
+                <button
+                  className="icon-button"
+                  aria-label={`${collapsed ? t("بازکردن شاخهٔ", "Expand branch") : t("بستن شاخهٔ", "Collapse branch")} ${task.title}`}
+                  aria-expanded={!collapsed}
+                  onClick={() => toggleBranch(task.task_id)}
+                >
+                  {collapsed ? (
+                    <ChevronLeft size={16} />
+                  ) : (
+                    <ChevronDown size={16} />
+                  )}
+                </button>
               ) : (
-                <ChevronDown size={16} />
+                <span className="tree-toggle-spacer" aria-hidden="true" />
               )}
-            </button>
-            <TaskRow task={task} onOpen={onOpen} onAction={action} />
-          </div>
-          {!collapsed.includes(task.task_id) &&
-            depth < 12 &&
-            branch(task.task_id, depth + 1)}
-          {!collapsed.includes(task.task_id) &&
-            depth >= 12 &&
-            tasks.some((child) => child.parent_task_id === task.task_id) && (
+              <TaskRow task={task} onOpen={onOpen} onAction={action} />
+            </div>
+            {summary && (
+              <div
+                className="tree-branch-summary"
+                role="note"
+                aria-label={t(
+                  `در این صفحه: ${summary.total} زیرکار، ${summary.done} انجام‌شده، ${summary.urgent} فوریِ باز`,
+                  `On this page: ${summary.total} subtasks, ${summary.done} done, ${summary.urgent} open urgent`,
+                )}
+              >
+                <span>
+                  {summary.total}{" "}
+                  {t("زیرکار در این صفحه", "subtasks on this page")}
+                </span>
+                <span>
+                  {summary.done} {t("انجام‌شده", "done")}
+                </span>
+                <span className={summary.urgent > 0 ? "has-urgent" : ""}>
+                  {summary.urgent} {t("فوریِ باز", "open urgent")}
+                </span>
+              </div>
+            )}
+            {!collapsed && depth < 12 && branch(task.task_id, depth + 1)}
+            {!collapsed && depth >= 12 && hasVisibleChildren && (
               <Button onClick={() => onOpen(task.task_id)}>
                 {t(
                   "سطوح عمیق‌تر را از بخش زیرکارهای این کار باز کن",
@@ -987,11 +1056,30 @@ function TaskTree({
                 )}
               </Button>
             )}
-        </div>
-      ));
+          </div>
+        );
+      });
   }
   return (
     <div className="task-list">
+      <div className="tree-toolbar">
+        <span className="small muted">
+          {parentIds.size} {t("شاخه", "branches")} ·{" "}
+          {t("فقط کارهای این صفحه", "Only tasks on this page")}
+        </span>
+        <Button
+          disabled={parentIds.size === 0}
+          onClick={() => setAllBranches(true)}
+        >
+          {t("بستن همهٔ شاخه‌های این صفحه", "Collapse all on this page")}
+        </Button>
+        <Button
+          disabled={parentIds.size === 0}
+          onClick={() => setAllBranches(false)}
+        >
+          {t("بازکردن همهٔ شاخه‌های این صفحه", "Expand all on this page")}
+        </Button>
+      </div>
       {tasks.some(
         (task) =>
           task.parent_task_id &&
