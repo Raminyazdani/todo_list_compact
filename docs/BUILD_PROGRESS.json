@@ -1,4 +1,23 @@
 {
+  "task_tree_organization_2026_10_26": {
+    "status": "released_live_mcp_verified",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/15",
+    "release_commit": "76ee91c5317865487faed9383d925317df6e5660",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/40342744774",
+    "observed": {
+      "live_data": "Owner-bound MCP created 6 major parent tasks, previewed and committed 15 child moves, and corrected 1 clear project assignment. All 58 prior non-archived tasks were preserved without status, date, or dependency changes. Final readback: 64 non-archived tasks, 25 roots, 0 missing parents.",
+      "ui": "Tree page has page-scoped expand/collapse-all controls, visible descendant/Done/open-Urgent summaries, and localized accessible view names. Shared row field settings remain view-wide.",
+      "domain": "Subtree reparent validation rejects hard dependency conflicts involving nested descendants and new ancestors.",
+      "local_checks": "PASS format, typecheck, lint, security scan, and 39 graph domain tests.",
+      "ci": "PASS full coverage, PostgreSQL, build, authenticated browser and MCP, HTTP authorization, rate-limit and token-expiry checks. The first CI run failed only on an overbroad assertion in the new browser test; its selector was fixed and the second full run passed.",
+      "production": "Vercel Production deployment for the release commit READY at the canonical alias; health HTTP 200; owner MCP health reports connected database and verified backup; task inventory read back after release."
+    },
+    "limits": [
+      "Tree controls and branch summaries apply to the current filtered page; cross-project child context is shown in the all-project tree view.",
+      "An authenticated manual production-browser interaction was unavailable in this session; the authenticated browser scenario passed in CI against the built application."
+    ],
+    "privacy": "No private task titles, IDs, rows, screenshots, credentials, or backups entered Git."
+  },
   "calendar_source_diagnostics": {
     "status": "live_verified_google_review_pending",
     "observed_at": "2026-10-25",
