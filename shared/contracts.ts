@@ -125,6 +125,43 @@ export interface ProjectDTO {
   ready?: number;
   blocked?: number;
 }
+export interface DailyFocusDTO {
+  date: string;
+  timezone: "Europe/Berlin";
+  revision: number;
+  task_ids: string[];
+  items: TaskDTO[];
+}
+export interface DailyCapacityPreviewDTO {
+  date: string;
+  period: "day" | "week";
+  timezone: "Europe/Berlin";
+  from_date: string;
+  to_date_exclusive: string;
+  focus: {
+    open_selected_task_count: number;
+    closed_selected_task_count: number;
+    archived_selected_task_count: number;
+    registered_estimate_minutes: number;
+    unknown_estimate_task_ids: string[];
+    repeated_task_ids: string[];
+  };
+  calendar: {
+    access: "granted" | "not_granted";
+    busy_minutes: number | null;
+    complete: boolean | null;
+    fresh: boolean | null;
+    source_warnings: string[];
+    source_issues: { source_title: string; code: string }[];
+  };
+  work: {
+    access: "granted" | "not_granted";
+    occupied_minutes: number | null;
+    entry_count: number | null;
+  };
+  known_busy_minutes: number | null;
+  busy_coverage: "complete" | "partial" | "unknown";
+}
 export type FileProvider =
   "google_drive" | "private_blob" | "neon_object_storage";
 export type PrivateFileProvider = Exclude<FileProvider, "google_drive">;
@@ -509,6 +546,7 @@ export interface MutationResult {
   replayed?: boolean;
 }
 export const COMMAND_NAMES = [
+  "daily_focus_set",
   "task_create",
   "task_update",
   "task_complete",
@@ -597,6 +635,8 @@ export const COMMAND_NAMES = [
 ] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 export const QUERY_NAMES = [
+  "daily_focus_get",
+  "daily_capacity_preview",
   "system_capabilities",
   "calendar_sync_status",
   "calendar_event_change_preview",

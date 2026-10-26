@@ -5,6 +5,8 @@ type Mode = "read" | "exclusive";
 // Exhaustive by design: a new query must classify its SQL and delegated side
 // effects before runtime can route it through a SQL read-only transaction.
 const modes = {
+  daily_focus_get: "read",
+  daily_capacity_preview: "read",
   system_capabilities: "read",
   system_health: "read",
   whoami: "read",

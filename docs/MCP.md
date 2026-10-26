@@ -1,6 +1,6 @@
 # API و MCP
 
-اتصال فعلی موردنظر مالک، Codex بومی است. سرور `life_os` با URL تولید در تنظیمات محلی ثبت شده و OAuth login واقعی موفق بوده است. runtime همین چت اکنون ۱۳۰ ابزار دارد و پنج خواندن واقعی MCP با حساب موجود موفق بودند: whoami، capabilities، health، task_search و file_search. کانال MCP، ۴۵ کار فعال، سه فایل اصلی و سلامت Neon/پشتیبان verified تأیید شدند؛ هیچ write تجاری در این تست انجام نشد. admin و backup در grant نیستند. AI داخل برنامه و نصب ChatGPT فعلاً شرط تحویل نیستند؛ [محدودهٔ فعلی](CURRENT_SCOPE_FA.md) بر توضیح تاریخی ChatGPT در ادامه مقدم است.
+سرور `life_os` در تولید با OAuth مالک به Codex و ChatGPT Web متصل شده است؛ شواهد هر اتصال و نسخه در [پیشرفت ساخت](BUILD_PROGRESS.json) ثبت می‌شود. شمار ۱۳۰ ابزار و ۴۵ کار در پاراگراف‌های تاریخی پایین مربوط به آزمون ۱۴ اکتبر است و شمار فعلی نیست. AI داخل برنامه طبق تصمیم مالک خاموش می‌ماند.
 
 Endpoint برنامه `/api/mcp` از SDK رسمی MCP و Streamable HTTP استفاده می‌کند. POST درخواست‌های پروتکل را می‌پذیرد؛ احراز هویت Bearer OAuth لازم است. discovery در `/.well-known/oauth-protected-resource/api/mcp` و `/.well-known/oauth-authorization-server/api/auth` است. نشانی کامل باید از deployment واقعی مشاهده‌شده گرفته شود.
 
@@ -13,6 +13,8 @@ OAuth Authorization Code + PKCE S256، DCR، consent، resource audience و scop
 شاهد آزمون واقعی محلی، ثبت‌شده در ۱۳ اکتبر۲۲:۴۷:۵۸ UTC: DCR/PKCE، UserInfo مالک، ID token امضاشده با JWKS و issuer/audience/subject/nonce صحیح موفق بود؛ لغو همان client توسط مالک، توکنِ هنوز منقضی‌نشده را فوراً در UserInfo و MCP رد کرد. این شاهد مستقل از نصب ChatGPT است. سیاست resource seed از API رسمی provider با merge فقط فیلدهای مشخص همین resource را به‌روز می‌کند و سایر تنظیمات مدیر را حفظ می‌کند.
 
 ابزارهای query و command از قرارداد مشترک ساخته می‌شوند. `operation_id` پایدار برای هر قصد و `expected_revision` برای ویرایش موجودیت لازم است. ورودی snake_case و شناسهٔ پایدار دارد. commitهای حساس فقط preview معتبر، owner-bound، منقضی‌نشده و revisionهای ثابت را می‌پذیرند. waiver به تأیید صریح مرورگر مالک هم نیاز دارد و مدل AI آن را نمی‌تواند ایجاد کند.
+
+`daily_focus_get` انتخاب‌های یک روز محلی برلین را می‌خواند و `daily_focus_set` حداکثر پنج شناسهٔ مرتب را با `expected_revision`، `operation_id` و scope نوشتن کارها جایگزین می‌کند؛ خود کار، موعد و وضعیتش تغییر نمی‌کند. `daily_capacity_preview` فقط برآوردهای ثبت‌شده و بازه‌های مشغول شناخته‌شده را گزارش می‌کند؛ دادهٔ تقویم و ساعت کار تنها با scope مستقل همان منبع برمی‌گردد. `search_all` صفحه‌های مستقل کار، پروژه و فایل را فقط در scopeهای مجاز ارائه می‌کند.
 
 فهرست واقعی ابزارها با `tools/list` گرفته می‌شود؛ شمارش ثابت در مستندات منبع حقیقت نیست. `legacy_import`، restore، ثبت مستقیم upload و job سیستمی ابزار عمومی MCP نیستند. هر تغییر موفق audit مشترک و read-back UI دارد.
 

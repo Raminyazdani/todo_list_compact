@@ -17,7 +17,7 @@ async function main() {
   }
   const database = getDatabase();
   await migrateDatabase(database);
-  console.log("Versioned domain schema migrated successfully");
+  console.log("Idempotent domain schema migration completed successfully");
   await database.close?.();
 }
 main().catch(() => {

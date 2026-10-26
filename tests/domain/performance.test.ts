@@ -109,6 +109,23 @@ describe("Bounded graph performance on the real PostgreSQL engine", () => {
     expect(plan.levels.flat()).toHaveLength(10000);
     expect(plan.critical_path).toHaveLength(2);
     expect(plan.total_estimated_minutes).toBe(60);
+    await service.execute(
+      "daily_focus_set",
+      { date: "2050-01-01", task_ids: [`${token}task-0`, `${token}task-1`] },
+      principal,
+      { idempotencyKey: randomUUID(), expectedRevision: 0 },
+    );
+    started = performance.now();
+    const focus = await service.query(
+      "daily_focus_get",
+      { date: "2050-01-01" },
+      principal,
+    );
+    measurements.daily_focus_get_ms = performance.now() - started;
+    expect(focus).toMatchObject({
+      task_ids: [`${token}task-0`, `${token}task-1`],
+      items: [{ task_id: `${token}task-0` }, { task_id: `${token}task-1` }],
+    });
     const count = await db.query<{ count: string }>(
       "SELECT count(*) FROM task_dependency_edges WHERE owner_id=$1",
       [token],

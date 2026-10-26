@@ -32,6 +32,8 @@ export const BACKUP_TABLES = [
   "calendar_external_events",
   "calendar_mutation_intents",
   "preferences",
+  "daily_focus_days",
+  "daily_focus_items",
   "saved_views",
   "reminders",
   "notifications",
@@ -387,6 +389,8 @@ export async function legacyImport(
   };
 }
 const ADDITIVE_BACKUP_TABLES: readonly string[] = [
+  "daily_focus_days",
+  "daily_focus_items",
   "time_drafts",
   "work_contract_policies",
   "calendar_sources",

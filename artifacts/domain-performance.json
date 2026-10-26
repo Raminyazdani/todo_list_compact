@@ -1,16 +1,17 @@
 {
   "engine": "PGlite real PostgreSQL isolated WASM",
-  "captured_at": "2026-10-14T02:56:05.283Z",
+  "captured_at": "2026-10-26T17:43:14.837Z",
   "tasks": 10000,
   "edges": 30000,
   "projects": 20,
   "hierarchy_roots": 100,
   "max_depth": 2,
   "measurements": {
-    "graph_page_ms": 1119.4334000000003,
-    "graph_second_page_ms": 1288.8355999999999,
-    "blocked_page_ms": 1271.8221999999996,
-    "topological_plan_ms": 1196.8922000000002
+    "graph_page_ms": 879.1587,
+    "graph_second_page_ms": 836.8004000000005,
+    "blocked_page_ms": 818.1120999999994,
+    "topological_plan_ms": 859.9645,
+    "daily_focus_get_ms": 800.5809000000008
   },
   "scope": "Local domain query latency; not production network or browser latency"
 }

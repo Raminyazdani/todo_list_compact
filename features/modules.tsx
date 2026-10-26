@@ -42,6 +42,9 @@ import { FullReports } from "./reports";
 import { Connections } from "./connections";
 import { FileWorkspace } from "./files";
 import { DashboardExtras, type DashboardRange } from "./dashboard-extras";
+import { DailyFocus } from "./daily-focus";
+import { InboxReview } from "./inbox-review";
+import { activityLabel } from "./activity-labels";
 import { ExperienceSettings } from "./experience-settings";
 import { PasswordSettings } from "./security-settings";
 import { InstallAppCard } from "@/components/pwa";
@@ -110,9 +113,18 @@ export function Dashboard({
     !preferencesSaving;
   const [customize, setCustomize] = useState(false);
   const [localRange, setLocalRange] = useState<DashboardRange | null>(null);
-  const [fallbackDay] = useState(() =>
-    instantToLocalDate(Date.now(), "Europe/Berlin"),
+  const [draftRange, setDraftRange] = useState<DashboardRange | null>(null);
+  const [calendarFrom, setCalendarFrom] = useState(() =>
+    new Date().toISOString(),
   );
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setCalendarFrom(new Date().toISOString()),
+      60000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+  const fallbackDay = instantToLocalDate(calendarFrom, "Europe/Berlin");
   const fallbackRange = {
     from_date: fallbackDay,
     to_date: addCalendarDays(fallbackDay, 8),
@@ -142,12 +154,16 @@ export function Dashboard({
     /* Invalid imported preferences use the current local default. */
   }
   const range = localRange ?? persistedRange;
+  const displayedRange = draftRange ?? range;
   const defaults = [
-    { id: "focus", title: t("قدم‌های بعدی", "Next moves") },
+    { id: "focus", title: t("کارهای آماده", "Ready tasks") },
     { id: "calendar", title: t("نمای روز", "Day preview") },
     { id: "blocked", title: t("رادار پیش‌نیازها", "Blocked radar") },
     { id: "activity", title: t("تاریخچه", "Activity") },
-    { id: "projects", title: t("ریسک پروژه‌ها", "Project risks") },
+    {
+      id: "projects",
+      title: t("پیش‌نیاز و مهلت پروژه‌ها", "Project blockers and deadlines"),
+    },
     { id: "waiting", title: t("منتظر پاسخ", "Waiting for responses") },
     { id: "upcoming", title: t("مهلت‌های هفته", "Upcoming deadlines") },
     { id: "workload", title: t("زمان کار این هفته", "Work time this week") },
@@ -322,16 +338,6 @@ export function Dashboard({
   const data = useQuery<Analytics>("analytics_summary", { ...range });
   const ready = useQuery<PageDTO<TaskDTO>>("task_find_ready", { limit: 6 });
   const blocked = useQuery<PageDTO<TaskDTO>>("task_find_blocked", { limit: 4 });
-  const [calendarFrom, setCalendarFrom] = useState(() =>
-    new Date().toISOString(),
-  );
-  useEffect(() => {
-    const timer = window.setInterval(
-      () => setCalendarFrom(new Date().toISOString()),
-      60000,
-    );
-    return () => window.clearInterval(timer);
-  }, []);
   const calendarDay = instantToLocalDate(calendarFrom, range.timezone);
   const weekStart = addCalendarDays(
     calendarDay,
@@ -469,9 +475,14 @@ export function Dashboard({
           <ArrowUpRight size={16} />
         </Button>
       </form>
+      <DailyFocus
+        date={instantToLocalDate(calendarFrom, "Europe/Berlin")}
+        action={action}
+        onOpen={onOpen}
+      />
+      <InboxReview action={action} onOpen={onOpen} />
       <form
         className="filter-bar"
-        key={`${range.from_date}:${range.to_date}:${range.timezone}`}
         onSubmit={async (event) => {
           event.preventDefault();
           if (!preferencesEditable || preferencesSavingRef.current) return;
@@ -495,8 +506,10 @@ export function Dashboard({
                   "Range must be ordered and at most one year",
                 ),
               );
-            if (await saveDashboardPreferences({ dashboard_range: next }))
+            if (await saveDashboardPreferences({ dashboard_range: next })) {
               setLocalRange(next);
+              setDraftRange(null);
+            }
           } catch (error) {
             window.dispatchEvent(
               new CustomEvent("lifeos:error", {
@@ -512,7 +525,13 @@ export function Dashboard({
             disabled={!preferencesEditable}
             type="date"
             required
-            defaultValue={range.from_date}
+            value={displayedRange.from_date}
+            onChange={(event) =>
+              setDraftRange({
+                ...displayedRange,
+                from_date: event.target.value,
+              })
+            }
           />
         </Field>
         <Field
@@ -526,21 +545,27 @@ export function Dashboard({
             disabled={!preferencesEditable}
             type="date"
             required
-            defaultValue={range.to_date}
+            value={displayedRange.to_date}
+            onChange={(event) =>
+              setDraftRange({ ...displayedRange, to_date: event.target.value })
+            }
           />
         </Field>
         <Field label={t("منطقهٔ زمانی داشبورد", "Dashboard timezone")}>
           <select
             disabled={!preferencesEditable}
             name="timezone"
-            defaultValue={range.timezone}
+            value={displayedRange.timezone}
+            onChange={(event) =>
+              setDraftRange({ ...displayedRange, timezone: event.target.value })
+            }
           >
             <option>Europe/Berlin</option>
             <option>Asia/Tehran</option>
             <option>UTC</option>
             {!["Europe/Berlin", "Asia/Tehran", "UTC"].includes(
-              range.timezone,
-            ) && <option>{range.timezone}</option>}
+              displayedRange.timezone,
+            ) && <option>{displayedRange.timezone}</option>}
           </select>
         </Field>
         <Button disabled={!preferencesEditable} type="submit">
@@ -610,10 +635,10 @@ export function Dashboard({
         />
         <section className="panel focus-panel" {...widgetProps("focus")}>
           <SectionHeading
-            title={t("قدم‌های بعدی", "Your next moves")}
+            title={t("کارهای آماده", "Ready tasks")}
             subtitle={t(
-              "کارهایی که همین حالا آمادهٔ شروع هستند",
-              "Tasks with satisfied prerequisites",
+              "پیش‌نیازهایشان برآورده شده؛ ترتیب این فهرست اولویت امروز نیست.",
+              "Prerequisites are satisfied; this list is not today's priority order.",
             )}
             action={
               <Link className="text-link" href="/tasks?filter=ready">
@@ -777,8 +802,8 @@ export function Dashboard({
           {projectRisks.data && !risks.length && (
             <Empty
               title={t(
-                "در این محدوده ریسکی پیدا نشد",
-                "No risks found in this scope",
+                "پروژه‌ای با پیش‌نیاز ناتمام یا مهلت گذشته پیدا نشد",
+                "No projects with blockers or overdue deadlines were found",
               )}
             />
           )}
@@ -1126,7 +1151,7 @@ function Activity({
   events: ActivityDTO[];
   timezone?: string;
 }) {
-  const { t } = useLocale();
+  const { t, language } = useLocale();
   return (
     <div className="activity-list">
       {events.length ? (
@@ -1134,7 +1159,7 @@ function Activity({
           <div key={event.event_id}>
             <span className="activity-dot" />
             <div>
-              <strong>{event.event_type}</strong>
+              <strong>{activityLabel(event.event_type, language)}</strong>
               <small>{event.channel}</small>
             </div>
             <time>

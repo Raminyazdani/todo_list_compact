@@ -1,4 +1,21 @@
 {
+  "life_os_focus_and_navigation_2026_10_26": {
+    "status": "local_verified_release_pending",
+    "scope": "Owner-selected daily focus, explicit Inbox review, read-only capacity preview, project-area grouping, filtered-tree parent context, grouped search, localized activity labels and Berlin-midnight default ranges.",
+    "observed": {
+      "local_gates": "PASS format, lint, typecheck, public safety scan, high-severity dependency audit and production build.",
+      "synthetic_contract_domain_tests": "PASS 663 tests across 79 files with 30 explicit skips; full coverage statement 90.82%, branch 86.69%. Daily focus, search scope, idempotency, revision, backup, busy-interval union and DST were exercised.",
+      "isolated_browser": "PASS six focused authenticated Playwright scenarios plus three adversarial follow-ups using separate synthetic PostgreSQL and credentials: daily focus reload/mobile/keyboard and conflict review, filtered-tree parent context, project area collapse and reload, Berlin-midnight ranges, Ctrl+K grouped and same-route project/file search, and Inbox skip/concurrent-edit/passive status-change draft retention.",
+      "native_database_migration": "PASS isolated PostgreSQL migration and authentication bootstrap used by the browser suite; production migration is pending.",
+      "production": "PENDING PR CI, production migration, deployment and authenticated readback."
+    },
+    "limits": [
+      "Synthetic browser and local build evidence does not establish production deployment behavior.",
+      "The daily focus read derives exact readiness from the owner graph. Synthetic 10000-task/30000-edge local measurements are recorded in artifacts/domain-performance.json; they vary by run and do not include network or browser latency.",
+      "Large-account scaling remains unmeasured for Inbox review (paged reads are fully collected) and project search (owner projects are filtered in memory); these are P2 follow-ups, not production latency claims."
+    ],
+    "privacy": "Public tests and browser fixtures are synthetic; no private task titles, IDs, calendar feeds, credentials, backups or real screenshots entered Git."
+  },
   "task_tree_organization_2026_10_26": {
     "status": "released_live_mcp_verified",
     "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/15",

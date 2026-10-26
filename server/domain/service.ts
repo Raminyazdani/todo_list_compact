@@ -31,6 +31,7 @@ import { knowledgeCommand } from "./knowledge";
 import { recurrenceCommand } from "./recurrence";
 import { reservedTaskIdentity } from "./internal-options";
 import { queryTransactionMode } from "./query-transaction-mode";
+import { dailyFocusSet } from "./daily-focus";
 import {
   prepareCalendarChangeReview,
   withTrustedCalendarReview,
@@ -156,6 +157,7 @@ export function createDomainService(database: Database): DomainService {
             // Keep its owner lock, revision, audit and receipt without scanning it.
             before =
               command === "preferences_update" ||
+              command === "daily_focus_set" ||
               command.startsWith("calendar_") ||
               command.startsWith("time_")
                 ? null
@@ -258,7 +260,14 @@ export function createDomainService(database: Database): DomainService {
               );
             }
             change.reason = `${redo ? "Redo" : "Undo"} event ${last.event_id}`;
-          } else if (command.startsWith("task_recurrence_"))
+          } else if (command === "daily_focus_set")
+            change = await dailyFocusSet(
+              tx,
+              input,
+              principal,
+              options.expectedRevision,
+            );
+          else if (command.startsWith("task_recurrence_"))
             change = await recurrenceCommand(
               tx,
               command,

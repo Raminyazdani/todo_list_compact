@@ -63,6 +63,8 @@ async function main() {
       omitted_absent_additive_tables: [
         "file_annotations",
         "event_reminders",
+        "daily_focus_days",
+        "daily_focus_items",
       ].filter((name) => !Object.hasOwn(object(backup.tables), name)),
       observed_at: new Date().toISOString(),
       table_counts: Object.fromEntries(

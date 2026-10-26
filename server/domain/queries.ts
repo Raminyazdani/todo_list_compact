@@ -54,6 +54,8 @@ import { taskOverdue } from "./deadline";
 import { previewCalendarOccurrence } from "./calendar";
 import { previewTimeImport } from "./time-import";
 import { instantToLocalDate } from "../../shared/datetime";
+import { dailyFocusGet } from "./daily-focus";
+import { dailyCapacityPreview } from "./capacity";
 import {
   backupStorageCapabilities,
   storageCapabilities,
@@ -291,6 +293,26 @@ export async function domainQuery(
   principal: Principal,
 ): Promise<unknown> {
   const owner = principal.ownerId;
+  if (operation === "daily_focus_get")
+    return dailyFocusGet(tx, input, principal);
+  if (operation === "daily_capacity_preview")
+    return dailyCapacityPreview(
+      tx,
+      input,
+      principal,
+      (from, to) =>
+        domainQuery(
+          tx,
+          "calendar_availability",
+          { from, to },
+          principal,
+        ) as Promise<{
+          busy: { starts_at: string; ends_at: string }[];
+          complete: boolean;
+          fresh: boolean;
+          source_warnings: string[];
+        }>,
+    );
   if (operation === "time_contract_policy_list")
     return workContractPolicyList(tx, principal);
   if (operation === "time_contract_report")
@@ -1397,13 +1419,50 @@ export async function domainQuery(
     };
   }
   if (operation === "search_all") {
-    const taskResults = page(tasks, input, (t) => t.task_id);
+    const taskResults = page(
+      tasks,
+      { ...input, cursor: input.task_cursor ?? input.cursor },
+      (t) => t.task_id,
+    );
+    const projects =
+      principal.scopes.includes("projects:read") ||
+      principal.scopes.includes("admin:manage")
+        ? page(
+            cleanRows(
+              (
+                await tx.query<Input>(
+                  "SELECT * FROM projects WHERE owner_id=$1 AND archived_at IS NULL ORDER BY title,project_id",
+                  [owner],
+                )
+              ).rows,
+            ).filter((project) => {
+              if (!input.search && !input.query) return true;
+              const needle = normalizedSearch(
+                text(input, input.search ? "search" : "query"),
+              );
+              return normalizedSearch(
+                `${project.title} ${project.notes} ${project.area}`,
+              ).includes(needle);
+            }),
+            { ...input, cursor: input.project_cursor },
+            (project) => String(project.project_id),
+          )
+        : { items: [], total: 0, next_cursor: null };
     const files =
       principal.scopes.includes("files:read") ||
       principal.scopes.includes("admin:manage")
-        ? await domainQuery(tx, "file_search", input, principal)
+        ? await domainQuery(
+            tx,
+            "file_search",
+            {
+              ...input,
+              search: input.search ?? input.query,
+              cursor: input.file_cursor,
+            },
+            principal,
+          )
         : { items: [], total: 0, next_cursor: null };
-    return { tasks: taskResults, files };
+    return { tasks: taskResults, projects, files };
   }
   if (
     [

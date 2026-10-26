@@ -15,6 +15,7 @@ import { IN_APP_AI_ENABLED } from "@/shared/product-features";
 import { useQuery } from "./api";
 import { useLocale } from "./locale";
 import { TaskRow } from "./tasks";
+import { activityLabel } from "./activity-labels";
 import {
   Button,
   Empty,
@@ -222,7 +223,7 @@ export function DashboardExtras({
           <QueryState {...ai} retry={ai.refresh} />
           {ai.data?.items.map((event) => (
             <div key={event.event_id} className="dependency-row">
-              <strong>{event.event_type}</strong>
+              <strong>{activityLabel(event.event_type, language)}</strong>
               <time>
                 {new Date(event.occurred_at).toLocaleString(
                   language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",

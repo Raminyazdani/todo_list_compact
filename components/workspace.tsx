@@ -24,7 +24,14 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import type { CommandName, MutationResult, PageDTO } from "@/shared/contracts";
+import type {
+  CommandName,
+  FileDTO,
+  MutationResult,
+  PageDTO,
+  ProjectDTO,
+  TaskDTO,
+} from "@/shared/contracts";
 import { IN_APP_AI_ENABLED } from "@/shared/product-features";
 import { command, useQuery, ApiError } from "@/features/api";
 import { LocaleContext, type Language, useLocale } from "@/features/locale";
@@ -39,7 +46,7 @@ import {
   Reports,
   Settings,
 } from "@/features/modules";
-import { Button, Field, Modal, ToastPortal } from "./ui";
+import { Button, Field, Modal, QueryState, ToastPortal } from "./ui";
 
 const navigation = [
   { path: "/", fa: "امروز", en: "Today", icon: LayoutDashboard },
@@ -145,14 +152,21 @@ function WorkspaceContent({
   const routeParams = useSearchParams();
   const [mobile, setMobile] = useState(false);
   const [capture, setCapture] = useState(false);
-  const [taskId, setTaskId] = useState<string | null>(() =>
-    routeParams.get("task"),
-  );
+  const linkedTaskId = routeParams.get("task");
+  const [taskChoice, setTaskChoice] = useState<{
+    forLink: string | null;
+    taskId: string | null;
+  }>(() => ({ forLink: linkedTaskId, taskId: linkedTaskId }));
+  const taskId =
+    taskChoice.forLink === linkedTaskId ? taskChoice.taskId : linkedTaskId;
+  const setTaskId = (id: string | null) =>
+    setTaskChoice({ forLink: linkedTaskId, taskId: id });
   const [toast, setToast] = useState("");
   const [toastError, setToastError] = useState(false);
   const [preview, setPreview] = useState<unknown>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [blocked, setBlocked] = useState<{
     name: CommandName;
     input: Record<string, unknown>;
@@ -170,6 +184,22 @@ function WorkspaceContent({
       revision: number;
     }>
   >("notifications_list", { limit: 50 });
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setSearchTerm(globalSearch.trim()),
+      250,
+    );
+    return () => window.clearTimeout(timer);
+  }, [globalSearch]);
+  const searchResults = useQuery<{
+    tasks: PageDTO<TaskDTO>;
+    projects?: PageDTO<ProjectDTO>;
+    files: PageDTO<FileDTO>;
+  }>(
+    "search_all",
+    { search: searchTerm, limit: 6 },
+    commandOpen && searchTerm.length >= 2,
+  );
   const showToast = useCallback((text: string, error = false) => {
     setToast(text);
     setToastError(error);
@@ -418,7 +448,11 @@ function WorkspaceContent({
                 mutateTask={actionStrict}
               />
             ) : pathname === "/projects" ? (
-              <Projects onOpen={setTaskId} action={action} />
+              <Projects
+                key={`project-${routeParams.get("project") ?? ""}`}
+                onOpen={setTaskId}
+                action={action}
+              />
             ) : pathname === "/calendar" ? (
               <CalendarWorkspace action={action} onOpen={setTaskId} />
             ) : pathname === "/time" ? (
@@ -428,7 +462,11 @@ function WorkspaceContent({
                 initialWork
               />
             ) : pathname === "/files" ? (
-              <Files action={action} onOpen={setTaskId} />
+              <Files
+                key={`file-${routeParams.get("file") ?? ""}`}
+                action={action}
+                onOpen={setTaskId}
+              />
             ) : pathname === "/assistant" ? (
               <Assistant />
             ) : pathname === "/reports" ? (
@@ -507,6 +545,7 @@ function WorkspaceContent({
           )}
         </Modal>
         <TaskDetail
+          key={taskId ?? "closed"}
           taskId={taskId}
           onClose={() => setTaskId(null)}
           onOpen={setTaskId}
@@ -521,7 +560,27 @@ function WorkspaceContent({
             className="inline-form"
             onSubmit={(event) => {
               event.preventDefault();
-              router.push(`/tasks?search=${encodeURIComponent(globalSearch)}`);
+              const term = globalSearch.trim();
+              if (!term) return;
+              const results = term === searchTerm ? searchResults.data : null;
+              const firstTask = results?.tasks.items[0];
+              if (firstTask) {
+                setCommandOpen(false);
+                setTaskId(firstTask.task_id);
+              } else if (results?.projects?.items[0]) {
+                setCommandOpen(false);
+                router.push(
+                  `/projects?project=${encodeURIComponent(results.projects.items[0].project_id)}`,
+                );
+              } else if (results?.files.items[0]) {
+                setCommandOpen(false);
+                router.push(
+                  `/files?file=${encodeURIComponent(results.files.items[0].file_id)}`,
+                );
+              } else {
+                setCommandOpen(false);
+                router.push(`/tasks?search=${encodeURIComponent(term)}`);
+              }
             }}
           >
             <Search size={17} />
@@ -529,12 +588,77 @@ function WorkspaceContent({
               autoFocus
               value={globalSearch}
               onChange={(event) => setGlobalSearch(event.target.value)}
-              placeholder={t("بین کارها جست‌وجو کن…", "Search tasks…")}
+              placeholder={t(
+                "کار، پروژه یا فایل را پیدا کن…",
+                "Find a task, project or file…",
+              )}
+              aria-label={t("جست‌وجوی سراسری", "Search everywhere")}
             />
-            <Button type="submit">
+            <Button type="submit" disabled={!globalSearch.trim()}>
               <ArrowUpRight size={16} />
             </Button>
           </form>
+          {searchTerm.length >= 2 && (
+            <div className="command-results" aria-live="polite">
+              <QueryState {...searchResults} retry={searchResults.refresh} />
+              {searchResults.data && (
+                <>
+                  <div className="command-result-group">
+                    <strong>
+                      {t("کارها", "Tasks")} ({searchResults.data.tasks.total})
+                    </strong>
+                    {searchResults.data.tasks.items.map((task) => (
+                      <button
+                        key={task.task_id}
+                        onClick={() => {
+                          setCommandOpen(false);
+                          setTaskId(task.task_id);
+                        }}
+                      >
+                        <ListTodo size={16} /> {task.title}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="command-result-group">
+                    <strong>
+                      {t("پروژه‌ها", "Projects")} (
+                      {searchResults.data.projects?.total ?? 0})
+                    </strong>
+                    {searchResults.data.projects?.items.map((project) => (
+                      <Link
+                        key={project.project_id}
+                        href={`/projects?project=${encodeURIComponent(project.project_id)}`}
+                        onClick={() => setCommandOpen(false)}
+                      >
+                        <Folder size={16} /> {project.title}
+                      </Link>
+                    ))}
+                  </div>
+                  <div className="command-result-group">
+                    <strong>
+                      {t("فایل‌ها", "Files")} ({searchResults.data.files.total})
+                    </strong>
+                    {searchResults.data.files.items.map((file) => (
+                      <Link
+                        key={file.file_id}
+                        href={`/files?file=${encodeURIComponent(file.file_id)}`}
+                        onClick={() => setCommandOpen(false)}
+                      >
+                        <FileText size={16} /> {file.title}
+                      </Link>
+                    ))}
+                  </div>
+                  {!searchResults.data.tasks.total &&
+                    !searchResults.data.projects?.total &&
+                    !searchResults.data.files.total && (
+                      <p className="muted small">
+                        {t("نتیجه‌ای پیدا نشد.", "No matches found.")}
+                      </p>
+                    )}
+                </>
+              )}
+            </div>
+          )}
           <div className="command-links">
             {navigation.map((item) => (
               <Link

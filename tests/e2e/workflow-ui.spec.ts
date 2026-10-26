@@ -451,6 +451,526 @@ test("calendar_pointer_creation_resize_source_filter_and_event_reminder_are_real
   }
 });
 
+test("default_report_and_dashboard_ranges_advance_at_Berlin_midnight_without_moving_manual_range", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2090-01-02T22:59:00Z") });
+  const ranges: { path: string; from_date: string; to_date: string }[] = [];
+  await page.route("**/api/v1/query*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const payload = request.method() === "POST" ? request.postDataJSON() : null;
+    const operation = payload?.operation ?? url.searchParams.get("operation");
+    if (operation === "preferences_get") {
+      // Exercise the default dashboard range without changing real settings.
+      const response = await route.fetch();
+      const body = await response.json();
+      body.data.settings = { ...body.data.settings, dashboard_range: null };
+      return route.fulfill({ response, json: body });
+    }
+    if (operation === "analytics_summary") {
+      const input =
+        payload?.input ?? JSON.parse(url.searchParams.get("input") ?? "{}");
+      ranges.push({
+        path: new URL(page.url()).pathname,
+        from_date: input.from_date,
+        to_date: input.to_date,
+      });
+    }
+    return route.continue();
+  });
+
+  await page.goto("/reports");
+  const reportEnd = page.getByLabel("پایان بازهٔ گزارش (شامل نمی‌شود)");
+  await expect(reportEnd).toHaveValue("2090-01-03");
+  await page.clock.fastForward(120000);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(reportEnd).toHaveValue("2090-01-04");
+  await expect
+    .poll(
+      () => ranges.filter((range) => range.path === "/reports").at(-1)?.to_date,
+    )
+    .toBe("2090-01-04");
+  await page.getByLabel("شروع بازهٔ گزارش").fill("2090-02-01");
+  await reportEnd.fill("2090-02-10");
+  await page.getByRole("button", { name: "نمایش این بازه" }).click();
+  await expect
+    .poll(
+      () => ranges.filter((range) => range.path === "/reports").at(-1)?.to_date,
+    )
+    .toBe("2090-02-10");
+  await page.clock.fastForward(86400000);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(reportEnd).toHaveValue("2090-02-10");
+
+  await page.goto("/");
+  const dashboardEnd = page.getByLabel("پایان بازهٔ داشبورد (شامل نمی‌شود)");
+  await expect(dashboardEnd).toHaveValue("2090-01-12");
+  await page.clock.fastForward(86400000);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(dashboardEnd).toHaveValue("2090-01-13");
+  await expect
+    .poll(() => ranges.filter((range) => range.path === "/").at(-1)?.to_date)
+    .toBe("2090-01-13");
+});
+
+test("daily_focus_picker_persists_exact_owner_selection_without_changing_task_fields", async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    !["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname),
+    "Synthetic daily focus writes run only against isolated local staging.",
+  );
+  const date = "2090-02-01";
+  const title = `E2E-${crypto.randomUUID().slice(0, 8)} focus action`;
+  const created = await mutate(request, "task_create", { title });
+  const before = await readTask(request, created.entity_id);
+  await page.clock.install({ time: new Date("2090-02-01T10:00:00Z") });
+  await page.goto("/");
+  const focus = page.getByRole("region", { name: "تمرکز امروز" });
+  await expect(focus).toBeVisible();
+  await focus.getByRole("button", { name: "انتخاب کار" }).click();
+  await focus
+    .getByRole("textbox", { name: "جست‌وجوی کار برای امروز" })
+    .fill(title);
+  await page.clock.fastForward(300);
+  await focus
+    .getByRole("button", { name: new RegExp(title) })
+    .last()
+    .press("Enter");
+  await expect(focus.locator(".daily-focus-list")).toContainText(title);
+  const saved = await readQuery<{
+    date: string;
+    revision: number;
+    task_ids: string[];
+  }>(request, "daily_focus_get", { date });
+  expect(saved).toMatchObject({ date, task_ids: [created.entity_id] });
+  expect((await readTask(request, created.entity_id)).due_date).toBe(
+    before.due_date,
+  );
+  expect((await readTask(request, created.entity_id)).status).toBe(
+    before.status,
+  );
+  await page.reload();
+  await expect(focus.locator(".daily-focus-list")).toContainText(title);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(focus).toBeVisible();
+  await focus
+    .getByRole("button", { name: `برداشتن ${title} از تمرکز امروز` })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await readQuery<{ task_ids: string[] }>(request, "daily_focus_get", {
+            date,
+          })
+        ).task_ids,
+    )
+    .toEqual([]);
+});
+
+test("daily_focus_conflict_reads_new_revision_before_retry", async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    !["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname),
+    "Synthetic focus conflict writes run only against isolated local staging.",
+  );
+  const date = "2090-03-01";
+  const prefix = `E2E-${crypto.randomUUID().slice(0, 8)} focus race`;
+  const first = await mutate(request, "task_create", {
+    title: `${prefix} first`,
+  });
+  const second = await mutate(request, "task_create", {
+    title: `${prefix} second`,
+  });
+  await page.clock.install({ time: new Date("2090-03-01T10:00:00Z") });
+  await page.goto("/");
+  const focus = page.getByRole("region", { name: "تمرکز امروز" });
+  await focus.getByRole("button", { name: "انتخاب کار" }).click();
+  const search = focus.getByRole("textbox", {
+    name: "جست‌وجوی کار برای امروز",
+  });
+  await search.fill(`${prefix} first`);
+  await page.clock.fastForward(300);
+  await focus
+    .getByRole("button", { name: new RegExp(`${prefix} first`) })
+    .last()
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await readQuery<{ revision: number }>(request, "daily_focus_get", {
+            date,
+          })
+        ).revision,
+    )
+    .toBe(1);
+  await search.fill(`${prefix} second`);
+  await page.clock.fastForward(300);
+  let injectConflict = true;
+  await page.route("**/api/v1/commands", async (route) => {
+    const payload = route.request().postDataJSON();
+    if (
+      injectConflict &&
+      payload.command === "daily_focus_set" &&
+      payload.input.date === date &&
+      payload.input.task_ids.includes(second.entity_id)
+    ) {
+      injectConflict = false;
+      await mutate(request, "daily_focus_set", { date, task_ids: [] }, 1);
+    }
+    await route.continue();
+  });
+  await focus
+    .getByRole("button", { name: new RegExp(`${prefix} second`) })
+    .last()
+    .click();
+  await expect(focus).toContainText("تغییر تأیید نشد");
+  const conflict = focus.locator(".daily-focus-conflict");
+  await expect(conflict).toContainText(`${prefix} first`);
+  await expect(conflict).toContainText(`${prefix} second`);
+  await expect(focus.locator(".daily-focus-list")).toHaveCount(0);
+  expect(await readQuery(request, "daily_focus_get", { date })).toMatchObject({
+    revision: 2,
+    task_ids: [],
+  });
+  await focus.getByRole("button", { name: "اعمال دوباره پس از بررسی" }).click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await readQuery<{ revision: number }>(request, "daily_focus_get", {
+            date,
+          })
+        ).revision,
+    )
+    .toBe(3);
+  expect(await readQuery(request, "daily_focus_get", { date })).toMatchObject({
+    task_ids: [first.entity_id, second.entity_id],
+  });
+  expect((await readTask(request, first.entity_id)).due_date).toBeNull();
+});
+
+test("inbox_review_skip_is_nonmutating_and_conflict_keeps_the_draft", async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    !["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname),
+    "Synthetic Inbox review writes run only against isolated local staging.",
+  );
+  const prefix = `E2E-${crypto.randomUUID().slice(0, 8)} review`;
+  const firstSortKey = -Date.now();
+  const project = await mutate(request, "project_create", {
+    title: `${prefix} project`,
+    area: "Research",
+  });
+  const skipped = await mutate(request, "task_create", {
+    title: `${prefix} skip`,
+    sort_key: firstSortKey,
+  });
+  const target = await mutate(request, "task_create", {
+    title: `${prefix} target`,
+    sort_key: firstSortKey + 1,
+  });
+  const skippedBefore = await readTask(request, skipped.entity_id);
+  const targetBefore = await readTask(request, target.entity_id);
+  await page.goto("/");
+  const review = page.getByRole("region", { name: "مرور صندوق ورودی" });
+  await review.getByRole("button", { name: "شروع مرور" }).click();
+  await expect(review.locator(".inbox-review-task")).toContainText(
+    `${prefix} skip`,
+  );
+  await review.getByRole("button", { name: "رد شدن بدون تغییر" }).click();
+  expect(await readTask(request, skipped.entity_id)).toMatchObject({
+    revision: skippedBefore.revision,
+    status: skippedBefore.status,
+    next_action: skippedBefore.next_action,
+  });
+  await expect(review.locator(".inbox-review-task")).toContainText(
+    `${prefix} target`,
+  );
+  const draft = `${prefix} explicit next action`;
+  await review.getByLabel("اقدام بعدی").fill(draft);
+  await review.getByLabel("اولویت").selectOption("High");
+  await review
+    .getByLabel("پروژه و حوزهٔ موجود")
+    .selectOption(project.entity_id);
+  let injectConflict = true;
+  await page.route("**/api/v1/commands", async (route) => {
+    const payload = route.request().postDataJSON();
+    if (
+      injectConflict &&
+      payload.command === "task_update" &&
+      payload.input.task_id === target.entity_id
+    ) {
+      injectConflict = false;
+      await mutate(
+        request,
+        "task_update",
+        { task_id: target.entity_id, notes: "Synthetic concurrent edit" },
+        targetBefore.revision,
+      );
+    }
+    await route.continue();
+  });
+  await review.getByRole("button", { name: "ذخیره و کار بعدی" }).click();
+  await expect(review.getByLabel("اقدام بعدی")).toHaveValue(draft);
+  await expect(
+    review.getByRole("button", { name: "بارگذاری نسخهٔ تازه" }),
+  ).toBeVisible();
+  expect((await readTask(request, target.entity_id)).next_action).toBe(
+    targetBefore.next_action,
+  );
+  await review.getByRole("button", { name: "بارگذاری نسخهٔ تازه" }).click();
+  await review.getByLabel("اقدام بعدی").fill(draft);
+  await review.getByLabel("اولویت").selectOption("High");
+  await review
+    .getByLabel("پروژه و حوزهٔ موجود")
+    .selectOption(project.entity_id);
+  await review.getByRole("button", { name: "ذخیره و کار بعدی" }).click();
+  await expect
+    .poll(async () => (await readTask(request, target.entity_id)).next_action)
+    .toBe(draft);
+  expect(await readTask(request, target.entity_id)).toMatchObject({
+    priority: "High",
+    project_id: project.entity_id,
+    status: targetBefore.status,
+    due_date: targetBefore.due_date,
+    notes: "Synthetic concurrent edit",
+  });
+});
+
+test("inbox_review_keeps_a_conflicted_draft_when_task_leaves_inbox", async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    !["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname),
+    "Synthetic cross-status conflict runs only against isolated local staging.",
+  );
+  const prefix = `E2E-${crypto.randomUUID().slice(0, 8)} moving inbox task`;
+  const firstSortKey = -Date.now();
+  const passive = await mutate(request, "task_create", {
+    title: `${prefix} passive`,
+    sort_key: firstSortKey,
+  });
+  const created = await mutate(request, "task_create", {
+    title: `${prefix} save conflict`,
+    sort_key: firstSortKey + 1,
+  });
+  const passiveBefore = await readTask(request, passive.entity_id);
+  const before = await readTask(request, created.entity_id);
+  await page.goto("/");
+  const review = page.getByRole("region", { name: "مرور صندوق ورودی" });
+  await review.getByRole("button", { name: "شروع مرور" }).click();
+  await expect(review.locator(".inbox-review-task")).toContainText(
+    `${prefix} passive`,
+  );
+  const passiveDraft = "Synthetic unsaved action during passive refresh";
+  await review.getByLabel("اقدام بعدی").fill(passiveDraft);
+  await mutate(
+    request,
+    "task_update",
+    { task_id: passive.entity_id, status: "Next" },
+    passiveBefore.revision,
+  );
+  // The normal focus refresh must not unmount an editor with an unsaved draft.
+  await page.waitForTimeout(3200);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(review.getByRole("status")).toContainText(
+    "این کار دیگر در صندوق ورودی نیست",
+  );
+  await expect(review.locator(".inbox-review-task")).toContainText(
+    `${prefix} passive`,
+  );
+  await expect(review.getByLabel("اقدام بعدی")).toHaveValue(passiveDraft);
+  await review.getByRole("button", { name: "رد شدن بدون تغییر" }).click();
+  await expect(review.locator(".inbox-review-task")).toContainText(
+    `${prefix} save conflict`,
+  );
+  const draft = "Synthetic unsaved next action after status conflict";
+  await review.getByLabel("اقدام بعدی").fill(draft);
+  let injectConflict = true;
+  await page.route("**/api/v1/commands", async (route) => {
+    const payload = route.request().postDataJSON();
+    if (
+      injectConflict &&
+      payload.command === "task_update" &&
+      payload.input.task_id === created.entity_id
+    ) {
+      injectConflict = false;
+      await mutate(
+        request,
+        "task_update",
+        { task_id: created.entity_id, status: "Next" },
+        before.revision,
+      );
+    }
+    await route.continue();
+  });
+  await review.getByRole("button", { name: "ذخیره و کار بعدی" }).click();
+  await expect(review.getByLabel("اقدام بعدی")).toHaveValue(draft);
+  await expect(review.locator(".inbox-review-task")).toContainText(
+    `${prefix} save conflict`,
+  );
+  await expect(review.getByRole("status")).toContainText(
+    "این کار دیگر در صندوق ورودی نیست",
+  );
+  await expect(
+    review.getByRole("button", { name: "بارگذاری نسخهٔ تازه" }),
+  ).toBeVisible();
+  expect(await readTask(request, created.entity_id)).toMatchObject({
+    status: "Next",
+    next_action: before.next_action,
+    revision: before.revision + 1,
+  });
+});
+
+test("command_palette_searches_tasks_and_projects_with_keyboard_navigation", async ({
+  page,
+  request,
+}) => {
+  const needle = `E2E-${crypto.randomUUID().slice(0, 8)} palette`;
+  const task = await mutate(request, "task_create", {
+    title: `${needle} task`,
+  });
+  const project = await mutate(request, "project_create", {
+    title: `${needle} project`,
+    area: "Research",
+  });
+  await page.goto("/");
+  await expect(page.locator(".save-status")).toContainText("متصل به سرور");
+  await page.locator("body").press("Control+k");
+  const palette = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "جست‌وجو و فرمان‌ها" }),
+  });
+  await expect(palette).toBeVisible();
+  await palette.getByRole("textbox", { name: "جست‌وجوی سراسری" }).fill(needle);
+  await expect(palette.locator(".command-results")).toContainText(
+    `${needle} task`,
+  );
+  await expect(palette.locator(".command-results")).toContainText(
+    `${needle} project`,
+  );
+  await palette
+    .getByRole("textbox", { name: "جست‌وجوی سراسری" })
+    .press("Enter");
+  await expect(
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: `${needle} task`, exact: true }),
+    }),
+  ).toBeVisible();
+  expect((await readTask(request, task.entity_id)).title).toBe(
+    `${needle} task`,
+  );
+  await page.keyboard.press("Escape");
+  await page.locator("body").press("Control+k");
+  await palette.getByRole("textbox", { name: "جست‌وجوی سراسری" }).fill(needle);
+  await palette.getByRole("link", { name: `${needle} project` }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/projects\\?project=${project.entity_id}`),
+  );
+  await expect(
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", {
+        name: `${needle} project`,
+        exact: true,
+      }),
+    }),
+  ).toBeVisible();
+});
+
+test("same_route_command_palette_links_open_the_new_project_and_file", async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    !["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname),
+    "Synthetic same-route references run only against isolated local staging.",
+  );
+  const prefix = `E2E-${crypto.randomUUID().slice(0, 8)} same route`;
+  const firstProject = await mutate(request, "project_create", {
+    title: `${prefix} project A`,
+  });
+  const secondProject = await mutate(request, "project_create", {
+    title: `${prefix} project B`,
+  });
+  const registerFile = async (suffix: string) => {
+    const externalId = `synthetic-${crypto.randomUUID()}`;
+    return mutate(request, "file_register_external_link", {
+      title: `${prefix} file ${suffix}`,
+      provider: "google_drive",
+      external_id: externalId,
+      external_url: `https://drive.google.com/file/d/${externalId}/view`,
+      original_filename: `${prefix} file ${suffix}.txt`,
+    });
+  };
+  const firstFile = await registerFile("A");
+  const secondFile = await registerFile("B");
+
+  await page.goto(
+    `/projects?project=${encodeURIComponent(firstProject.entity_id)}`,
+  );
+  await expect(
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", {
+        name: `${prefix} project A`,
+        exact: true,
+      }),
+    }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.locator("body").press("Control+k");
+  let palette = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "جست‌وجو و فرمان‌ها" }),
+  });
+  await palette
+    .getByRole("textbox", { name: "جست‌وجوی سراسری" })
+    .fill(`${prefix} project B`);
+  await palette.getByRole("link", { name: `${prefix} project B` }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/projects\\?project=${secondProject.entity_id}`),
+  );
+  await expect(
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", {
+        name: `${prefix} project B`,
+        exact: true,
+      }),
+    }),
+  ).toBeVisible();
+
+  await page.goto(`/files?file=${encodeURIComponent(firstFile.entity_id)}`);
+  await expect(
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: `${prefix} file A`, exact: true }),
+    }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.locator("body").press("Control+k");
+  palette = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "جست‌وجو و فرمان‌ها" }),
+  });
+  await palette
+    .getByRole("textbox", { name: "جست‌وجوی سراسری" })
+    .fill(`${prefix} file B`);
+  await palette.getByRole("link", { name: `${prefix} file B` }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/files\\?file=${secondFile.entity_id}`),
+  );
+  await expect(
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: `${prefix} file B`, exact: true }),
+    }),
+  ).toBeVisible();
+});
+
 test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_and_truthful", async ({
   page,
   request,
@@ -2764,6 +3284,108 @@ test("task_tree_bulk_collapse_expand_applies_to_visible_branches_after_filter_ch
   await expect(treeRows).toHaveCount(2);
   await expandAll.click();
   await expect(treeRows).toHaveCount(5);
+});
+
+test("filtered_tree_keeps_missing_parent_context_and_opens_the_actual_parent", async ({
+  page,
+  request,
+}) => {
+  const prefix = `E2E-${crypto.randomUUID().slice(0, 8)} filtered tree`;
+  const parent = await mutate(request, "task_create", {
+    title: `${prefix} parent`,
+  });
+  const child = await mutate(request, "task_create", {
+    title: `${prefix} child`,
+    parent_task_id: parent.entity_id,
+  });
+  await page.goto(
+    `/tasks?${new URLSearchParams({ search: `${prefix} child`, view: "tree" })}`,
+  );
+  const outside = page.locator(".tree-missing-parent");
+  await expect(outside).toHaveCount(1);
+  await expect(outside).toContainText(
+    "والد این شاخه بیرون از فیلتر یا صفحهٔ فعلی است",
+  );
+  await expect(outside.locator(".tree-row")).toHaveCount(1);
+  await expect(outside.locator(".tree-row")).toContainText(`${prefix} child`);
+  expect((await readTask(request, child.entity_id)).parent_task_id).toBe(
+    parent.entity_id,
+  );
+  await outside.getByRole("button", { name: "بازکردن والد اصلی" }).click();
+  await expect(
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", {
+        name: `${prefix} parent`,
+        exact: true,
+      }),
+    }),
+  ).toBeVisible();
+});
+
+test("project_area_filter_and_collapse_preserve_project_identity_across_reload", async ({
+  page,
+  request,
+}) => {
+  const prefix = `000-E2E-${crypto.randomUUID().slice(0, 8)}`;
+  const areaA = `${prefix} area A`;
+  const areaB = `${prefix} area B`;
+  const first = await mutate(request, "project_create", {
+    title: `${prefix} first project`,
+    area: areaA,
+  });
+  const second = await mutate(request, "project_create", {
+    title: `${prefix} second project`,
+    area: areaB,
+  });
+  await page.goto("/projects");
+  const areaFilter = page.getByLabel("نمایش حوزه");
+  await expect(areaFilter).toBeVisible();
+  const groupA = page.locator(".project-area").filter({ hasText: areaA });
+  const groupB = page.locator(".project-area").filter({ hasText: areaB });
+  await expect(groupA.locator(".project-card")).toContainText(
+    `${prefix} first project`,
+  );
+  await expect(groupB.locator(".project-card")).toContainText(
+    `${prefix} second project`,
+  );
+  await areaFilter.selectOption(areaA);
+  await expect(groupA).toBeVisible();
+  await expect(groupB).toHaveCount(0);
+  await expect(
+    page.getByText("گروه‌بندی فقط پروژه‌های این صفحه"),
+  ).toBeVisible();
+  await areaFilter.selectOption("");
+
+  await groupA.locator(".project-area-toggle").click();
+  await expect(groupA.locator(".project-area-toggle")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(groupA.locator(".project-grid")).toBeHidden();
+  await expect(groupB.locator(".project-grid")).toBeVisible();
+  await page.reload();
+  await expect(groupA.locator(".project-area-toggle")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await groupA.locator(".project-area-toggle").click();
+  await expect(groupA.locator(".project-card")).toContainText(
+    `${prefix} first project`,
+  );
+  await expect(groupA.locator(".project-grid")).toBeVisible();
+  const projects = await readQuery<PageDTO<ProjectDTO>>(
+    request,
+    "project_list",
+    {
+      limit: 100,
+    },
+  );
+  expect(
+    projects.items.find((item) => item.project_id === first.entity_id)?.area,
+  ).toBe(areaA);
+  expect(
+    projects.items.find((item) => item.project_id === second.entity_id)?.area,
+  ).toBe(areaB);
 });
 
 test("project_task_views_and_manual_order_persist_without_resequencing_other_tasks", async ({

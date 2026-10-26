@@ -379,6 +379,11 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
   whoami: object({}),
   task_search: object({ ...taskFilters, ...page }),
   task_find_ready: object({ ...taskFilters, ...page }),
+  daily_focus_get: object({ date: localDate.optional() }),
+  daily_capacity_preview: object({
+    date: localDate.optional(),
+    period: z.enum(["day", "week"]).optional(),
+  }),
   task_find_blocked: object({ ...taskFilters, ...page }),
   task_list_overdue: object({ ...taskFilters, ...page }),
   task_get: taskIdentity,
@@ -514,6 +519,9 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
   search_all: object({
     ...taskFilters,
     state: z.enum(["Inbox", "Active", "Old", "External"]).optional(),
+    task_cursor: page.cursor,
+    project_cursor: page.cursor,
+    file_cursor: page.cursor,
     ...page,
   }),
   analytics_summary: object({ ...taskFilters, ...dateRange }).refine(
@@ -545,6 +553,16 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
 };
 const previewInput = object({ preview_id: id });
 export const WRITE_INPUT_SCHEMAS: Partial<Record<CommandName, z.ZodType>> = {
+  daily_focus_set: object({
+    date: localDate,
+    task_ids: z
+      .array(id)
+      .max(5)
+      .refine(
+        (values) => new Set(values).size === values.length,
+        "Choose each task at most once",
+      ),
+  }),
   task_create: object(createFields),
   subtask_create: object({ ...createFields, parent_task_id: id }),
   task_update: object({ task_id: id, ...updateFields }),
@@ -845,7 +863,7 @@ export function writeSchema(command: CommandName) {
     input,
     operation_id: z.string().min(8).max(200),
     expected_revision:
-      command === "time_contract_policy_upsert"
+      command === "time_contract_policy_upsert" || command === "daily_focus_set"
         ? z.number().int().nonnegative()
         : revisionCommands.has(command)
           ? z.number().int().positive()
@@ -928,6 +946,12 @@ export function requiredToolScopes(
   ];
 }
 const semantics: Partial<Record<QueryName | CommandName, string>> = {
+  daily_focus_get:
+    "Read the owner-selected tasks for one Europe/Berlin day in saved order. Selection is independent of due dates and workflow status; closed tasks remain visible until the owner removes them.",
+  daily_capacity_preview:
+    "Read a Berlin day or Monday–Sunday week's selected task estimates and known busy calendar/work intervals. Calendar and work fields require their own scopes; missing estimates or incomplete/stale coverage remain explicit. No free-time or automatic schedule is inferred.",
+  daily_focus_set:
+    "Replace one Berlin day's ordered selection of at most five existing owner tasks using the current day revision and a stable operation ID. Do not alter task status, due date, parent, or priority; conflicts require a fresh read.",
   calendar_sync_status:
     "Read owner-bound source capabilities, last successful refresh, coverage and sanitized source failures from persistent cache. This read performs no provider network requests and never returns private feed credentials.",
   calendar_operation_status:

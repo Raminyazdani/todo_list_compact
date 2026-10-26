@@ -2,7 +2,7 @@
 
 سامانهٔ شخصی فارسی/انگلیسی برای کارها، پروژه‌ها، وابستگی‌ها، چک‌لیست‌ها، تقویم، ساعت کار و فایل‌ها. [گزارش نهایی فارسی](docs/FINAL_REPORT_FA.md) نتیجهٔ اجرا و محدودیت‌های باقی‌مانده را توضیح می‌دهد. وضعیت انتشار و نتیجهٔ واقعی آزمون‌ها در [گزارش کیفیت](docs/QUALITY_REPORT.md)، [چک‌لیست پذیرش](docs/ACCEPTANCE_CHECKLIST.md) و [پیشرفت ساخت](docs/BUILD_PROGRESS.json) ثبت می‌شود. وجود کد به معنی تأیید انتشار نیست.
 
-طبق [درخواست فعلی مالک](docs/CURRENT_SCOPE_FA.md)، فایل‌های تازه روی Neon خصوصی ذخیره می‌شوند و AI داخل برنامه فعلاً خاموش است. [بارگذاری و نسخه‌بندی واقعی و پشتیبان ابری](docs/NEON_LIVE_VERIFICATION.md) تأیید شدند. ورود OAuth بومی Codex و خواندن واقعی MCP در همین چت موفق‌اند؛ ۱۳۰ ابزار، حساب موجود، ۴۵ کار فعال و سه فایل اصلی تأیید شدند.
+طبق [درخواست مالک](docs/CURRENT_SCOPE_FA.md)، فایل‌های تازه روی Neon خصوصی ذخیره می‌شوند و AI داخل برنامه فعلاً خاموش است. [بارگذاری و نسخه‌بندی واقعی و پشتیبان ابری](docs/NEON_LIVE_VERIFICATION.md) تأیید شدند. شمار ۱۳۰ ابزار، ۴۵ کار فعال و سه فایل اصلی، شاهد تاریخیِ آزمون ۱۴ اکتبر است؛ وضعیت و شمار فعلی را از MCP و [پیشرفت ساخت](docs/BUILD_PROGRESS.json) بخوانید.
 
 The application uses Next.js, Neon PostgreSQL, Better Auth and the official MCP TypeScript SDK. Browser, REST and MCP call one transactional domain service. Task workflow status and derived readiness are separate. Hard dependencies form a directed acyclic graph with ALL/ANY groups; only Done satisfies a prerequisite.
 
