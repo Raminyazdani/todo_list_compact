@@ -276,6 +276,179 @@ describe("MCP advertised schemas against the real canonical PostgreSQL service",
         .success,
     ).toBe(false);
   });
+  it("daily_focus_contract_requires_one_Berlin_day_revision_and_preserves_task_state", async () => {
+    const selected = await task("Synthetic focus action");
+    const second = await task("Synthetic finished focus action");
+    const done = await write(
+      "task_complete",
+      { task_id: second.task_id },
+      second.revision,
+    );
+    expect(done.version).toBeGreaterThan(second.revision);
+
+    expect(tool("daily_focus_get").scopes).toEqual(["tasks:read"]);
+    expect(tool("daily_focus_set").scopes).toEqual(["tasks:write"]);
+    expect(
+      tool("daily_focus_get").schema.safeParse({ date: "2027-02-30" }).success,
+    ).toBe(false);
+    expect(
+      tool("daily_focus_set").schema.safeParse({
+        input: { date: "2027-10-25", task_ids: [selected.task_id] },
+        operation_id: randomUUID(),
+      }).success,
+    ).toBe(false);
+    expect(
+      tool("daily_focus_set").schema.safeParse({
+        input: {
+          date: "2027-10-25",
+          task_ids: [selected.task_id, selected.task_id],
+        },
+        operation_id: randomUUID(),
+        expected_revision: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      tool("daily_focus_set").schema.safeParse({
+        input: {
+          date: "2027-10-25",
+          task_ids: Array.from(
+            { length: 6 },
+            (_, index) => `synthetic-${index}`,
+          ),
+        },
+        operation_id: randomUUID(),
+        expected_revision: 0,
+      }).success,
+    ).toBe(false);
+
+    const date = "2027-10-25";
+    const initial = (await read("daily_focus_get", { date })) as {
+      date: string;
+      timezone: string;
+      revision: number;
+      task_ids: string[];
+      items: TaskDTO[];
+    };
+    expect(initial).toMatchObject({
+      date,
+      timezone: "Europe/Berlin",
+      revision: 0,
+      task_ids: [],
+      items: [],
+    });
+    const key = randomUUID();
+    const input = { date, task_ids: [second.task_id, selected.task_id] };
+    const saved = await write("daily_focus_set", input, 0, principal, key);
+    expect(saved.version).toBe(1);
+    expect(
+      await write("daily_focus_set", input, 0, principal, key),
+    ).toMatchObject({
+      version: 1,
+      replayed: true,
+    });
+    const actual = (await read("daily_focus_get", { date })) as typeof initial;
+    expect(actual.revision).toBe(1);
+    expect(actual.task_ids).toEqual(input.task_ids);
+    expect(actual.items.map((item) => item.task_id)).toEqual(input.task_ids);
+    expect(actual.items[0].status).toBe("Done");
+    expect(actual.items[1].due_date).toBeNull();
+    await expect(
+      write("daily_focus_set", { date, task_ids: [] }, 0),
+    ).rejects.toMatchObject({
+      code: "REVISION_CONFLICT",
+    });
+    expect(
+      (await read("daily_focus_get", { date: "2027-10-26" })) as typeof initial,
+    ).toMatchObject({
+      revision: 0,
+      task_ids: [],
+    });
+    const otherOwner = { ...principal, ownerId: `foreign-${randomUUID()}` };
+    expect(
+      (await read("daily_focus_get", { date }, otherOwner)) as typeof initial,
+    ).toMatchObject({
+      revision: 0,
+      task_ids: [],
+    });
+    await expect(
+      write("daily_focus_set", input, 0, otherOwner),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(
+      read(
+        "daily_focus_get",
+        { date },
+        { ...principal, scopes: ["projects:read"] },
+      ),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_PERMISSIONS" });
+  });
+  it("search_all_returns_only_authorized_matching_project_metadata", async () => {
+    const needle = `SyntheticSearch${randomUUID().slice(0, 8)}`;
+    await write("project_create", {
+      title: `${needle} project`,
+      area: "Research",
+    });
+    await write("task_create", { title: `${needle} task` });
+    const result = (await read("search_all", { search: needle })) as {
+      tasks: PageDTO<TaskDTO>;
+      projects: PageDTO<{ project_id: string; title: string }>;
+    };
+    expect(result.tasks.items.map((item) => item.title)).toContain(
+      `${needle} task`,
+    );
+    expect(result.projects.items.map((item) => item.title)).toContain(
+      `${needle} project`,
+    );
+    expect(result.projects.total).toBe(1);
+    const taskOnly = (await read(
+      "search_all",
+      { search: needle },
+      { ...principal, scopes: ["tasks:read"] },
+    )) as typeof result;
+    expect(taskOnly.tasks.total).toBe(1);
+    expect(taskOnly.projects).toMatchObject({ total: 0, items: [] });
+  });
+  it("daily_capacity_preview_is_bounded_read_only_and_hides_ungranted_calendar_and_work", async () => {
+    expect(tool("daily_capacity_preview").readOnly).toBe(true);
+    expect(tool("daily_capacity_preview").scopes).toEqual(["tasks:read"]);
+    expect(
+      tool("daily_capacity_preview").schema.safeParse({
+        date: "2027-03-28",
+        period: "week",
+      }).success,
+    ).toBe(true);
+    for (const input of [
+      { date: "2027-02-30" },
+      { period: "month" },
+      { date: "2027-03-28", task_ids: ["synthetic"] },
+    ])
+      expect(
+        tool("daily_capacity_preview").schema.safeParse(input).success,
+      ).toBe(false);
+    const before = (await read("get_activity", {
+      limit: 200,
+    })) as PageDTO<unknown>;
+    const preview = await read(
+      "daily_capacity_preview",
+      { date: "2027-03-28", period: "day" },
+      { ...principal, scopes: ["tasks:read"] },
+    );
+    expect(preview).toMatchObject({
+      date: "2027-03-28",
+      period: "day",
+      timezone: "Europe/Berlin",
+      from_date: "2027-03-28",
+      to_date_exclusive: "2027-03-29",
+      calendar: { access: "not_granted", busy_minutes: null },
+      work: { access: "not_granted", occupied_minutes: null },
+      known_busy_minutes: null,
+      busy_coverage: "unknown",
+    });
+    expect(
+      (await read("get_activity", { limit: 200 })) as PageDTO<unknown>,
+    ).toMatchObject({
+      total: before.total,
+    });
+  });
   it("preserves Persian text and unset dates through create/update/status and exact accepted retry", async () => {
     const created = await write("task_create", {
       title: "بررسی آزمایش",

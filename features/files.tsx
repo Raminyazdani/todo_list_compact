@@ -211,8 +211,9 @@ export function FileWorkspace({
   const [external, setExternal] = useState(false);
   const [picked, setSelected] = useState<FileDTO | null>(null);
   const params = useSearchParams();
-  const [initialFileId, setInitialFileId] = useState<string | null>(() =>
-    params.get("file"),
+  const linkedFileId = params.get("file");
+  const [initialFileId, setInitialFileId] = useState<string | null>(
+    () => linkedFileId,
   );
   const activeFileId = picked?.file_id ?? initialFileId;
   const [versionCursor, setVersionCursor] = useState<string | null>(null);

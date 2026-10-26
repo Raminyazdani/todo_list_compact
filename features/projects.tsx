@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Folder } from "lucide-react";
+import { ChevronDown, ChevronLeft, Folder } from "lucide-react";
 import type {
   CommandName,
   MutationResult,
@@ -11,7 +11,7 @@ import type {
   ProjectDTO,
   TaskDTO,
 } from "@/shared/contracts";
-import { useQuery } from "./api";
+import { clearQueryCache, useQuery } from "./api";
 import { useLocale } from "./locale";
 import { TaskRow } from "./tasks";
 import {
@@ -40,17 +40,24 @@ export function ProjectWorkspace({
   onOpen: (id: string) => void;
   knowledge: (id: string) => React.ReactNode;
 }) {
-  const { t } = useLocale();
+  const { t, language } = useLocale();
   const [archived, setArchived] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const [taskCursor, setTaskCursor] = useState<string | null>(null);
   const params = useSearchParams();
-  const [selected, setSelected] = useState<string | null>(() =>
-    params.get("project"),
+  const linkedProjectId = params.get("project");
+  const [selected, setSelected] = useState<string | null>(
+    () => linkedProjectId,
   );
   const [create, setCreate] = useState(false);
   const [edit, setEdit] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [areaFilter, setAreaFilter] = useState("");
+  const [areaSaving, setAreaSaving] = useState(false);
+  const preferences = useQuery<{
+    settings: Record<string, unknown>;
+    revision: number;
+  }>("preferences_get");
   const projects = useQuery<PageDTO<ProjectDTO>>("project_list", {
     limit: 100,
     cursor,
@@ -76,6 +83,53 @@ export function ProjectWorkspace({
     setTaskCursor(null);
     setEdit(false);
     setArchiveConfirm(false);
+  }
+  const areaGroups = new Map<string, ProjectDTO[]>();
+  for (const item of projects.data?.items ?? []) {
+    const area = item.area.trim();
+    const group = areaGroups.get(area) ?? [];
+    group.push(item);
+    areaGroups.set(area, group);
+  }
+  const areaNames = [...areaGroups.keys()].sort((a, b) =>
+    a.localeCompare(b, language === "fa" ? "fa" : "en"),
+  );
+  const savedCollapsed = preferences.data?.settings.project_area_collapsed;
+  const collapsedAreas = new Set(
+    Array.isArray(savedCollapsed)
+      ? savedCollapsed.filter(
+          (area): area is string => typeof area === "string",
+        )
+      : [],
+  );
+  async function saveCollapsedAreas(next: Set<string>) {
+    if (!preferences.data || preferences.fetching || areaSaving) return;
+    setAreaSaving(true);
+    try {
+      const result = await action(
+        "preferences_update",
+        { settings: { project_area_collapsed: [...next] } },
+        preferences.data.revision,
+      );
+      if (!result) clearQueryCache();
+      preferences.refresh();
+    } finally {
+      setAreaSaving(false);
+    }
+  }
+  function toggleArea(area: string) {
+    const next = new Set(collapsedAreas);
+    if (next.has(area)) next.delete(area);
+    else next.add(area);
+    void saveCollapsedAreas(next);
+  }
+  function setAllAreas(collapsed: boolean) {
+    const next = new Set(collapsedAreas);
+    for (const area of areaNames) {
+      if (collapsed) next.add(area);
+      else next.delete(area);
+    }
+    void saveCollapsedAreas(next);
   }
   const current = project.data;
   return (
@@ -103,6 +157,7 @@ export function ProjectWorkspace({
           onClick={() => {
             setArchived(false);
             setCursor(null);
+            setAreaFilter("");
           }}
         >
           {t("فعال", "Active")}
@@ -112,49 +167,138 @@ export function ProjectWorkspace({
           onClick={() => {
             setArchived(true);
             setCursor(null);
+            setAreaFilter("");
           }}
         >
           {t("بایگانی", "Archived")}
         </button>
       </div>
       <QueryState {...projects} retry={projects.refresh} />
-      <div className="project-grid">
-        {projects.data?.items.map((item) => (
-          <button
-            key={item.project_id}
-            className="project-card"
-            onClick={() => pick(item.project_id)}
-          >
-            <div className="project-icon">
-              <Folder size={20} />
-            </div>
-            <span className="chip">
-              {item.area || t("بدون حوزه", "Unassigned")}
-            </span>
-            <h2>{item.title}</h2>
-            <p>
-              {item.notes ||
-                t("جزئیات پروژه را باز کن", "Open the project workspace")}
-            </p>
-            <Progress
-              value={item.done ?? 0}
-              max={item.total ?? 0}
-              label={t(
-                `پیشرفت پروژهٔ ${item.title}`,
-                `Progress for ${item.title}`,
+      {projects.data && projects.data.items.length > 0 && (
+        <div className="project-area-controls">
+          <Field label={t("نمایش حوزه", "Show area")}>
+            <select
+              value={areaFilter}
+              onChange={(event) => setAreaFilter(event.target.value)}
+            >
+              <option value="">
+                {t("همهٔ حوزه‌های این صفحه", "All areas on this page")}
+              </option>
+              {areaFilter && !areaGroups.has(areaFilter) && (
+                <option value={areaFilter}>{areaFilter} (0)</option>
               )}
-            />
-            <footer>
-              <span>
-                {item.done ?? 0}/{item.total ?? 0} {t("کار", "tasks")}
-              </span>
-              <span>
-                {item.blocked ?? 0} {t("مسدود", "blocked")}
-              </span>
-            </footer>
-          </button>
-        ))}
-      </div>
+              {areaNames.map((area) => (
+                <option key={area} value={area}>
+                  {area || t("بدون حوزه", "Unassigned")} (
+                  {areaGroups.get(area)?.length ?? 0})
+                </option>
+              ))}
+            </select>
+          </Field>
+          <span className="small muted">
+            {t(
+              "گروه‌بندی فقط پروژه‌های این صفحه",
+              "Grouping covers projects on this page",
+            )}
+          </span>
+          <div className="form-actions">
+            <Button
+              disabled={!preferences.data || preferences.fetching || areaSaving}
+              onClick={() => setAllAreas(true)}
+            >
+              {t("بستن همهٔ حوزه‌ها", "Collapse all areas")}
+            </Button>
+            <Button
+              disabled={!preferences.data || preferences.fetching || areaSaving}
+              onClick={() => setAllAreas(false)}
+            >
+              {t("بازکردن همهٔ حوزه‌ها", "Expand all areas")}
+            </Button>
+          </div>
+        </div>
+      )}
+      <QueryState {...preferences} retry={preferences.refresh} />
+      {areaNames
+        .filter((area) => !areaFilter || area === areaFilter)
+        .map((area) => {
+          const items = areaGroups.get(area) ?? [];
+          const collapsed = collapsedAreas.has(area);
+          return (
+            <section className="project-area" key={area}>
+              <div className="project-area-heading">
+                <button
+                  className="project-area-toggle"
+                  aria-expanded={!collapsed}
+                  aria-controls={`project-area-${area.length}-${encodeURIComponent(area)}`}
+                  disabled={
+                    !preferences.data || preferences.fetching || areaSaving
+                  }
+                  onClick={() => toggleArea(area)}
+                >
+                  {collapsed ? (
+                    <ChevronLeft size={17} />
+                  ) : (
+                    <ChevronDown size={17} />
+                  )}
+                  <span>{area || t("بدون حوزه", "Unassigned")}</span>
+                  <span className="chip">{items.length}</span>
+                </button>
+              </div>
+              <div
+                className="project-grid"
+                id={`project-area-${area.length}-${encodeURIComponent(area)}`}
+                hidden={collapsed}
+              >
+                {items.map((item) => (
+                  <button
+                    key={item.project_id}
+                    className="project-card"
+                    onClick={() => pick(item.project_id)}
+                  >
+                    <div className="project-icon">
+                      <Folder size={20} />
+                    </div>
+                    <span className="chip">
+                      {item.area || t("بدون حوزه", "Unassigned")}
+                    </span>
+                    <h2>{item.title}</h2>
+                    <p>
+                      {item.notes ||
+                        t(
+                          "جزئیات پروژه را باز کن",
+                          "Open the project workspace",
+                        )}
+                    </p>
+                    <Progress
+                      value={item.done ?? 0}
+                      max={item.total ?? 0}
+                      label={t(
+                        `پیشرفت پروژهٔ ${item.title}`,
+                        `Progress for ${item.title}`,
+                      )}
+                    />
+                    <footer>
+                      <span>
+                        {item.done ?? 0}/{item.total ?? 0} {t("کار", "tasks")}
+                      </span>
+                      <span>
+                        {item.blocked ?? 0} {t("مسدود", "blocked")}
+                      </span>
+                    </footer>
+                  </button>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      {projects.data && areaFilter && !areaGroups.has(areaFilter) && (
+        <Empty
+          title={t(
+            "این حوزه در صفحهٔ فعلی پروژه‌ای ندارد",
+            "No projects in this area on the current page",
+          )}
+        />
+      )}
       {projects.data && !projects.data.items.length && (
         <Empty
           title={t("پروژه‌ای در این بخش نیست", "No projects in this section")}
@@ -166,12 +310,22 @@ export function ProjectWorkspace({
           {t("پروژه در این صفحه", "projects on this page")}
         </span>
         {cursor && (
-          <Button onClick={() => setCursor(null)}>
+          <Button
+            onClick={() => {
+              setCursor(null);
+              setAreaFilter("");
+            }}
+          >
             {t("صفحهٔ اول", "First page")}
           </Button>
         )}
         {projects.data?.next_cursor && (
-          <Button onClick={() => setCursor(projects.data!.next_cursor)}>
+          <Button
+            onClick={() => {
+              setCursor(projects.data!.next_cursor);
+              setAreaFilter("");
+            }}
+          >
             {t("صفحهٔ بعد", "Next page")}
           </Button>
         )}

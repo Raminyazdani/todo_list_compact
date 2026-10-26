@@ -40,6 +40,7 @@ import type {
 } from "@/shared/contracts";
 import { WORKFLOW_STATUSES } from "@/shared/contracts";
 import { command, query, usePagedQuery, useQuery } from "./api";
+import { activityLabel } from "./activity-labels";
 import { resolveTaskRowLayout } from "@/shared/task-row-fields";
 import {
   CustomizedTaskRow,
@@ -954,6 +955,13 @@ function TaskTree({
       .map((task) => task.parent_task_id)
       .filter((id): id is string => id !== null && taskIds.has(id)),
   );
+  const missingParentIds = [
+    ...new Set(
+      tasks
+        .map((task) => task.parent_task_id)
+        .filter((id): id is string => id !== null && !taskIds.has(id)),
+    ),
+  ];
   const childrenByParent = new Map<string, TaskDTO[]>();
   for (const task of tasks) {
     if (!task.parent_task_id) continue;
@@ -995,12 +1003,7 @@ function TaskTree({
   }
   function branch(parentId: string | null, depth: number): React.ReactNode {
     return tasks
-      .filter(
-        (task) =>
-          task.parent_task_id === parentId ||
-          (parentId === null &&
-            !tasks.some((parent) => parent.task_id === task.parent_task_id)),
-      )
+      .filter((task) => task.parent_task_id === parentId)
       .map((task) => {
         const hasVisibleChildren = parentIds.has(task.task_id);
         const collapsed = isCollapsed(task.task_id);
@@ -1080,19 +1083,23 @@ function TaskTree({
           {t("بازکردن همهٔ شاخه‌های این صفحه", "Expand all on this page")}
         </Button>
       </div>
-      {tasks.some(
-        (task) =>
-          task.parent_task_id &&
-          !tasks.some((parent) => parent.task_id === task.parent_task_id),
-      ) && (
-        <p className="warning">
-          {t(
-            "بعضی والدها خارج از این صفحه یا فیلترند؛ این شاخه‌ها مستقل نمایش داده می‌شوند. والد اصلی در جزئیات کار در دسترس است.",
-            "Some parents are outside this page or filter. Their branches appear independently; the actual parent remains available in task details.",
-          )}
-        </p>
-      )}
       {branch(null, 0)}
+      {missingParentIds.map((parentId) => (
+        <section className="tree-missing-parent" key={parentId}>
+          <div className="tree-missing-parent-header">
+            <span>
+              {t(
+                "والد این شاخه بیرون از فیلتر یا صفحهٔ فعلی است",
+                "The parent of this branch is outside the current filter or page",
+              )}
+            </span>
+            <Button onClick={() => onOpen(parentId)}>
+              {t("بازکردن والد اصلی", "Open actual parent")}
+            </Button>
+          </div>
+          {branch(parentId, 1)}
+        </section>
+      ))}
     </div>
   );
 }
@@ -1176,7 +1183,7 @@ export function TaskDetail({
   onOpen: (id: string) => void;
   action: Action;
 }) {
-  const { t } = useLocale();
+  const { t, language } = useLocale();
   const data = useQuery<TaskDTO>(
     "task_get",
     { task_id: taskId ?? "" },
@@ -1978,7 +1985,7 @@ export function TaskDetail({
                 <div key={event.event_id}>
                   <span className="activity-dot" />
                   <div>
-                    <strong>{event.event_type}</strong>
+                    <strong>{activityLabel(event.event_type, language)}</strong>
                     <small>
                       {event.channel} · {event.reason}
                     </small>

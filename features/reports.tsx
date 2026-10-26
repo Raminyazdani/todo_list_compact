@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type {
   ReportsDTO,
@@ -17,6 +17,7 @@ import {
 import { useQuery } from "./api";
 import { useLocale } from "./locale";
 import { Trends } from "./trends";
+import { activityLabel } from "./activity-labels";
 import {
   Button,
   Empty,
@@ -37,12 +38,27 @@ type Analytics = {
 
 export function FullReports() {
   const { t, language } = useLocale();
-  const [day] = useState(() => instantToLocalDate(Date.now()));
-  const [range, setRange] = useState({
+  const [day, setDay] = useState(() => instantToLocalDate(Date.now()));
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setDay(instantToLocalDate(Date.now())),
+      60000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+  const defaultRange = {
     from_date: addCalendarDays(day, -84),
     to_date: addCalendarDays(day, 1),
     timezone: "Europe/Berlin",
-  });
+  };
+  const [customRange, setCustomRange] = useState<typeof defaultRange | null>(
+    null,
+  );
+  const range = customRange ?? defaultRange;
+  const [draftRange, setDraftRange] = useState<typeof defaultRange | null>(
+    null,
+  );
+  const displayedRange = draftRange ?? range;
   const [cursor, setCursor] = useState<string | null>(null);
   const [activityCursor, setActivityCursor] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -97,7 +113,8 @@ export function FullReports() {
                   "Range must be ordered and at most one year",
                 ),
               );
-            setRange(next);
+            setCustomRange(next);
+            setDraftRange(null);
             setCursor(null);
           } catch (error) {
             setError(error instanceof Error ? error.message : String(error));
@@ -108,7 +125,13 @@ export function FullReports() {
           <input
             type="date"
             name="from_date"
-            defaultValue={range.from_date}
+            value={displayedRange.from_date}
+            onChange={(event) =>
+              setDraftRange({
+                ...displayedRange,
+                from_date: event.target.value,
+              })
+            }
             required
           />
         </Field>
@@ -121,14 +144,20 @@ export function FullReports() {
           <input
             type="date"
             name="to_date"
-            defaultValue={range.to_date}
+            value={displayedRange.to_date}
+            onChange={(event) =>
+              setDraftRange({ ...displayedRange, to_date: event.target.value })
+            }
             required
           />
         </Field>
         <Field label={t("منطقهٔ زمانی گزارش", "Report timezone")}>
           <input
             name="timezone"
-            defaultValue={range.timezone}
+            value={displayedRange.timezone}
+            onChange={(event) =>
+              setDraftRange({ ...displayedRange, timezone: event.target.value })
+            }
             required
             list="report-zones"
           />
@@ -369,7 +398,7 @@ export function FullReports() {
         <QueryState {...activity} retry={activity.refresh} />
         {activity.data?.items.map((event) => (
           <div className="dependency-row" key={event.event_id}>
-            <strong>{event.event_type}</strong>
+            <strong>{activityLabel(event.event_type, language)}</strong>
             <span className="chip">{event.channel}</span>
             <time>
               {new Date(event.occurred_at).toLocaleString(
