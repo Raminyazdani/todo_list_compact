@@ -1,16 +1,23 @@
 {
   "life_os_focus_and_navigation_2026_10_26": {
-    "status": "local_verified_release_pending",
+    "status": "released_live_api_mcp_verified_browser_session_pending",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/16",
+    "release_commit": "3e3c55301d28552bdc4c23b4a239dbd97dfeb94a",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/40379564678",
     "scope": "Owner-selected daily focus, explicit Inbox review, read-only capacity preview, project-area grouping, filtered-tree parent context, grouped search, localized activity labels and Berlin-midnight default ranges.",
     "observed": {
       "local_gates": "PASS format, lint, typecheck, public safety scan, high-severity dependency audit and production build.",
       "synthetic_contract_domain_tests": "PASS 663 tests across 79 files with 30 explicit skips; full coverage statement 90.82%, branch 86.69%. Daily focus, search scope, idempotency, revision, backup, busy-interval union and DST were exercised.",
       "isolated_browser": "PASS six focused authenticated Playwright scenarios plus three adversarial follow-ups using separate synthetic PostgreSQL and credentials: daily focus reload/mobile/keyboard and conflict review, filtered-tree parent context, project area collapse and reload, Berlin-midnight ranges, Ctrl+K grouped and same-route project/file search, and Inbox skip/concurrent-edit/passive status-change draft retention.",
-      "native_database_migration": "PASS isolated PostgreSQL migration and authentication bootstrap used by the browser suite; production migration is pending.",
-      "production": "PENDING PR CI, production migration, deployment and authenticated readback."
+      "ci": "PASS full second run: 663 unit/contract/domain tests, 14 real PostgreSQL transaction tests, 55 authenticated browser/MCP tests with 3 explicit skips, and HTTP authorization/revocation/rate-limit/token-expiry suites. The first run hit an API 429 rate limit in an overactive E2E fixture; the fixture now waits at the observed read budget without changing production limits.",
+      "native_database_migration": "PASS isolated PostgreSQL and private expiring Neon clone of the production branch: additive DDL, focus/capacity reads, focus write and same-key replay. No user task was changed on production.",
+      "production_backup": "PASS fresh encrypted private pre-migration database export, decrypt and manifest readback; the backup and passphrase remain outside Git, and external file bytes are not part of this export.",
+      "production_migration": "PASS additive focus tables and both focus foreign keys on the verified direct Production endpoint; existing business-table counts stayed unchanged and new focus tables began empty.",
+      "production": "PASS canonical Vercel alias READY at the merged master SHA; public health returned ok, authenticated owner MCP health returned ok with verified backup, search_all returned tasks/projects/files, and read-only owner service focus/capacity queries succeeded against Production."
     },
     "limits": [
-      "Synthetic browser and local build evidence does not establish production deployment behavior.",
+      "Authenticated production UI was not browser-tested in this session because Computer Use stopped when it could not determine the active browser URL; isolated CI browser evidence does not replace that check.",
+      "Capacity preview found two stale calendar cache sources in the live read. Coverage is marked partial until foreground refresh; the task/project MCP connection does not grant calendar scopes.",
       "The daily focus read derives exact readiness from the owner graph. Synthetic 10000-task/30000-edge local measurements are recorded in artifacts/domain-performance.json; they vary by run and do not include network or browser latency.",
       "Large-account scaling remains unmeasured for Inbox review (paged reads are fully collected) and project search (owner projects are filtered in memory); these are P2 follow-ups, not production latency claims."
     ],
