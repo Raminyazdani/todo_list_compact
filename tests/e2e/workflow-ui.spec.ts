@@ -1232,7 +1232,7 @@ test("ui_graph_and_linear_accessible_fallback_are_equivalent", async ({
   const data = await fixture(request);
   await page.goto("/tasks");
   await page.getByPlaceholder("جست‌وجو بین کارها…").fill(data.a.title);
-  await page.getByRole("button", { name: "graph", exact: true }).click();
+  await page.getByRole("button", { name: /^(نمای گراف|Graph view)$/ }).click();
   await expect(page.locator(".graph-boundary")).toContainText(
     "این نما همهٔ روابط را نشان نمی‌دهد",
   );
@@ -1736,7 +1736,7 @@ test("synthetic_desktop_dark_rtl_and_light_ltr_are_accessible", async ({
             )
             .fill(data.a.title);
           await page
-            .getByRole("button", { name: "graph", exact: true })
+            .getByRole("button", { name: /^(نمای گراف|Graph view)$/ })
             .click();
           await page
             .getByRole("combobox", {
@@ -1809,7 +1809,9 @@ test("schedule_preview_requires_estimates_and_preserves_deadlines_until_confirma
   async function openPlan() {
     await page.goto("/tasks");
     await page.getByPlaceholder("جست‌وجو بین کارها…").fill(data.prefix);
-    await page.getByRole("button", { name: "timeline", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^(نمای خط زمانی|Timeline view)$/ })
+      .click();
     await expect(
       page.getByRole("heading", {
         name: "برنامهٔ وابستگی‌ها و پیشنهاد زمان‌بندی",
@@ -2685,6 +2687,85 @@ test("all_day_drag_keeps_calendar_days_across_dst_and_timed_drag_keeps_seconds",
   ).toHaveCount(0);
 });
 
+test("task_tree_bulk_collapse_expand_applies_to_visible_branches_after_filter_change", async ({
+  page,
+  request,
+}) => {
+  const prefix = `E2E-${crypto.randomUUID().slice(0, 8)} tree controls`;
+  for (const group of ["A", "B"]) {
+    const parent = await mutate(request, "task_create", {
+      title: `${prefix} ${group} parent`,
+    });
+    const child = await mutate(request, "task_create", {
+      title: `${prefix} ${group} child`,
+      parent_task_id: parent.entity_id,
+    });
+    if (group === "A") {
+      await mutate(request, "task_create", {
+        title: `${prefix} A grandchild`,
+        parent_task_id: child.entity_id,
+        priority: "Urgent",
+      });
+      await mutate(
+        request,
+        "task_complete",
+        { task_id: child.entity_id },
+        (await readTask(request, child.entity_id)).revision,
+      );
+    }
+  }
+  await page.goto(
+    `/tasks?${new URLSearchParams({ search: prefix, view: "tree" })}`,
+  );
+  const treeRows = page.locator(".tree-row");
+  const collapseAll = page.getByRole("button", {
+    name: /^(بستن همهٔ شاخه‌های این صفحه|Collapse all on this page)$/,
+  });
+  const expandAll = page.getByRole("button", {
+    name: /^(بازکردن همهٔ شاخه‌های این صفحه|Expand all on this page)$/,
+  });
+  await expect(treeRows).toHaveCount(5);
+  await collapseAll.click();
+  await expect(treeRows).toHaveCount(2);
+  await expect(
+    page.locator('.tree-row > .icon-button[aria-expanded="false"]'),
+  ).toHaveCount(2);
+  const firstParent = treeRows.filter({ hasText: `${prefix} A parent` });
+  const firstSummary = firstParent
+    .locator("..")
+    .locator(".tree-branch-summary");
+  await expect(firstSummary).toContainText(
+    /2 (زیرکار در این صفحه|subtasks on this page)/,
+  );
+  await expect(firstSummary).toContainText(/1 (انجام‌شده|done)/);
+  await expect(firstSummary).toContainText(/1 (فوریِ باز|open urgent)/);
+  await firstParent
+    .getByRole("button", { name: /^(بازکردن شاخهٔ|Expand branch)/ })
+    .click();
+  await expect(treeRows).toHaveCount(3);
+  await expect(
+    firstParent.locator(':scope > .icon-button[aria-expanded="true"]'),
+  ).toBeVisible();
+  await expandAll.click();
+  await expect(treeRows).toHaveCount(5);
+  await expect(
+    page.locator('.tree-row > .icon-button[aria-expanded="true"]'),
+  ).toHaveCount(3);
+
+  await page
+    .getByPlaceholder(/^(جست‌وجو بین کارها…|Search tasks…)$/)
+    .fill(`${prefix} B`);
+  await expect(treeRows).toHaveCount(2);
+  await collapseAll.click();
+  await expect(treeRows).toHaveCount(1);
+  await page
+    .getByPlaceholder(/^(جست‌وجو بین کارها…|Search tasks…)$/)
+    .fill(prefix);
+  await expect(treeRows).toHaveCount(2);
+  await expandAll.click();
+  await expect(treeRows).toHaveCount(5);
+});
+
 test("project_task_views_and_manual_order_persist_without_resequencing_other_tasks", async ({
   page,
   request,
@@ -2741,11 +2822,13 @@ test("project_task_views_and_manual_order_persist_without_resequencing_other_tas
       .locator(".main-content .task-title")
       .filter({ hasText: outside.title }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "board", exact: true }).click();
+  await page.getByRole("button", { name: /^(نمای ستونی|Board view)$/ }).click();
   await expect(page.locator(".board-card")).toHaveCount(2);
-  await page.getByRole("button", { name: "timeline", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^(نمای خط زمانی|Timeline view)$/ })
+    .click();
   await expect(page.locator(".gantt-row")).toHaveCount(2);
-  await page.getByRole("button", { name: "graph", exact: true }).click();
+  await page.getByRole("button", { name: /^(نمای گراف|Graph view)$/ }).click();
   await expect(page.locator(".react-flow__node")).toHaveCount(2);
   await expect(page.locator(".graph-boundary")).toContainText(
     "این نما همهٔ روابط را نشان نمی‌دهد",
@@ -2757,7 +2840,7 @@ test("project_task_views_and_manual_order_persist_without_resequencing_other_tas
   await expect(
     page.locator(".react-flow__node").filter({ hasText: outside.title }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "list", exact: true }).click();
+  await page.getByRole("button", { name: /^(نمای فهرستی|List view)$/ }).click();
   await page
     .getByRole("button", { name: values[0].title, exact: true })
     .first()
