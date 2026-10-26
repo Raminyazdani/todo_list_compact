@@ -2727,9 +2727,9 @@ test("task_tree_bulk_collapse_expand_applies_to_visible_branches_after_filter_ch
   await expect(treeRows).toHaveCount(5);
   await collapseAll.click();
   await expect(treeRows).toHaveCount(2);
-  await expect(page.locator('.tree-row [aria-expanded="false"]')).toHaveCount(
-    2,
-  );
+  await expect(
+    page.locator('.tree-row > .icon-button[aria-expanded="false"]'),
+  ).toHaveCount(2);
   const firstParent = treeRows.filter({ hasText: `${prefix} A parent` });
   const firstSummary = firstParent
     .locator("..")
@@ -2744,11 +2744,13 @@ test("task_tree_bulk_collapse_expand_applies_to_visible_branches_after_filter_ch
     .click();
   await expect(treeRows).toHaveCount(3);
   await expect(
-    firstParent.getByRole("button", { expanded: true }),
+    firstParent.locator(':scope > .icon-button[aria-expanded="true"]'),
   ).toBeVisible();
   await expandAll.click();
   await expect(treeRows).toHaveCount(5);
-  await expect(page.locator('.tree-row [aria-expanded="true"]')).toHaveCount(3);
+  await expect(
+    page.locator('.tree-row > .icon-button[aria-expanded="true"]'),
+  ).toHaveCount(3);
 
   await page
     .getByPlaceholder(/^(جست‌وجو بین کارها…|Search tasks…)$/)
