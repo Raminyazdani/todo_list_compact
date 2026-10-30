@@ -4,6 +4,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 import type { Principal } from "../../shared/contracts";
+import { SCHEMA_VERSION } from "../../server/db/schema";
 import {
   getDatabase,
   type Database,
@@ -73,7 +74,7 @@ async function assertEmptyOwner(tx: SqlClient, ownerId: string): Promise<void> {
   const schema = await tx.query<{ version: number | null }>(
     "SELECT max(version)::int AS version FROM schema_migrations",
   );
-  if (schema.rows[0]?.version !== 1)
+  if (schema.rows[0]?.version !== SCHEMA_VERSION)
     throw new Error("DRILL_DESTINATION_SCHEMA_VERSION_MISMATCH");
   const tables = await tx.query<{ table_name: string }>(
     "SELECT table_name FROM information_schema.columns WHERE table_schema='public' AND column_name='owner_id' ORDER BY table_name",

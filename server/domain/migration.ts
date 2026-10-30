@@ -14,6 +14,9 @@ export const BACKUP_TABLES = [
   "task_recurrence_rules",
   "task_recurrence_instances",
   "task_recurrence_instance_tasks",
+  "routines",
+  "routine_schedules",
+  "routine_checkins",
   "project_milestones",
   "files",
   "file_annotations",
@@ -389,6 +392,9 @@ export async function legacyImport(
   };
 }
 const ADDITIVE_BACKUP_TABLES: readonly string[] = [
+  "routines",
+  "routine_schedules",
+  "routine_checkins",
   "daily_focus_days",
   "daily_focus_items",
   "time_drafts",

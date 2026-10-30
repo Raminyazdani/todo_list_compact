@@ -17,6 +17,7 @@ import {
   ListTodo,
   Menu,
   Plus,
+  Repeat2,
   Search,
   Settings2,
   ShieldCheck,
@@ -38,6 +39,7 @@ import { LocaleContext, type Language, useLocale } from "@/features/locale";
 import { CreateTask, TaskDetail, TaskExplorer } from "@/features/tasks";
 import { TaskRowDraftProvider } from "@/features/task-row-fields";
 import { CalendarWorkspace } from "@/features/calendar-workspace";
+import { RoutineWorkspace } from "@/features/routines";
 import {
   Assistant,
   Dashboard,
@@ -53,6 +55,7 @@ const navigation = [
   { path: "/tasks", fa: "کارهای من", en: "My tasks", icon: ListTodo },
   { path: "/projects", fa: "پروژه‌ها", en: "Projects", icon: Folder },
   { path: "/calendar", fa: "تقویم", en: "Calendar", icon: CalendarDays },
+  { path: "/routines", fa: "روتین‌ها", en: "Routines", icon: Repeat2 },
   { path: "/time", fa: "ثبت ساعت کار", en: "Work log", icon: Timer },
   {
     path: "/files",
@@ -362,7 +365,7 @@ function WorkspaceContent({
           </button>
           <div className="nav-label">{t("فضای من", "WORKSPACE")}</div>
           <nav aria-label={t("منوی اصلی", "Main navigation")}>
-            {navigation.slice(0, 6).map((item) => (
+            {navigation.slice(0, 7).map((item) => (
               <Link
                 href={item.path}
                 key={item.path}
@@ -379,7 +382,7 @@ function WorkspaceContent({
             {t("بینش و ابزار", "INSIGHT & TOOLS")}
           </div>
           <nav>
-            {navigation.slice(6).map((item) => (
+            {navigation.slice(7).map((item) => (
               <Link
                 href={item.path}
                 key={item.path}
@@ -485,6 +488,8 @@ function WorkspaceContent({
               />
             ) : pathname === "/calendar" ? (
               <CalendarWorkspace action={action} onOpen={setTaskId} />
+            ) : pathname === "/routines" ? (
+              <RoutineWorkspace action={action} />
             ) : pathname === "/time" ? (
               <CalendarWorkspace
                 action={action}
