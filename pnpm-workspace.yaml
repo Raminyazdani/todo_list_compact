@@ -8,3 +8,5 @@ overrides:
   "@vercel/cli-config>zod": 4.6.7
   express>body-parser: 2.4.0
   "@vercel/blob>undici": 6.29.1
+  "ajv>fast-uri": 3.1.9
+  "express>qs": 6.16.1
