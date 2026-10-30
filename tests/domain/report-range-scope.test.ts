@@ -382,13 +382,19 @@ describe("Complete report ranges, local dates and scope boundaries", () => {
       ),
     ).toMatchObject({ total: 0 });
   });
-  it("known_old_empty_v1_backup_restores_without_additive_tables_and_SQL_source_matches_migration", async () => {
+  it("known_old_empty_v1_backup_restores_without_additive_tables_and_SQL_source_matches_ordered_migrations", async () => {
     const backup = (await service.query("backup_export", {}, principal)) as {
       tables: Record<string, unknown>;
       checksums: Record<string, unknown>;
       manifest_hash: string;
     };
-    for (const table of ["file_annotations", "event_reminders"]) {
+    for (const table of [
+      "file_annotations",
+      "event_reminders",
+      "routines",
+      "routine_schedules",
+      "routine_checkins",
+    ]) {
       delete backup.tables[table];
       delete backup.checksums[table];
     }
@@ -407,22 +413,40 @@ describe("Complete report ranges, local dates and scope boundaries", () => {
       expect((await fresh.query("SELECT * FROM event_reminders")).rows).toEqual(
         [],
       );
+      for (const table of ["routines", "routine_schedules", "routine_checkins"])
+        expect((await fresh.query(`SELECT * FROM ${table}`)).rows).toEqual([]);
     } finally {
       await fresh.close?.();
     }
-    expect(
-      (
-        await readFile(
-          new URL(
-            "../../server/db/migrations/0001_initial.sql",
-            import.meta.url,
-          ),
-          "utf8",
-        )
-      )
-        .replace(/\r\n/g, "\n")
-        .trim(),
-    ).toBe(MIGRATION_SQL.replace(/\r\n/g, "\n").trim());
+    const normalize = (sql: string) => sql.replace(/\r\n/g, "\n").trim();
+    const initial = normalize(
+      await readFile(
+        new URL("../../server/db/migrations/0001_initial.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    const additive = normalize(
+      await readFile(
+        new URL(
+          "../../server/db/migrations/0003_routines.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ).replace(/^--[^\n]*\n/, "");
+    const v1 =
+      "INSERT INTO schema_migrations(version) VALUES(1) ON CONFLICT DO NOTHING;";
+    const v3 =
+      "INSERT INTO schema_migrations(version) VALUES(3) ON CONFLICT DO NOTHING;";
+    expect(initial.endsWith(v1)).toBe(true);
+    expect(additive.endsWith(v3)).toBe(true);
+    const expectedRuntime = [
+      initial.slice(0, -v1.length).trimEnd(),
+      additive.slice(0, -v3.length).trimEnd(),
+      v1,
+      v3,
+    ].join("\n");
+    expect(normalize(MIGRATION_SQL)).toBe(expectedRuntime);
   });
   it("authentic_unknown_table_or_checksum_and_unsupported_row_columns_fail_closed_instead_of_being_dropped", async () => {
     const project = await exec("project_create", {
