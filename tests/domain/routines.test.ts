@@ -115,6 +115,13 @@ describe("Personal routines", () => {
       0,
     );
     expect(created.version).toBe(1);
+    expect(
+      await service.query(
+        "routine_list",
+        { limit: 200, cursor: null },
+        principal,
+      ),
+    ).toMatchObject({ total: 1, items: [{ routine_id: created.entity_id }] });
     const due = await day();
     expect(due).toMatchObject({ date: today, total: 1, completed: 0 });
     expect(due.items[0]).toMatchObject({

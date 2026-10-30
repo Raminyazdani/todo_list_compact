@@ -436,7 +436,7 @@ export async function routineQuery(
       );
     const archived = input.include_archived === true;
     let cursor: string | null = null;
-    if (input.cursor !== undefined) {
+    if (input.cursor !== undefined && input.cursor !== null) {
       try {
         cursor = Buffer.from(text(input, "cursor"), "base64url").toString(
           "utf8",

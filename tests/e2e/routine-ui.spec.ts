@@ -142,7 +142,9 @@ test("routine UI keeps Today, keyboard check-in, state changes and conflict visi
       dialog.locator(".routine-form .error[role='alert']"),
     ).toContainText(/ذخیره تأیید نشد|Save was not confirmed/);
 
-    await dialog.getByRole("button", { name: /Close|بستن/ }).click();
+    await dialog
+      .getByRole("button", { name: "Close / بستن", exact: true })
+      .click();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(
       page.getByRole("heading", { name: /روتین‌ها|Routines/ }).first(),

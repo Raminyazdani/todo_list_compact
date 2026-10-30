@@ -9,7 +9,7 @@
       "focused_tests": "PASS 34 routine/MCP/restore contract tests and 8 report/legacy-backup tests. Final full suite: 683 passed, 30 skipped across 89 files.",
       "ci_first_run": "Coverage, real PostgreSQL, repeat migration and build passed. Authenticated browser/MCP stage had 58 passed, 3 skipped and one failure in the new routine keyboard test: disabling the focused check-in button dropped keyboard focus. The in-flight button now stays focusable with aria-busy; final CI rerun pending.",
       "neon_clone": "PASS additive schema migration twice on an expiring private clone of Production main; schema version 3, three new tables initially empty. Shared service created, read and checked a synthetic routine on the clone. Production data was not written.",
-      "browser": "Focused authenticated Playwright scenario covers empty Today, keyboard check-in, pause/resume, archive/restore, history, revision conflict and mobile layout; local execution needs an isolated E2E credential fixture and remains unverified."
+      "browser": "PASS focused authenticated Playwright scenario on a private Neon clone with a synthetic account: empty Today, keyboard check-in/undo with focus retained, pause/resume, archive/restore, history, revision conflict and mobile layout. The run exposed and fixed null initial pagination cursor and stale three-second read cache after conflicts; the final full CI browser suite is pending."
     },
     "pending": [
       "Complete CI authenticated browser/PostgreSQL/MCP suites on the final commit.",

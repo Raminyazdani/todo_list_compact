@@ -34,7 +34,7 @@ import {
   QueryState,
   SectionHeading,
 } from "@/components/ui";
-import { usePagedQuery, useQuery } from "./api";
+import { clearQueryCache, usePagedQuery, useQuery } from "./api";
 import { useLocale } from "./locale";
 
 type Action = (
@@ -136,7 +136,7 @@ function RoutineDayCard({
     if (!day.data || busyId) return;
     setBusyId(item.routine_id);
     try {
-      await action(
+      const result = await action(
         "routine_checkin_set",
         {
           routine_id: item.routine_id,
@@ -145,6 +145,7 @@ function RoutineDayCard({
         },
         item.checkin_revision,
       );
+      if (!result) clearQueryCache();
     } finally {
       setBusyId(null);
       day.refresh();
@@ -338,6 +339,7 @@ export function RoutineWorkspace({ action }: { action: Action }) {
             "Save was not confirmed. Check the error above; if another edit conflicted, close and reopen this form.",
           ),
         );
+        clearQueryCache();
         routines.refresh();
       }
     } finally {
@@ -355,11 +357,12 @@ export function RoutineWorkspace({ action }: { action: Action }) {
     if (busyId) return;
     setBusyId(routine.routine_id);
     try {
-      await action(
+      const result = await action(
         command,
         { routine_id: routine.routine_id },
         routine.revision,
       );
+      if (!result) clearQueryCache();
     } finally {
       setBusyId(null);
       routines.refresh();
