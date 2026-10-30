@@ -44,3 +44,16 @@ pnpm build
 Work Planner and Drive originals remain read-only references. [Native calendar/work integration](docs/CALENDAR_WORKPLANNER.md) supports cached multi-source calendars and explicitly authorized personal Google event changes after app-specific OAuth activation; connector access in the build chat does not grant the deployed server access. Invites and mail sending remain disabled. New private uploads use verified Neon Object Storage; existing Drive/Blob records retain their provider. In-app AI remains deferred. Scheduled cron evidence is separate from manual backup verification.
 
 Private source snapshots, IDs, credentials, real calendar feeds and backups must never enter this public repository. Tests and screenshots use synthetic data only. The Work Planner-derived calendar/time behavior retains its MIT notice in `server/integrations/WORK_PLANNER_LICENSE.txt`.
+
+## Source snapshot and publication boundary — 2026-10-30
+
+The copied source matches the existing remote `master` base; this preparation
+adds source-publication documentation, compatible dependency security updates and original-code licensing without claiming
+new product capabilities. Review the actual checks and limits in
+[SOURCE_SNAPSHOT.md](SOURCE_SNAPSHOT.md). No deployment or provider activation is implied.
+
+Read [SECURITY.md](SECURITY.md). Real owner/contact records, calendar feeds, CVs,
+credentials, environment files, runtime databases, cookies, backups, screenshots
+and exports must remain outside Git, including private repositories. Existing
+third-party notices and licenses remain in force. Only checks recorded in the
+publication receipt were run; no live-provider or real-owner database check is implied.
