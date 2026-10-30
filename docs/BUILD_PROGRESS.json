@@ -1,19 +1,24 @@
 {
   "personal_routines_2026_10_30": {
-    "status": "local_verified_ci_and_release_pending",
+    "status": "released_live_ui_rest_verified",
     "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/18",
+    "release_commit": "37038e6dc8b4ce59162fa4a30641115b04177c02",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/41072219622",
+    "production_url": "https://ramin-life-os.vercel.app/routines",
     "scope": "Owner-bound personal routines with daily or selected weekdays, Berlin-local dated check-ins, next-day schedule edits, pause/resume, archive/restore, short history, Life OS UI and shared REST/MCP service.",
     "plan": "docs/ROUTINES_PLAN_FA.md",
     "observed": {
       "local_gates": "PASS typecheck, ESLint, Prettier, public-safety scan across 377 public files, and Next.js 16.4.3 production build after rebasing on current origin/master.",
       "focused_tests": "PASS 34 routine/MCP/restore contract tests and 8 report/legacy-backup tests. Final full suite: 683 passed, 30 skipped across 89 files.",
-      "ci_first_run": "Coverage, real PostgreSQL, repeat migration and build passed. Authenticated browser/MCP stage had 58 passed, 3 skipped and one failure in the new routine keyboard test: disabling the focused check-in button dropped keyboard focus. The in-flight button now stays focusable with aria-busy; final CI rerun pending.",
+      "ci": "PASS final pull-request checks at head 769bc5670155e02c0d56d3c3023fa34d5e25e666: coverage, real PostgreSQL migration twice, auth bootstrap, production build, 62 authenticated browser/MCP cases, and HTTP authorization/revocation/rate-limit/token-expiry suites. The first run exposed keyboard focus loss during check-in save; the fix kept the control focusable with aria-busy and the final run completed successfully.",
       "neon_clone": "PASS additive schema migration twice on an expiring private clone of Production main; schema version 3, three new tables initially empty. Shared service created, read and checked a synthetic routine on the clone. Production data was not written.",
-      "browser": "PASS focused authenticated Playwright scenario on a private Neon clone with a synthetic account: empty Today, keyboard check-in/undo with focus retained, pause/resume, archive/restore, history, revision conflict and mobile layout. The run exposed and fixed null initial pagination cursor and stale three-second read cache after conflicts; the final full CI browser suite is pending."
+      "browser": "PASS focused authenticated Playwright scenario on a private Neon clone with a synthetic account: empty Today, keyboard check-in/undo with focus retained, pause/resume, archive/restore, history, revision conflict and mobile layout. The run exposed and fixed null initial pagination cursor and stale three-second read cache after conflicts.",
+      "production_migration": "PASS additive migration on verified Production Neon main; schema version 3 read back with all three new routine tables empty. No real owner routine was created or changed.",
+      "production_deployment": "PASS Vercel Production READY on canonical alias at exact squash merge commit 37038e6dc8b4ce59162fa4a30641115b04177c02; public /api/health returned HTTP 200 with status ok. Authenticated Life OS MCP system_health reported connected PostgreSQL and verified backup; system_capabilities read schema version 3.",
+      "production_ui_rest": "PASS authenticated owner browser read at /routines: Life OS navigation, empty day and routine list, create dialog with daily/selected-weekday schedule, and Today dashboard routine card rendered. Owner-authenticated routine_list and routine_day REST reads both returned empty results for 2026-10-30. No production routine write was made."
     },
     "pending": [
-      "Complete CI authenticated browser/PostgreSQL/MCP suites on the final commit.",
-      "Apply the additive schema migration to the verified Production database, release the code and read back the live result."
+      "The current ChatGPT Life OS connector tool inventory was opened before this deployment and does not yet list routine_* tools. MCP routine schemas and transport passed CI; a fresh connector inventory or reconnection is needed for a direct live routine_* tool readback."
     ],
     "limits": [
       "Paused or archived routines are hidden from the dated day grid, including past dates; persisted check-ins remain available in routine history.",
