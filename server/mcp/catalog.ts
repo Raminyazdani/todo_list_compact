@@ -537,7 +537,10 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
   reminder_list: list,
   routine_list: object({ include_archived: z.boolean().optional(), ...page }),
   routine_day: object({ date: localDate.optional() }),
-  routine_history: object({ routine_id: id, limit: page.limit }),
+  routine_history: object({
+    routine_id: id,
+    limit: z.number().int().min(1).max(90).optional(),
+  }),
   task_recurrence_list: list,
   task_recurrence_instances: object({ rule_id: id, ...page }),
   notifications_list: list,
