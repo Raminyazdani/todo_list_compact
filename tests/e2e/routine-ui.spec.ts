@@ -104,6 +104,7 @@ test("routine UI keeps Today, keyboard check-in, state changes and conflict visi
     await expect(check).toBeFocused();
     await page.keyboard.press("Space");
     await expect(check).toHaveAttribute("aria-pressed", "true");
+    await expect(check).toBeFocused();
     await page.keyboard.press("Space");
     await expect(check).toHaveAttribute("aria-pressed", "false");
 

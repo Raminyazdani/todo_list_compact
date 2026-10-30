@@ -7,6 +7,7 @@
     "observed": {
       "local_gates": "PASS typecheck, ESLint, Prettier, public-safety scan across 377 public files, and Next.js 16.4.3 production build after rebasing on current origin/master.",
       "focused_tests": "PASS 34 routine/MCP/restore contract tests and 8 report/legacy-backup tests. Final full suite: 683 passed, 30 skipped across 89 files.",
+      "ci_first_run": "Coverage, real PostgreSQL, repeat migration and build passed. Authenticated browser/MCP stage had 58 passed, 3 skipped and one failure in the new routine keyboard test: disabling the focused check-in button dropped keyboard focus. The in-flight button now stays focusable with aria-busy; final CI rerun pending.",
       "neon_clone": "PASS additive schema migration twice on an expiring private clone of Production main; schema version 3, three new tables initially empty. Shared service created, read and checked a synthetic routine on the clone. Production data was not written.",
       "browser": "Focused authenticated Playwright scenario covers empty Today, keyboard check-in, pause/resume, archive/restore, history, revision conflict and mobile layout; local execution needs an isolated E2E credential fixture and remains unverified."
     },

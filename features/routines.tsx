@@ -203,7 +203,8 @@ function RoutineDayCard({
                     : t(`ثبت انجام ${item.title}`, `Complete ${item.title}`)
                 }
                 aria-pressed={item.done}
-                disabled={busyId !== null}
+                aria-busy={busyId === item.routine_id}
+                disabled={busyId !== null && busyId !== item.routine_id}
                 onClick={() => void toggle(item)}
               >
                 {item.done && <Check size={17} />}
