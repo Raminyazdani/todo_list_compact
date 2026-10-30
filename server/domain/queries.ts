@@ -55,6 +55,8 @@ import { previewCalendarOccurrence } from "./calendar";
 import { previewTimeImport } from "./time-import";
 import { instantToLocalDate } from "../../shared/datetime";
 import { dailyFocusGet } from "./daily-focus";
+import { routineQuery } from "./routines";
+import { SCHEMA_VERSION } from "../db/schema";
 import { dailyCapacityPreview } from "./capacity";
 import {
   backupStorageCapabilities,
@@ -293,6 +295,12 @@ export async function domainQuery(
   principal: Principal,
 ): Promise<unknown> {
   const owner = principal.ownerId;
+  if (
+    operation === "routine_list" ||
+    operation === "routine_day" ||
+    operation === "routine_history"
+  )
+    return routineQuery(tx, operation, input, principal);
   if (operation === "daily_focus_get")
     return dailyFocusGet(tx, input, principal);
   if (operation === "daily_capacity_preview")
@@ -356,7 +364,7 @@ export async function domainQuery(
     }
     return {
       canonical_store: "PostgreSQL",
-      schema_version: 1,
+      schema_version: SCHEMA_VERSION,
       graph: true,
       checklists: true,
       hierarchy: true,

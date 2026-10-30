@@ -69,6 +69,13 @@ const routes: Record<
     id: "notification_id",
   },
   reminders: { list: "reminder_list", create: "reminder_create" },
+  routines: {
+    list: "routine_list",
+    create: "routine_create",
+    update: "routine_update",
+    archive: "routine_archive",
+    id: "routine_id",
+  },
   "saved-views": {
     list: "saved_view_list",
     create: "saved_view_create",
@@ -140,6 +147,11 @@ async function handle(request: Request, context: Context) {
           .min(1)
           .max(200)
           .parse(params.get("limit"));
+      if (params.has("include_archived"))
+        input.include_archived = z
+          .enum(["true", "false"])
+          .transform((value) => value === "true")
+          .parse(params.get("include_archived"));
       if (identifier) {
         if (!route.get || !route.id)
           throw new DomainError(

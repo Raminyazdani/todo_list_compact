@@ -535,6 +535,9 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
   preferences_get: object({}),
   saved_view_list: list,
   reminder_list: list,
+  routine_list: object({ include_archived: z.boolean().optional(), ...page }),
+  routine_day: object({ date: localDate.optional() }),
+  routine_history: object({ routine_id: id, limit: page.limit }),
   task_recurrence_list: list,
   task_recurrence_instances: object({ rule_id: id, ...page }),
   notifications_list: list,
@@ -769,6 +772,34 @@ export const WRITE_INPUT_SCHEMAS: Partial<Record<CommandName, z.ZodType>> = {
   reminder_pause: object({ reminder_id: id }),
   reminder_resume: object({ reminder_id: id }),
   reminder_cancel: object({ reminder_id: id }),
+  routine_create: object({
+    title: text(200),
+    notes: notes.optional(),
+    start_date: localDate,
+    weekdays: z.array(z.number().int().min(1).max(7)).max(7).optional(),
+    time_of_day: z
+      .union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), z.null()])
+      .optional(),
+  }),
+  routine_update: object({
+    routine_id: id,
+    title: text(200).optional(),
+    notes: notes.optional(),
+    start_date: localDate.optional(),
+    weekdays: z.array(z.number().int().min(1).max(7)).max(7).optional(),
+    time_of_day: z
+      .union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), z.null()])
+      .optional(),
+  }),
+  routine_checkin_set: object({
+    routine_id: id,
+    date: localDate,
+    done: z.boolean(),
+  }),
+  routine_pause: object({ routine_id: id }),
+  routine_resume: object({ routine_id: id }),
+  routine_archive: object({ routine_id: id }),
+  routine_restore: object({ routine_id: id }),
   task_recurrence_create: object({
     template_id: id,
     start_date: localDate,
@@ -845,6 +876,11 @@ const revisionCommands = new Set<CommandName>([
   "time_entry_update",
   "time_entry_archive",
   "saved_view_update",
+  "routine_update",
+  "routine_pause",
+  "routine_resume",
+  "routine_archive",
+  "routine_restore",
   "task_recurrence_pause",
   "task_recurrence_resume",
   "notification_mark_read",
@@ -863,7 +899,10 @@ export function writeSchema(command: CommandName) {
     input,
     operation_id: z.string().min(8).max(200),
     expected_revision:
-      command === "time_contract_policy_upsert" || command === "daily_focus_set"
+      command === "time_contract_policy_upsert" ||
+      command === "daily_focus_set" ||
+      command === "routine_create" ||
+      command === "routine_checkin_set"
         ? z.number().int().nonnegative()
         : revisionCommands.has(command)
           ? z.number().int().positive()
@@ -872,16 +911,21 @@ export function writeSchema(command: CommandName) {
       ? { human_confirmation_id: z.string().uuid() }
       : {}),
   });
-  return command === "time_contract_policy_upsert"
+  return command === "routine_create"
     ? schema.refine(
-        (value) =>
-          (value.input as { id?: string }).id
-            ? typeof value.expected_revision === "number" &&
-              value.expected_revision > 0
-            : value.expected_revision === 0,
-        "Create requires expected_revision 0; update requires the current positive revision",
+        (value) => value.expected_revision === 0,
+        "Routine creation requires expected_revision 0",
       )
-    : schema;
+    : command === "time_contract_policy_upsert"
+      ? schema.refine(
+          (value) =>
+            (value.input as { id?: string }).id
+              ? typeof value.expected_revision === "number" &&
+                value.expected_revision > 0
+              : value.expected_revision === 0,
+          "Create requires expected_revision 0; update requires the current positive revision",
+        )
+      : schema;
 }
 const HIDDEN_COMMANDS: readonly CommandName[] = [
   "legacy_import",
@@ -1051,6 +1095,12 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
     "Read existing owner view configurations and revisions with bounded pagination.",
   reminder_list:
     "Read owner reminders and actual Pending/Paused/Cancelled/Succeeded states with bounded pagination; no email is sent.",
+  routine_list:
+    "List owner personal routines and current revisions with bounded pagination. Routines are independent of tasks and template recurrence rules.",
+  routine_day:
+    "Read scheduled owner routines and saved completion state for one Europe/Berlin local day. Reading does not create task instances or check-ins.",
+  routine_history:
+    "Read recent persisted check-ins for one exact owner routine. Missing days are not reported as completed or missed records.",
   task_recurrence_list:
     "Read owner template-based recurrence rules, zones and actual paused state with bounded pagination.",
   task_recurrence_instances:
@@ -1228,6 +1278,20 @@ const semantics: Partial<Record<QueryName | CommandName, string>> = {
     "Add an explicit local-date milestone and optional actual owner task; do not invent a due date.",
   task_recurrence_create:
     "Create a bounded template-based task rule with an explicit local start_date and IANA zone; generated instances are separate tasks.",
+  routine_create:
+    "Create one owner personal routine with a Berlin-local start date, daily or selected ISO weekdays, and optional preferred time. This creates no tasks, calendar events or notifications; expected_revision must be 0.",
+  routine_update:
+    "Update one owner routine at its current revision. Existing dated check-in history is retained; schedule changes affect future due days.",
+  routine_checkin_set:
+    "Set or clear one scheduled routine check-in for today or an allowed recent Berlin-local date, using the current check-in revision (0 when absent). Future dates are rejected.",
+  routine_pause:
+    "Pause one owner routine at its current revision; saved check-in history remains intact.",
+  routine_resume:
+    "Resume one paused owner routine at its current revision; no backlog of task instances is generated.",
+  routine_archive:
+    "Archive one owner routine at its current revision; history remains available for restoration.",
+  routine_restore:
+    "Restore one archived owner routine at its current revision without changing past check-ins.",
   preferences_update:
     "Merge supplied JSON settings. New preferences start at revision0; existing preferences require their current revision.",
   undo_last_eligible_action:

@@ -86,6 +86,101 @@ afterAll(async () => {
 });
 
 describe("MCP advertised schemas against the real canonical PostgreSQL service", () => {
+  it("offers owner-scoped routine reads and revision-safe writes through the shared service", async () => {
+    const operation_id = randomUUID();
+    const today = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Europe/Berlin",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    expect(tool("routine_day").scopes).toEqual(["tasks:read"]);
+    expect(tool("routine_create").scopes).toEqual(["tasks:write"]);
+    expect(tool("routine_checkin_set").scopes).toEqual(["tasks:write"]);
+    expect(
+      tool("routine_create").schema.safeParse({
+        input: { title: "Synthetic routine", start_date: "2026-10-30" },
+        operation_id,
+      }).success,
+    ).toBe(false);
+    expect(
+      tool("routine_create").schema.safeParse({
+        input: { title: "Synthetic routine", start_date: "2026-10-30" },
+        operation_id,
+        expected_revision: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      tool("routine_checkin_set").schema.safeParse({
+        input: { routine_id: "example", date: "2026-10-30", done: true },
+        operation_id,
+      }).success,
+    ).toBe(false);
+    expect(
+      tool("routine_create").schema.safeParse({
+        input: {
+          title: "Synthetic routine",
+          start_date: "2026-10-30",
+          weekdays: [8],
+        },
+        operation_id,
+        expected_revision: 0,
+      }).success,
+    ).toBe(false);
+
+    const created = await write(
+      "routine_create",
+      { title: "Synthetic routine", start_date: today, weekdays: [] },
+      0,
+    );
+    const listed = (await read("routine_list", {})) as PageDTO<{
+      routine_id: string;
+      title: string;
+    }>;
+    expect(listed.items).toContainEqual(
+      expect.objectContaining({
+        routine_id: created.entity_id,
+        title: "Synthetic routine",
+      }),
+    );
+    const day = (await read("routine_day", { date: today })) as {
+      items: { routine_id: string; done: boolean; checkin_revision: number }[];
+    };
+    expect(day.items).toContainEqual(
+      expect.objectContaining({
+        routine_id: created.entity_id,
+        done: false,
+        checkin_revision: 0,
+      }),
+    );
+    const checkin = { routine_id: created.entity_id, date: today, done: true };
+    const key = randomUUID();
+    const checked = await write(
+      "routine_checkin_set",
+      checkin,
+      0,
+      principal,
+      key,
+    );
+    expect(checked.version).toBe(1);
+    expect(
+      await write("routine_checkin_set", checkin, 0, principal, key),
+    ).toMatchObject({ replayed: true, version: 1 });
+    await expect(
+      write("routine_checkin_set", { ...checkin, done: false }, 0),
+    ).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+    await expect(
+      read("routine_list", {}, { ...principal, scopes: ["calendar:read"] }),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_PERMISSIONS" });
+    await expect(
+      write(
+        "routine_pause",
+        { routine_id: created.entity_id },
+        created.version,
+        { ...principal, scopes: ["tasks:read"] },
+      ),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_PERMISSIONS" });
+  });
   it("offers every supported safe operation with concrete serializable properties, explicit semantics and least required scopes", () => {
     const excluded = new Set([
       "legacy_import",

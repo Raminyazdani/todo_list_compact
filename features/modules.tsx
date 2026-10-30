@@ -44,6 +44,7 @@ import { FileWorkspace } from "./files";
 import { DashboardExtras, type DashboardRange } from "./dashboard-extras";
 import { DailyFocus } from "./daily-focus";
 import { InboxReview } from "./inbox-review";
+import { RoutineTodayCard } from "./routines";
 import { activityLabel } from "./activity-labels";
 import { ExperienceSettings } from "./experience-settings";
 import { PasswordSettings } from "./security-settings";
@@ -157,6 +158,7 @@ export function Dashboard({
   const displayedRange = draftRange ?? range;
   const defaults = [
     { id: "focus", title: t("کارهای آماده", "Ready tasks") },
+    { id: "routines", title: t("روتین‌های امروز", "Today's routines") },
     { id: "calendar", title: t("نمای روز", "Day preview") },
     { id: "blocked", title: t("رادار پیش‌نیازها", "Blocked radar") },
     { id: "activity", title: t("تاریخچه", "Activity") },
@@ -672,6 +674,10 @@ export function Dashboard({
                 />
               )}
         </section>
+        <RoutineTodayCard
+          action={action}
+          widgetProps={widgetProps("routines")}
+        />
         <section className="panel calendar-peek" {...widgetProps("calendar")}>
           <SectionHeading
             title={t("فضای روز", "A little room for today")}

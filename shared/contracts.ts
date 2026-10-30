@@ -496,6 +496,32 @@ export interface PageDTO<T> {
   next_cursor: string | null;
   total: number;
 }
+export interface RoutineDTO {
+  routine_id: string;
+  title: string;
+  notes: string;
+  start_date: string;
+  weekdays: number[];
+  time_of_day: string | null;
+  timezone: "Europe/Berlin";
+  enabled: boolean;
+  archived_at: string | null;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+export interface RoutineDayItemDTO extends RoutineDTO {
+  done: boolean;
+  checkin_revision: number;
+  checked_at: string | null;
+}
+export interface RoutineCheckinDTO {
+  routine_id: string;
+  date: string;
+  done: boolean;
+  checked_at: string | null;
+  revision: number;
+}
 export interface GraphDTO {
   nodes: TaskDTO[];
   edges: DependencyDTO[];
@@ -627,6 +653,13 @@ export const COMMAND_NAMES = [
   "task_recurrence_create",
   "task_recurrence_pause",
   "task_recurrence_resume",
+  "routine_create",
+  "routine_update",
+  "routine_pause",
+  "routine_resume",
+  "routine_archive",
+  "routine_restore",
+  "routine_checkin_set",
   "system_daily_run",
   "notification_mark_read",
   "task_comment_add",
@@ -702,6 +735,9 @@ export const QUERY_NAMES = [
   "reminder_list",
   "task_recurrence_list",
   "task_recurrence_instances",
+  "routine_list",
+  "routine_day",
+  "routine_history",
   "notifications_list",
   "task_comment_list",
   "tag_list",

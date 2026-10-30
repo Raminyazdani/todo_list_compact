@@ -32,6 +32,7 @@ import { recurrenceCommand } from "./recurrence";
 import { reservedTaskIdentity } from "./internal-options";
 import { queryTransactionMode } from "./query-transaction-mode";
 import { dailyFocusSet } from "./daily-focus";
+import { routineCommand } from "./routines";
 import {
   prepareCalendarChangeReview,
   withTrustedCalendarReview,
@@ -159,7 +160,8 @@ export function createDomainService(database: Database): DomainService {
               command === "preferences_update" ||
               command === "daily_focus_set" ||
               command.startsWith("calendar_") ||
-              command.startsWith("time_")
+              command.startsWith("time_") ||
+              command.startsWith("routine_")
                 ? null
                 : await snapshot(tx, principal.ownerId);
           let change: Change;
@@ -263,6 +265,14 @@ export function createDomainService(database: Database): DomainService {
           } else if (command === "daily_focus_set")
             change = await dailyFocusSet(
               tx,
+              input,
+              principal,
+              options.expectedRevision,
+            );
+          else if (command.startsWith("routine_"))
+            change = await routineCommand(
+              tx,
+              command as Parameters<typeof routineCommand>[1],
               input,
               principal,
               options.expectedRevision,
