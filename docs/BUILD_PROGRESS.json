@@ -15,6 +15,10 @@
       "Complete CI authenticated browser/PostgreSQL/MCP suites on the final commit.",
       "Apply the additive schema migration to the verified Production database, release the code and read back the live result."
     ],
+    "limits": [
+      "Paused or archived routines are hidden from the dated day grid, including past dates; persisted check-ins remain available in routine history.",
+      "Preferred time is display-only; this feature does not schedule notifications."
+    ],
     "privacy": "Only synthetic test data entered the repository; private owner rows, credentials, production identifiers and screenshots remain outside Git."
   },
   "calendar_freshness_parent_completion_2026_10_26": {
