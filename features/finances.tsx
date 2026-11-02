@@ -53,9 +53,11 @@ import {
 } from "./api";
 import {
   euroInput,
+  FINANCE_JSON_MAX_BYTES,
   financeEditInput,
   financeToday,
   parseEuroCents,
+  serializeFinanceExport,
   shiftFinanceMonth,
 } from "./finance-model";
 import { useLocale } from "./locale";
@@ -166,7 +168,7 @@ function cadence(
 
 function downloadJson(data: unknown, name: string) {
   const url = URL.createObjectURL(
-    new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+    new Blob([serializeFinanceExport(data)], { type: "application/json" }),
   );
   const link = document.createElement("a");
   link.href = url;
@@ -2283,7 +2285,7 @@ function FinanceTransfer({
     setPreview(null);
     setData(null);
     try {
-      if (file.size > 2_000_000)
+      if (file.size > FINANCE_JSON_MAX_BYTES)
         throw new Error(
           t("حداکثر حجم فایل JSON دو مگابایت است.", "The JSON limit is 2 MB."),
         );

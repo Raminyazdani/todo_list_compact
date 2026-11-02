@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { FinanceImportDTO } from "../../shared/contracts";
+import { normalizedFinanceImport } from "../domain/finance-import";
 
 const MAX_BYTES = 2_000_000;
 const MAX_RECORDS = 1000;
@@ -142,7 +143,7 @@ function markdownCells(line: string): string[] {
       escaped = false;
       continue;
     }
-    if (char === "\\") {
+    if (char === "\\" && !codeFence) {
       escaped = true;
       continue;
     }
@@ -395,6 +396,8 @@ export function prepareFinanceSource(
     );
   }
   const data = validatePayload(payload);
+  if (Buffer.byteLength(JSON.stringify(data), "utf8") > MAX_BYTES)
+    throw new Error("FINANCE_SOURCE_TOO_LARGE");
   return {
     data,
     document_hash,
@@ -415,6 +418,9 @@ export function reconcileFinanceSource(
   expected: FinanceImportDTO,
   actual: FinanceImportDTO,
 ) {
+  // Compare the domain's persisted representation without changing source intent hashes.
+  const wanted = normalizedFinanceImport(expected),
+    savedData = normalizedFinanceImport(actual);
   const differences: { kind: string; external_key: string; reason: string }[] =
     [];
   const same = (left: unknown, right: unknown): boolean => {
@@ -440,8 +446,10 @@ export function reconcileFinanceSource(
     "plans",
     "transactions",
   ] as const) {
-    const byKey = new Map(actual[kind].map((row) => [row.external_key, row]));
-    for (const row of expected[kind]) {
+    const byKey = new Map(
+      savedData[kind].map((row) => [row.external_key, row]),
+    );
+    for (const row of wanted[kind]) {
       const saved = byKey.get(row.external_key);
       if (!saved || !same(row, saved))
         differences.push({

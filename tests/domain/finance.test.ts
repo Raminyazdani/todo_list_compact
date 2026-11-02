@@ -6,6 +6,10 @@ import { createDomainService } from "../../server/domain/service";
 import { MIGRATION_SQL } from "../../server/db/schema";
 import { FINANCE_MIGRATION_SQL } from "../../server/db/finance-schema";
 import { FINANCE_TABLES } from "../../server/domain/finance";
+import {
+  FINANCE_IMPORT_MAX_BYTES,
+  normalizedFinanceImport,
+} from "../../server/domain/finance-import";
 import { hash } from "../../server/domain/core";
 import { createTestDatabase } from "./database";
 import type { Database } from "../../server/db/database";
@@ -813,6 +817,59 @@ describe("Owner finance domain", () => {
       code: "INVALID_INPUT",
       details: { alternative_query: "backup_export", max_entities: 1000 },
     });
+  });
+
+  it("rejects compact imports whose normalized defaults exceed the byte limit before creating a preview", async () => {
+    const compactPlan = {
+      external_key: "compact-plan",
+      title: "Synthetic compact history",
+      kind: "budget",
+      versions: Array.from({ length: 100 }, (_, i) => ({
+        effective_month: `${2028 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`,
+      })),
+    };
+    const normalized = normalizedFinanceImport({
+      ...empty(),
+      plans: [compactPlan],
+    });
+    expect(normalizedFinanceImport(normalized)).toEqual(normalized);
+    const compact = {
+      ...empty(),
+      plans: Array.from({ length: 100 }, (_, i) => ({
+        ...compactPlan,
+        external_key: `compact-${i}`,
+      })),
+    };
+    const expanded = {
+      ...empty(),
+      plans: compact.plans.map((p) => ({
+        ...normalized.plans[0],
+        external_key: p.external_key,
+      })),
+    };
+    expect(Buffer.byteLength(JSON.stringify(compact), "utf8")).toBeLessThan(
+      FINANCE_IMPORT_MAX_BYTES,
+    );
+    expect(Buffer.byteLength(JSON.stringify(expanded), "utf8")).toBeGreaterThan(
+      FINANCE_IMPORT_MAX_BYTES,
+    );
+    await expect(
+      query("finance_import_preview", { data: compact }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      details: {
+        max_bytes: FINANCE_IMPORT_MAX_BYTES,
+        representation: "normalized",
+      },
+    });
+    expect(
+      (
+        await db.query<{ count: number }>(
+          "SELECT count(*)::int AS count FROM command_previews WHERE owner_id=$1 AND command='finance_import_commit'",
+          [principal.ownerId],
+        )
+      ).rows[0].count,
+    ).toBe(0);
   });
 
   it("includes every finance table in complete backups and accepts legacy backups without additive finance tables", async () => {

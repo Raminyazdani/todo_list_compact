@@ -1,4 +1,17 @@
 /** Browser input helpers; money is stored and submitted as integer euro cents. */
+export const FINANCE_JSON_MAX_BYTES = 2_000_000;
+
+/** Keep the downloaded file within the same UTF-8 limit as direct import. */
+export function serializeFinanceExport(data: unknown): string {
+  const json = JSON.stringify(data);
+  if (json === undefined) throw new Error("Invalid finance export");
+  if (new TextEncoder().encode(json).byteLength > FINANCE_JSON_MAX_BYTES)
+    throw new Error(
+      "حجم خروجی مالی بیش از دو مگابایت است؛ از پشتیبان کامل در تنظیمات استفاده کن. / Finance export exceeds 2 MB; use the full backup in Settings.",
+    );
+  return json;
+}
+
 export function normalizeFinanceDigits(value: string): string {
   return value
     .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0))

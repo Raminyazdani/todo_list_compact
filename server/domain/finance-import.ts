@@ -72,14 +72,20 @@ function unique(rows: { external_key: string }[], kind: string) {
       `Duplicate ${kind} external keys in import.`,
     );
 }
-export function normalizedFinanceImport(raw: unknown): FinanceImportDTO {
-  const data = object(raw);
-  if (Buffer.byteLength(json(data), "utf8") > FINANCE_IMPORT_MAX_BYTES)
+function boundedImport(data: unknown, representation: "input" | "normalized") {
+  const bytes = Buffer.byteLength(json(data), "utf8");
+  if (bytes > FINANCE_IMPORT_MAX_BYTES)
     throw new DomainError(
       "INVALID_INPUT",
-      "Financial import exceeds 2,000,000 UTF-8 bytes.",
-      { max_bytes: FINANCE_IMPORT_MAX_BYTES },
+      representation === "normalized"
+        ? "Financial import exceeds 2,000,000 UTF-8 bytes after normalization. Reduce the import before requesting a preview."
+        : "Financial import exceeds 2,000,000 UTF-8 bytes.",
+      { bytes, max_bytes: FINANCE_IMPORT_MAX_BYTES, representation },
     );
+}
+export function normalizedFinanceImport(raw: unknown): FinanceImportDTO {
+  const data = object(raw);
+  boundedImport(data, "input");
   if (data.format !== FORMAT || data.currency !== "EUR")
     throw new DomainError(
       "INVALID_INPUT",
@@ -200,7 +206,7 @@ export function normalizedFinanceImport(raw: unknown): FinanceImportDTO {
     transactions,
   }))
     unique(rows, label);
-  return {
+  const normalized: FinanceImportDTO = {
     format: FORMAT,
     currency: "EUR",
     accounts,
@@ -208,6 +214,8 @@ export function normalizedFinanceImport(raw: unknown): FinanceImportDTO {
     plans,
     transactions,
   };
+  boundedImport(normalized, "normalized");
+  return normalized;
 }
 const exportKey = (row: { external_key: string | null }, identity: string) =>
   row.external_key ?? `life-os:${identity}`;

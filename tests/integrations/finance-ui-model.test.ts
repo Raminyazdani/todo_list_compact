@@ -1,12 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
   euroInput,
+  FINANCE_JSON_MAX_BYTES,
   financeMonth,
   financeEditInput,
   normalizeFinanceDigits,
   parseEuroCents,
+  serializeFinanceExport,
   shiftFinanceMonth,
 } from "../../features/finance-model";
+
+describe("finance JSON download boundaries", () => {
+  it("downloads a near-limit multilingual export that direct import can read", () => {
+    const data = {
+      format: "ramin-life-os/finance/1",
+      accounts: [],
+      categories: [],
+      plans: Array.from({ length: 1000 }, (_, index) => ({
+        title: `هزینهٔ آزمایشی ${index}`,
+        notes: "",
+      })),
+      transactions: [],
+    };
+    const baseBytes = new TextEncoder().encode(JSON.stringify(data)).byteLength;
+    data.plans[0].notes = "x".repeat(FINANCE_JSON_MAX_BYTES - baseBytes);
+    expect(new Blob([JSON.stringify(data, null, 2)]).size).toBeGreaterThan(
+      FINANCE_JSON_MAX_BYTES,
+    );
+
+    const download = serializeFinanceExport(data);
+    expect(new Blob([download]).size).toBe(FINANCE_JSON_MAX_BYTES);
+    expect(JSON.parse(download)).toEqual(data);
+    data.plans[0].notes += "ی";
+    expect(() => serializeFinanceExport(data)).toThrow(/2 MB/);
+  });
+});
 
 describe("finance money inputs", () => {
   it("parses Latin, Persian and Arabic digits without fractional arithmetic", () => {

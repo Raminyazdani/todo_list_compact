@@ -11,8 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { FinanceImportDTO } from "../../shared/contracts";
+import { normalizedFinanceImport } from "../../server/domain/finance-import";
 import {
   extractFinanceMarkdownTables,
+  financeSourceHash,
   parseFinanceMoney,
   prepareFinanceSource,
   reconcileFinanceSource,
@@ -61,6 +63,19 @@ const payload = (): FinanceImportDTO => ({
   ],
   transactions: [],
 });
+function unnormalizedPayload() {
+  const data = payload();
+  data.accounts[0].external_key = " sample-account ";
+  data.accounts[0].title = " Sample account ";
+  data.categories[0].archived_at = "2027-01-01T02:00:00+02:00";
+  data.plans[0].title = " Sample cost ";
+  data.plans[0].account_key = " sample-account ";
+  data.plans[0].versions.push({
+    ...data.plans[0].versions[0],
+    effective_month: "2027-01",
+  });
+  return data;
+}
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 const source =
   "| Label | Amount |\n| --- | ---: |\n| A literal \\| label | €12.45 |\n| Unknown amount | — |\n";
@@ -183,6 +198,16 @@ describe("finance source normalization", () => {
       )[0].rows,
     ).toEqual([["`a|b`", "c|d"]]);
   });
+  it("preserves literal backslashes and pipes inside code spans", () => {
+    expect(
+      extractFinanceMarkdownTables(
+        "| a | b |\n| --- | --- |\n| `a\\b|c\\` | c\\|d |\n| ``a\\`b|c\\\\d`` | plain |\n",
+      )[0].rows,
+    ).toEqual([
+      ["`a\\b|c\\`", "c|d"],
+      ["``a\\`b|c\\\\d``", "plain"],
+    ]);
+  });
   it("rejects duplicate source keys, server-managed fields and fractional cents", () => {
     const duplicate = payload();
     duplicate.accounts.push({ ...duplicate.accounts[0] });
@@ -235,6 +260,16 @@ describe("finance source normalization", () => {
       ],
     });
   });
+  it("reconciles authoritative trimmed keys, titles, sorted versions and archive instants", () => {
+    const raw = unnormalizedPayload(),
+      rawJson = JSON.stringify(raw),
+      actual = normalizedFinanceImport(raw);
+    expect(actual.accounts[0].external_key).toBe("sample-account");
+    expect(actual.categories[0].archived_at).toBe("2027-01-01T00:00:00.000Z");
+    expect(actual.plans[0].versions[0].effective_month).toBe("2027-01");
+    expect(reconcileFinanceSource(raw, actual).verified).toBe(true);
+    expect(JSON.stringify(raw)).toBe(rawJson);
+  });
 });
 
 describe("private finance import CLI", () => {
@@ -259,6 +294,79 @@ describe("private finance import CLI", () => {
       JSON.parse(await readFile(out, "utf8")).plans[0].versions[0].amount_cents,
     ).toBe(1245);
   });
+  it("emits a compact near-limit payload that the preview can read", async () => {
+    const dir = await folder(),
+      src = join(dir, "source.json"),
+      out = join(dir, "payload.json"),
+      creds = join(dir, "credentials.json"),
+      receipt = join(dir, "receipt.json");
+    const data = normalizedFinanceImport({
+      ...payload(),
+      accounts: [],
+      categories: [],
+      plans: Array.from({ length: 190 }, (_, index) => ({
+        external_key: `large-plan-${index}`,
+        title: "Synthetic near-limit plan",
+        kind: "budget",
+        notes: "x".repeat(9900),
+        versions: [payload().plans[0].versions[0]],
+      })),
+    });
+    const serialized = JSON.stringify(data);
+    expect(Buffer.byteLength(serialized, "utf8")).toBeLessThan(2_000_000);
+    expect(
+      Buffer.byteLength(JSON.stringify(data, null, 2) + "\n", "utf8"),
+    ).toBeGreaterThan(2_000_000);
+    await writeFile(src, serialized);
+    await financeImportCli(["--normalize", src, out]);
+    expect(await readFile(out, "utf8")).toBe(serialized);
+    await writeFile(
+      creds,
+      JSON.stringify({
+        origin: "https://synthetic.example",
+        owner_id: "synthetic-owner",
+        user_id: "synthetic-actor",
+        email: "synthetic@example.test",
+        password: "synthetic-test-only",
+      }),
+    );
+    const request: typeof fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      const result =
+        body.operation === "whoami"
+          ? { owner_id: "synthetic-owner", actor_id: "synthetic-actor" }
+          : {
+              preview_id: "synthetic-large-preview",
+              expires_at: "2027-02-03T00:00:00Z",
+              counts: {
+                accounts: 0,
+                categories: 0,
+                plans: 190,
+                transactions: 0,
+                unchanged: 0,
+              },
+              conflicts: [],
+              can_commit: true,
+              source_hash: financeSourceHash(
+                normalizedFinanceImport(body.input.data),
+              ),
+            };
+      return new Response(JSON.stringify({ data: result }), { status: 200 });
+    };
+    expect(
+      await financeImportCli(
+        ["--preview", "https://synthetic.example", creds, out, receipt],
+        {
+          fetch: request,
+          signIn: async () =>
+            new Response(null, {
+              status: 200,
+              headers: { "Set-Cookie": "session=synthetic; HttpOnly" },
+            }),
+        },
+      ),
+    ).toMatchObject({ status: "previewed", can_commit: true });
+  });
   it("retains the original preview and operation key through an uncertain commit and verifies readback", async () => {
     const dir = await folder(),
       src = join(dir, "source.json"),
@@ -267,7 +375,9 @@ describe("private finance import CLI", () => {
     const owner = "synthetic-owner",
       actor = "synthetic-actor",
       target = "https://synthetic.example";
-    await writeFile(src, JSON.stringify(payload()));
+    const raw = unnormalizedPayload(),
+      rawJson = JSON.stringify(raw);
+    await writeFile(src, rawJson);
     await writeFile(
       creds,
       JSON.stringify({
@@ -309,7 +419,7 @@ describe("private finance import CLI", () => {
         if (body.operation === "finance_export")
           return exportTooLarge
             ? new Response(null, { status: 413 })
-            : response(payload());
+            : response(normalizedFinanceImport(raw));
       }
       if (String(url).endsWith("/commands")) {
         const headers = new Headers(init?.headers);
@@ -346,6 +456,8 @@ describe("private finance import CLI", () => {
     ).rejects.toThrow("OUTCOME_UNCERTAIN_RETAIN_RECEIPT");
     const attempted = JSON.parse(await readFile(receipt, "utf8"));
     expect(attempted.status).toBe("attempted");
+    expect(attempted.document_hash).toBe(sha(rawJson));
+    expect(attempted.payload_hash).toBe(financeSourceHash(raw));
     await expect(
       financeImportCli(["--commit", target, creds, src, receipt], dependencies),
     ).rejects.toThrow("QUERY_FAILED_413");

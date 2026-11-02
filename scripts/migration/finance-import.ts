@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { open, readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -87,9 +87,23 @@ async function exclusiveOrIdentical(
   path: string,
   value: unknown,
   repositoryRoot?: string,
+  compact = false,
 ) {
   try {
-    await writeExclusivePrivateJson(path, value, { repositoryRoot });
+    if (compact) {
+      const serialized = JSON.stringify(value);
+      if (Buffer.byteLength(serialized, "utf8") > 2_000_000)
+        throw new Error("FINANCE_IMPORT_PRIVATE_OUTPUT_TOO_LARGE");
+      const target = await admitPrivatePath(path, { repositoryRoot });
+      const file = await open(target, "wx", 0o600);
+      try {
+        await admitPrivatePath(target, { repositoryRoot, mustExist: true });
+        await file.writeFile(serialized);
+        await file.sync();
+      } finally {
+        await file.close();
+      }
+    } else await writeExclusivePrivateJson(path, value, { repositoryRoot });
   } catch (error) {
     if (!(
       error &&
@@ -168,7 +182,7 @@ async function normalize(
         }
       : {}),
   });
-  await exclusiveOrIdentical(outputFile, prepared.data, repositoryRoot);
+  await exclusiveOrIdentical(outputFile, prepared.data, repositoryRoot, true);
   await exclusiveOrIdentical(
     outputFile + ".receipt.json",
     {
