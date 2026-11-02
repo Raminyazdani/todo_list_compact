@@ -49,6 +49,15 @@ it("real_SDK_discovery_advertises_target_scope_alternatives_without_broadening_o
     expect(security("task_get")).toEqual([
       { type: "oauth2", scopes: ["tasks:read"] },
     ]);
+    expect(security("finance_summary")).toEqual([
+      { type: "oauth2", scopes: ["finance:read"] },
+    ]);
+    expect(security("finance_import_preview")).toEqual([
+      { type: "oauth2", scopes: ["finance:write"] },
+    ]);
+    expect(security("finance_transaction_create")).toEqual([
+      { type: "oauth2", scopes: ["finance:write"] },
+    ]);
     expect(
       offered.tools.find((tool) => tool.name === "file_metadata_update")
         ?.annotations,

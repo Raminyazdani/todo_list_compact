@@ -78,7 +78,7 @@ describe("Personal routines", () => {
       const versions = await pg.query<{ version: number }>(
         "SELECT version FROM schema_migrations ORDER BY version",
       );
-      expect(versions.rows.map((row) => row.version)).toEqual([1, 3]);
+      expect(versions.rows.map((row) => row.version)).toEqual([1, 3, 4]);
       const tables = await pg.query<{ name: string }>(
         "SELECT tablename AS name FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'routine%' ORDER BY tablename",
       );

@@ -33,6 +33,8 @@ import { reservedTaskIdentity } from "./internal-options";
 import { queryTransactionMode } from "./query-transaction-mode";
 import { dailyFocusSet } from "./daily-focus";
 import { routineCommand } from "./routines";
+import { financeCommand } from "./finance";
+import { commitFinanceImport } from "./finance-import";
 import {
   prepareCalendarChangeReview,
   withTrustedCalendarReview,
@@ -47,6 +49,7 @@ import {
 } from "./calendar-orchestration";
 
 function resource(command: CommandName): string {
+  if (command.startsWith("finance_")) return "finance";
   if (command.startsWith("project_") || command.startsWith("knowledge_"))
     return "projects";
   if (command.startsWith("file_")) return "files";
@@ -161,7 +164,8 @@ export function createDomainService(database: Database): DomainService {
               command === "daily_focus_set" ||
               command.startsWith("calendar_") ||
               command.startsWith("time_") ||
-              command.startsWith("routine_")
+              command.startsWith("routine_") ||
+              command.startsWith("finance_")
                 ? null
                 : await snapshot(tx, principal.ownerId);
           let change: Change;
@@ -265,6 +269,22 @@ export function createDomainService(database: Database): DomainService {
           } else if (command === "daily_focus_set")
             change = await dailyFocusSet(
               tx,
+              input,
+              principal,
+              options.expectedRevision,
+            );
+          else if (command === "finance_import_commit")
+            change = await commitFinanceImport(
+              tx,
+              input,
+              principal,
+              options.expectedRevision,
+              operationId,
+            );
+          else if (command.startsWith("finance_"))
+            change = await financeCommand(
+              tx,
+              command,
               input,
               principal,
               options.expectedRevision,
@@ -425,7 +445,8 @@ export function createDomainService(database: Database): DomainService {
         throw new DomainError("UNSUPPORTED_OPERATION", "Unknown query.");
       object(input);
       if (
-        operation === "time_entry_import_preview"
+        operation === "time_entry_import_preview" ||
+        operation === "finance_import_preview"
           ? Buffer.byteLength(json(input), "utf8") > 2_000_000
           : json(input).length > 100000
       )

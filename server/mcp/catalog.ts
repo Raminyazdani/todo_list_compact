@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { normalizedSearch } from "../domain/core";
 import {
+  FINANCE_READ_SCHEMAS,
+  FINANCE_WRITE_SCHEMAS,
+  FINANCE_SEMANTICS,
+} from "./finance-catalog";
+import {
   COMMAND_NAMES,
   QUERY_NAMES,
   WORKFLOW_STATUSES,
@@ -374,6 +379,7 @@ const batchAction = z.discriminatedUnion("command", [
   object({ command: z.literal("task_restore"), input: taskIdentity }),
 ]);
 export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
+  ...FINANCE_READ_SCHEMAS,
   system_capabilities: object({}),
   system_health: object({}),
   whoami: object({}),
@@ -559,6 +565,7 @@ export const READ_SCHEMAS: Record<QueryName, z.ZodType> = {
 };
 const previewInput = object({ preview_id: id });
 export const WRITE_INPUT_SCHEMAS: Partial<Record<CommandName, z.ZodType>> = {
+  ...FINANCE_WRITE_SCHEMAS,
   daily_focus_set: object({
     date: localDate,
     task_ids: z
@@ -842,6 +849,9 @@ export const WRITE_INPUT_SCHEMAS: Partial<Record<CommandName, z.ZodType>> = {
   redo_last_eligible_action: object({ task_id: id.optional() }),
 };
 const revisionCommands = new Set<CommandName>([
+  ...(Object.keys(FINANCE_WRITE_SCHEMAS).filter((name) =>
+    /_(update|archive|restore)$/.test(name),
+  ) as CommandName[]),
   "undo_last_eligible_action",
   "redo_last_eligible_action",
   "task_update",
@@ -902,14 +912,17 @@ export function writeSchema(command: CommandName) {
     input,
     operation_id: z.string().min(8).max(200),
     expected_revision:
-      command === "time_contract_policy_upsert" ||
-      command === "daily_focus_set" ||
-      command === "routine_create" ||
-      command === "routine_checkin_set"
-        ? z.number().int().nonnegative()
-        : revisionCommands.has(command)
-          ? z.number().int().positive()
-          : z.number().int().nonnegative().optional(),
+      command.startsWith("finance_") &&
+      (command.endsWith("_create") || command === "finance_import_commit")
+        ? z.literal(0)
+        : command === "time_contract_policy_upsert" ||
+            command === "daily_focus_set" ||
+            command === "routine_create" ||
+            command === "routine_checkin_set"
+          ? z.number().int().nonnegative()
+          : revisionCommands.has(command)
+            ? z.number().int().positive()
+            : z.number().int().nonnegative().optional(),
     ...(command === "task_dependency_waive_commit"
       ? { human_confirmation_id: z.string().uuid() }
       : {}),
@@ -941,6 +954,12 @@ export function requiredToolScopes(
   name: QueryName | CommandName,
   readOnly: boolean,
 ): string[] {
+  if (name.startsWith("finance_"))
+    return [
+      readOnly && name !== "finance_import_preview"
+        ? "finance:read"
+        : "finance:write",
+    ];
   if (!readOnly)
     return [
       (name.startsWith("project_") || name.startsWith("knowledge_")
@@ -993,6 +1012,7 @@ export function requiredToolScopes(
   ];
 }
 const semantics: Partial<Record<QueryName | CommandName, string>> = {
+  ...FINANCE_SEMANTICS,
   daily_focus_get:
     "Read the owner-selected tasks for one Europe/Berlin day in saved order. Selection is independent of due dates and workflow status; closed tasks remain visible until the owner removes them.",
   daily_capacity_preview:

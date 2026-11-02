@@ -31,6 +31,7 @@ describe("Canonical pure-read transaction routing", () => {
     );
     expect(exclusive.sort()).toEqual(
       [
+        "finance_import_preview",
         "task_dependency_add_preview",
         "task_dependency_remove_preview",
         "task_dependency_waive_preview",

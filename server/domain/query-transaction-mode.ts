@@ -5,6 +5,13 @@ type Mode = "read" | "exclusive";
 // Exhaustive by design: a new query must classify its SQL and delegated side
 // effects before runtime can route it through a SQL read-only transaction.
 const modes = {
+  finance_account_list: "read",
+  finance_category_list: "read",
+  finance_plan_list: "read",
+  finance_transaction_list: "read",
+  finance_summary: "read",
+  finance_export: "read",
+  finance_import_preview: "exclusive",
   daily_focus_get: "read",
   daily_capacity_preview: "read",
   system_capabilities: "read",

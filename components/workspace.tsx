@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Timer,
   TrendingUp,
+  WalletCards,
   X,
 } from "lucide-react";
 import type {
@@ -40,6 +41,7 @@ import { CreateTask, TaskDetail, TaskExplorer } from "@/features/tasks";
 import { TaskRowDraftProvider } from "@/features/task-row-fields";
 import { CalendarWorkspace } from "@/features/calendar-workspace";
 import { RoutineWorkspace } from "@/features/routines";
+import { FinanceWorkspace } from "@/features/finances";
 import {
   Assistant,
   Dashboard,
@@ -57,6 +59,7 @@ const navigation = [
   { path: "/calendar", fa: "تقویم", en: "Calendar", icon: CalendarDays },
   { path: "/routines", fa: "روتین‌ها", en: "Routines", icon: Repeat2 },
   { path: "/time", fa: "ثبت ساعت کار", en: "Work log", icon: Timer },
+  { path: "/finances", fa: "مدیریت مالی", en: "Finances", icon: WalletCards },
   {
     path: "/files",
     fa: "فایل‌ها و منابع",
@@ -365,7 +368,7 @@ function WorkspaceContent({
           </button>
           <div className="nav-label">{t("فضای من", "WORKSPACE")}</div>
           <nav aria-label={t("منوی اصلی", "Main navigation")}>
-            {navigation.slice(0, 7).map((item) => (
+            {navigation.slice(0, 8).map((item) => (
               <Link
                 href={item.path}
                 key={item.path}
@@ -382,7 +385,7 @@ function WorkspaceContent({
             {t("بینش و ابزار", "INSIGHT & TOOLS")}
           </div>
           <nav>
-            {navigation.slice(7).map((item) => (
+            {navigation.slice(8).map((item) => (
               <Link
                 href={item.path}
                 key={item.path}
@@ -490,6 +493,8 @@ function WorkspaceContent({
               <CalendarWorkspace action={action} onOpen={setTaskId} />
             ) : pathname === "/routines" ? (
               <RoutineWorkspace action={action} />
+            ) : pathname === "/finances" ? (
+              <FinanceWorkspace action={actionStrict} />
             ) : pathname === "/time" ? (
               <CalendarWorkspace
                 action={action}
