@@ -1,18 +1,26 @@
 {
   "finance_itemized_expenses_2026_11_03": {
-    "status": "implementation_verified_release_pending",
+    "status": "released_live_itemized_ui_verified",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/20",
+    "tested_source_commit": "c09fe4c4a640edda4903d87ce0cbf0cabe2e4328",
+    "release_commit": "54bb7d93403815a1768a9d93a05ca4f4c990c102",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/41567331529",
+    "production_url": "https://ramin-life-os.vercel.app/finances",
     "problem": "The default finance overview showed category aggregates while individual costs and their component notes were hidden in a separate tab.",
     "change": "A first-class itemized panel precedes projections and category reports. Each applicable plan shows its own amount, monthly equivalent, account, timing precision and counting status, with expandable details and canonical editing. The existing archived-list query also loads for the overview so an active historical version remains visible after later archiving. Archived history is read only; no new ledger or schema was added.",
     "observed": {
       "static": "PASS full formatting, ESLint, TypeScript and production build.",
       "private_note_readability": "PASS reviewed source notes converted to readable Persian/euro breakdowns through revision-guarded canonical commands. Exact finance export reconciliation confirmed only notes changed; the complete monthly summary stayed identical. No records, financial values or payment states changed.",
       "independent_review": "PASS independent before/after comparison: changes were confined to notes, and source monetary mentions retained their historical/estimate/unknown meanings. The review found a real historical coverage gap; the itemized view now includes an archived plan's active selected-month version, deduplicated by identity/revision and read only. A future-archive regression and dynamic REST-to-row sums were added to the release browser gates.",
-      "local_browser_setup": "The default local port belonged to another application. An alternate auth-origin launch was rejected by automatic command review; no auth configuration was changed. Browser mutation scenarios will run on the existing isolated CI server instead."
+      "local_browser_setup": "The default local port belonged to another application. An alternate auth-origin launch was rejected by automatic command review; no auth configuration was changed. Browser mutation scenarios subsequently passed on the existing isolated CI server instead.",
+      "React_review": "PASS condensed react-best-practices review: existing client boundary and theme reused, independent plan reads run in parallel, merged rows are derived/deduplicated rather than copied into state, and native details provide expansion without new event listeners or dependencies.",
+      "final_CI": "PASS at c09fe4c: 720 unit/integration tests with 36 opt-in skips; 18 native PostgreSQL tests; 61 browser scenarios with 4 explicit production-only skips; 18 HTTP authorization, 1 OIDC, 6 rate-limit and 1 real token-expiry test. The extended finance story verified visible itemized bills/monthly equivalents, readable multiline notes, canonical editing and retained read-only history after a future archive.",
+      "release": "PASS exact tested-source/release tree equivalence and canonical Vercel Production READY at 54bb7d9. No database migration was required; the subsequent evidence update changes documentation only.",
+      "production_readback": "PASS actual owner-authenticated read-only browser on the canonical site: every eligible active/historical item and note matched REST; per-interval amounts, unknowns, monthly accounting labels and aggregate cost/reserve/allocation sums matched. Itemized rows preceded category reports. All attempted financial-write counts remained zero.",
+      "production_visual": "PASS private desktop/mobile screenshot review with existing Life OS theme. An additional 390px RTL capture verified an expanded individual cost and its source-derived component notes, with no page horizontal overflow or financial write.",
+      "cleanup": "PASS PR merged, exact feature branch removed locally and remotely. No temporary database branch was created for this UI-only follow-up."
     },
-    "pending": [
-      "Isolated CI browser scenarios and complete verification workflow.",
-      "Production release and actual itemized UI readback against owner REST."
-    ],
+    "pending": [],
     "privacy": "Private report content, proposals, before/after exports, operation journals, credentials and real screenshots remain outside Git; public fixtures are synthetic."
   },
   "personal_finance_2026_11_02": {
