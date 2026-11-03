@@ -172,6 +172,10 @@ export function openApiDocument() {
               scopes: {
                 "tasks:read": "Read owner tasks",
                 "tasks:write": "Change owner tasks",
+                "finance:read":
+                  "Read private owner finance plans and registered transactions",
+                "finance:write":
+                  "Change owner finance records and commit reviewed imports; does not execute bank payments",
               },
             },
           },

@@ -47,6 +47,10 @@ jobs:
           TEST_POSTGRES: "1"
       - name: Recheck idempotent schema migration
         run: pnpm db:migrate
+      - name: Finance PostgreSQL concurrency and integrity
+        run: node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/domain/finance-postgres.test.ts
+        env:
+          TEST_POSTGRES: "1"
       - run: pnpm exec tsx --env-file=.env.local scripts/ops/auth-migrate.ts
       - run: pnpm exec tsx --env-file=.env.local scripts/ops/bootstrap-owner.ts /tmp/lifeos-ci-credentials.json
       - run: pnpm build
@@ -66,7 +70,7 @@ jobs:
           PLAYWRIGHT_CHROMIUM_CHANNEL: chromium
       - name: Real HTTP authorization, revocation and token expiry
         run: |
-          node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth.test.ts tests/security/http-auth-human-authority.test.ts tests/security/http-auth-revocation.test.ts tests/security/http-notification-scopes.test.ts
+          node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth.test.ts tests/security/http-auth-human-authority.test.ts tests/security/http-auth-revocation.test.ts tests/security/http-notification-scopes.test.ts tests/security/http-finance.test.ts
           node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-oidc.test.ts
           node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-rate-limit.test.ts
           node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/security/http-auth-expiry.test.ts

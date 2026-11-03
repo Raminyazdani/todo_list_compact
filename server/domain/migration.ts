@@ -4,6 +4,11 @@ import { array, hash, id, json, object, text, type Input } from "./core";
 import type { Change } from "./tasks";
 
 export const BACKUP_TABLES = [
+  "finance_accounts",
+  "finance_categories",
+  "finance_plans",
+  "finance_plan_versions",
+  "finance_transactions",
   "projects",
   "tasks",
   "task_dependency_groups",
@@ -392,6 +397,11 @@ export async function legacyImport(
   };
 }
 const ADDITIVE_BACKUP_TABLES: readonly string[] = [
+  "finance_accounts",
+  "finance_categories",
+  "finance_plans",
+  "finance_plan_versions",
+  "finance_transactions",
   "routines",
   "routine_schedules",
   "routine_checkins",

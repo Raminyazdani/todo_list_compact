@@ -13,6 +13,7 @@ import type { Database } from "../../server/db/database";
 import { createDomainService } from "../../server/domain/service";
 import { hash } from "../../server/domain/core";
 import { MIGRATION_SQL } from "../../server/db/schema";
+import { FINANCE_TABLES } from "../../server/domain/finance";
 import {
   exportBackup,
   verifyBackupManifest,
@@ -394,6 +395,7 @@ describe("Complete report ranges, local dates and scope boundaries", () => {
       "routines",
       "routine_schedules",
       "routine_checkins",
+      ...FINANCE_TABLES,
     ]) {
       delete backup.tables[table];
       delete backup.checksums[table];
@@ -413,7 +415,12 @@ describe("Complete report ranges, local dates and scope boundaries", () => {
       expect((await fresh.query("SELECT * FROM event_reminders")).rows).toEqual(
         [],
       );
-      for (const table of ["routines", "routine_schedules", "routine_checkins"])
+      for (const table of [
+        "routines",
+        "routine_schedules",
+        "routine_checkins",
+        ...FINANCE_TABLES,
+      ])
         expect((await fresh.query(`SELECT * FROM ${table}`)).rows).toEqual([]);
     } finally {
       await fresh.close?.();
@@ -434,15 +441,27 @@ describe("Complete report ranges, local dates and scope boundaries", () => {
         "utf8",
       ),
     ).replace(/^--[^\n]*\n/, "");
+    const finance = normalize(
+      await readFile(
+        new URL("../../server/db/migrations/0004_finance.sql", import.meta.url),
+        "utf8",
+      ),
+    );
     const v1 =
       "INSERT INTO schema_migrations(version) VALUES(1) ON CONFLICT DO NOTHING;";
     const v3 =
       "INSERT INTO schema_migrations(version) VALUES(3) ON CONFLICT DO NOTHING;";
+    const v4 =
+      "INSERT INTO schema_migrations(version) VALUES(4) ON CONFLICT DO NOTHING;";
     expect(initial.endsWith(v1)).toBe(true);
     expect(additive.endsWith(v3)).toBe(true);
+    expect(finance.endsWith(v4)).toBe(true);
     const expectedRuntime = [
       initial.slice(0, -v1.length).trimEnd(),
       additive.slice(0, -v3.length).trimEnd(),
+      "",
+      finance,
+      "",
       v1,
       v3,
     ].join("\n");

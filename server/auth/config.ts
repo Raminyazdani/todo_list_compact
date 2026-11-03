@@ -16,6 +16,8 @@ export const OWNER_SCOPES = [
   "calendar:write",
   "time:read",
   "time:write",
+  "finance:read",
+  "finance:write",
   "activity:read",
   "backup:export",
   "admin:manage",

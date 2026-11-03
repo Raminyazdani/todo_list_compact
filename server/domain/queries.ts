@@ -56,6 +56,8 @@ import { previewTimeImport } from "./time-import";
 import { instantToLocalDate } from "../../shared/datetime";
 import { dailyFocusGet } from "./daily-focus";
 import { routineQuery } from "./routines";
+import { financeQuery } from "./finance";
+import { financeExport, previewFinanceImport } from "./finance-import";
 import { SCHEMA_VERSION } from "../db/schema";
 import { dailyCapacityPreview } from "./capacity";
 import {
@@ -295,6 +297,14 @@ export async function domainQuery(
   principal: Principal,
 ): Promise<unknown> {
   const owner = principal.ownerId;
+  if (operation === "finance_import_preview")
+    return previewFinanceImport(tx, input, principal);
+  if (operation === "finance_export") {
+    requireScope(principal, "finance");
+    return financeExport(tx, owner);
+  }
+  if (operation.startsWith("finance_"))
+    return financeQuery(tx, operation, input, principal);
   if (
     operation === "routine_list" ||
     operation === "routine_day" ||

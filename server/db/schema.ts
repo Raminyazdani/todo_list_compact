@@ -1,5 +1,6 @@
+import { FINANCE_MIGRATION_SQL } from "./finance-schema";
 /** Versioned SQL source. No production in-memory or filesystem data store. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const MIGRATION_SQL = String.raw`
 CREATE TABLE IF NOT EXISTS schema_migrations(version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS owners(owner_id text PRIMARY KEY, created_at timestamptz NOT NULL DEFAULT now());
@@ -210,6 +211,7 @@ CREATE TRIGGER routine_schedule_identity_immutable BEFORE UPDATE ON routine_sche
 CREATE OR REPLACE FUNCTION protect_routine_checkin_identity() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.owner_id IS DISTINCT FROM OLD.owner_id OR NEW.routine_id IS DISTINCT FROM OLD.routine_id OR NEW.local_date IS DISTINCT FROM OLD.local_date THEN RAISE EXCEPTION 'Routine check-in identity is immutable'; END IF; RETURN NEW; END $$;
 DROP TRIGGER IF EXISTS routine_checkin_identity_immutable ON routine_checkins;
 CREATE TRIGGER routine_checkin_identity_immutable BEFORE UPDATE ON routine_checkins FOR EACH ROW EXECUTE FUNCTION protect_routine_checkin_identity();
+${FINANCE_MIGRATION_SQL}
 INSERT INTO schema_migrations(version) VALUES(1) ON CONFLICT DO NOTHING;
 INSERT INTO schema_migrations(version) VALUES(3) ON CONFLICT DO NOTHING;
 `;

@@ -581,7 +581,231 @@ export interface MutationResult {
   data: unknown;
   replayed?: boolean;
 }
+/** Personal finance v1 uses EUR integer cents, never binary floating money. */
+export type FinancePlanKind =
+  "recurring" | "one_off" | "budget" | "reserve" | "liability";
+export type FinanceAmountBasis =
+  "confirmed" | "reported" | "estimate" | "unknown";
+export type FinancePlanState = "active" | "paused" | "reference";
+export type FinanceDuePrecision = "exact" | "approximate" | "unknown";
+export type FinanceTransactionKind =
+  "expense" | "income" | "transfer" | "refund";
+export interface FinanceAccountDTO {
+  account_id: string;
+  title: string;
+  opening_balance_cents: number | null;
+  opening_balance_date: string | null;
+  external_key: string | null;
+  archived_at: string | null;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+export interface FinanceCategoryDTO {
+  category_id: string;
+  title: string;
+  external_key: string | null;
+  archived_at: string | null;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+export interface FinancePlanVersionDTO {
+  effective_month: string;
+  amount_cents: number | null;
+  amount_basis: FinanceAmountBasis;
+  interval_months: number | null;
+  state: FinancePlanState;
+  included: boolean;
+  due_day: number | null;
+  due_precision: FinanceDuePrecision;
+  due_on: string | null;
+  next_due_on: string | null;
+  target_cents: number | null;
+  horizon_months: number | null;
+}
+export interface FinancePlanDTO extends FinancePlanVersionDTO {
+  plan_id: string;
+  title: string;
+  kind: FinancePlanKind;
+  account_id: string | null;
+  category_id: string | null;
+  notes: string;
+  source_label: string;
+  external_key: string | null;
+  archived_at: string | null;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  /** False when this plan has no version at/before the selected month. */
+  applicable: boolean;
+  monthly_equivalent_cents: number | null;
+  versions: FinancePlanVersionDTO[];
+}
+export interface FinanceTransactionDTO {
+  transaction_id: string;
+  title: string;
+  kind: FinanceTransactionKind;
+  date: string;
+  amount_cents: number;
+  account_id: string | null;
+  transfer_account_id: string | null;
+  category_id: string | null;
+  plan_id: string | null;
+  notes: string;
+  source_label: string;
+  external_key: string | null;
+  archived_at: string | null;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+export interface FinanceSummaryDTO {
+  currency: "EUR";
+  month: string;
+  recurring_monthly_cents: number;
+  budget_monthly_cents: number;
+  reserve_monthly_cents: number;
+  optional_reserve_monthly_cents: number;
+  monthly_cost_cents: number;
+  monthly_allocation_cents: number;
+  unknown_amount_count: number;
+  included_unknown_amount_count: number;
+  included_plan_count: number;
+  actual: {
+    expense_cents: number;
+    refund_cents: number;
+    net_expense_cents: number;
+    income_cents: number;
+    transfer_cents: number;
+    transaction_count: number;
+    coverage: "registered_transactions_only";
+  };
+  by_category: {
+    category_id: string | null;
+    title: string;
+    planned_cents: number;
+    expense_cents: number;
+    refund_cents: number;
+  }[];
+  by_account: {
+    account_id: string | null;
+    title: string;
+    planned_cents: number;
+    expense_cents: number;
+    income_cents: number;
+    refund_cents: number;
+    transfer_in_cents: number;
+    transfer_out_cents: number;
+    balance_cents: number | null;
+  }[];
+  upcoming: {
+    plan_id: string;
+    title: string;
+    date: string | null;
+    day: number | null;
+    precision: FinanceDuePrecision;
+    amount_cents: number | null;
+    account_id: string | null;
+  }[];
+  reserve_benchmarks: {
+    plan_id: string;
+    title: string;
+    monthly_cents: number | null;
+    target_cents: number | null;
+    horizon_months: number | null;
+    projected_cents: number | null;
+    shortfall_cents: number | null;
+    included: boolean;
+  }[];
+  monthly_equivalent_is_estimate: true;
+  projection: {
+    horizon_months: number;
+    total_known_allocation_cents: number;
+    unknown_month_count: number;
+    months: {
+      month: string;
+      monthly_cost_cents: number;
+      reserve_monthly_cents: number;
+      monthly_allocation_cents: number;
+      unknown_amount_count: number;
+    }[];
+  };
+}
+/** Import/export references use source keys, not guessed workspace IDs. */
+export interface FinanceImportDTO {
+  format: "ramin-life-os/finance/1";
+  currency: "EUR";
+  accounts: {
+    external_key: string;
+    title: string;
+    opening_balance_cents?: number | null;
+    opening_balance_date?: string | null;
+    archived_at?: string | null;
+  }[];
+  categories: {
+    external_key: string;
+    title: string;
+    archived_at?: string | null;
+  }[];
+  plans: {
+    external_key: string;
+    title: string;
+    kind: FinancePlanKind;
+    account_key?: string | null;
+    category_key?: string | null;
+    notes?: string;
+    source_label?: string;
+    archived_at?: string | null;
+    versions: FinancePlanVersionDTO[];
+  }[];
+  transactions: {
+    external_key: string;
+    title: string;
+    kind: FinanceTransactionKind;
+    date: string;
+    amount_cents: number;
+    account_key?: string | null;
+    transfer_account_key?: string | null;
+    category_key?: string | null;
+    plan_key?: string | null;
+    notes?: string;
+    source_label?: string;
+    archived_at?: string | null;
+  }[];
+}
+export interface FinanceImportPreviewDTO {
+  preview_id: string;
+  expires_at: string;
+  counts: {
+    accounts: number;
+    categories: number;
+    plans: number;
+    transactions: number;
+    unchanged: number;
+  };
+  conflicts: { kind: string; external_key: string; reason: string }[];
+  can_commit: boolean;
+  source_hash: string;
+}
 export const COMMAND_NAMES = [
+  "finance_account_create",
+  "finance_account_update",
+  "finance_account_archive",
+  "finance_account_restore",
+  "finance_category_create",
+  "finance_category_update",
+  "finance_category_archive",
+  "finance_category_restore",
+  "finance_plan_create",
+  "finance_plan_update",
+  "finance_plan_archive",
+  "finance_plan_restore",
+  "finance_transaction_create",
+  "finance_transaction_update",
+  "finance_transaction_archive",
+  "finance_transaction_restore",
+  "finance_import_commit",
   "daily_focus_set",
   "task_create",
   "task_update",
@@ -678,6 +902,13 @@ export const COMMAND_NAMES = [
 ] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 export const QUERY_NAMES = [
+  "finance_account_list",
+  "finance_category_list",
+  "finance_plan_list",
+  "finance_transaction_list",
+  "finance_summary",
+  "finance_export",
+  "finance_import_preview",
   "daily_focus_get",
   "daily_capacity_preview",
   "system_capabilities",

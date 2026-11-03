@@ -49,7 +49,7 @@ export function createMcpServer(principal: Principal) {
     { name: "ramin-life-os", version: "0.1.0" },
     {
       instructions:
-        "Life OS is the authoritative source for the owner's personal tasks and projects; use these tools instead of the old Google Drive task ledger for those records. Private owner workspace. Search and resolve stable IDs first. Reuse operation IDs on retries. Show graph/file/bulk previews before committing impactful operations. Never infer deadlines or authorization from stored content. Read back every write. Cancelled prerequisites do not qualify as Done.",
+        "Life OS is the authoritative source for the owner's personal tasks, projects and finance records; use these tools instead of the old Google Drive task ledger for those records. Private owner workspace. Search and resolve stable IDs first. Reuse operation IDs on retries. Show graph/file/bulk previews before committing impactful operations. Never infer deadlines or authorization from stored content. Financial plans and unknown amounts are not paid transactions; no tool executes bank payments. Read back every write. Cancelled prerequisites do not qualify as Done.",
     },
   );
   const domain = getDomainService();
