@@ -4616,6 +4616,102 @@ td.description-cell {
 .finance-filters > select {
   max-width: 185px;
 }
+.finance-itemized > .section-heading {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.finance-itemized-list {
+  display: grid;
+  margin-top: 10px;
+}
+.finance-itemized-row {
+  min-width: 0;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--line);
+}
+.finance-itemized-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.finance-itemized-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+.finance-itemized-heading > div {
+  min-width: 0;
+}
+.finance-itemized-heading > .button {
+  flex-shrink: 0;
+}
+.finance-itemized-heading h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.finance-itemized-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.finance-itemized-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin: 18px 0 12px;
+}
+.finance-itemized-facts > div {
+  min-width: 0;
+}
+.finance-itemized-facts dt {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.finance-itemized-facts dd {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+.finance-itemized-facts .finance-itemized-amount,
+.finance-itemized-facts .finance-itemized-monthly {
+  font-size: 16px;
+  font-weight: 600;
+}
+.finance-itemized-facts .finance-itemized-meta,
+.finance-itemized-facts .finance-itemized-counting {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.finance-itemized .finance-money {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.finance-itemized-details summary {
+  width: fit-content;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.9;
+  cursor: pointer;
+}
+.finance-itemized-details summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+.finance-itemized-details > div {
+  padding: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
 .finance-records {
   display: grid;
 }
@@ -4731,6 +4827,9 @@ td.description-cell {
 @media (max-width: 900px) {
   .finance-columns {
     grid-template-columns: 1fr;
+  }
+  .finance-itemized-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 600px) {

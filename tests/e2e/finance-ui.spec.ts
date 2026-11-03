@@ -206,6 +206,8 @@ test("finance workspace separates plans from registered payments and preserves h
 }) => {
   await login(request, page);
   const prefix = `E2E finance ${crypto.randomUUID().slice(0, 8)}`;
+  const breakdownNotes =
+    "بخش آزمایشی اول: ۲۰۰ یورو\nبخش آزمایشی دوم: ۱۰۰ یورو\nاین دو جزء داخل همان قبض سه‌ماهه‌اند.";
   const base = await read<FinanceSummaryDTO>(request, "finance_summary", {
     month,
   });
@@ -260,6 +262,7 @@ test("finance workspace separates plans from registered payments and preserves h
       .getByLabel(/دقت زمان پرداخت|Payment timing precision/)
       .selectOption("approximate");
     await dialog.getByLabel(/روز معمول ماه|Usual day of month/).fill("15");
+    await dialog.getByLabel(/^توضیحات$|^Notes$/).fill(breakdownNotes);
     await saveDialog(page);
     let plans = await all<FinancePlanDTO>(request, "finance_plan_list", {
       month,
@@ -291,6 +294,76 @@ test("finance workspace separates plans from registered payments and preserves h
         base.included_unknown_amount_count,
     ).toBe(1);
     expect(beforePayment.actual.expense_cents).toBe(base.actual.expense_cents);
+    // The default view must expose individual costs, not just category sums.
+    await page.getByRole("tab", { name: /نمای ماه|Month overview/ }).click();
+    const itemized = page.locator(".finance-itemized");
+    await expect(
+      itemized.getByRole("heading", {
+        name: /ریز هزینه‌های این ماه|Itemized costs this month/,
+      }),
+    ).toBeVisible();
+    const quarterlyRow = itemized.locator(
+      `.finance-itemized-row[data-plan-id="${planId}"]`,
+    );
+    const unknownRow = itemized.locator(".finance-itemized-row").filter({
+      has: page.getByRole("heading", {
+        name: `${prefix} Unknown`,
+        exact: true,
+      }),
+    });
+    await expect(quarterlyRow).toBeVisible();
+    await expect(unknownRow).toBeVisible();
+    const language = await page.locator("html").getAttribute("lang");
+    const money = (cents: number) =>
+      new Intl.NumberFormat(language === "fa" ? "fa-IR" : "en-IE", {
+        style: "currency",
+        currency: "EUR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(cents / 100);
+    await expect(
+      quarterlyRow.locator(".finance-itemized-amount .finance-money"),
+    ).toHaveText(money(30000));
+    await expect(
+      quarterlyRow.locator(".finance-itemized-monthly .finance-money"),
+    ).toHaveText(money(10000));
+    await expect(quarterlyRow.locator(".finance-itemized-counting")).toHaveText(
+      /در جمع هزینه‌های ماه|Included in monthly costs/,
+    );
+    await expect(quarterlyRow.locator(".finance-itemized-due")).toContainText(
+      /تقریبی|Approximate/,
+    );
+    await expect(unknownRow.locator(".finance-itemized-amount")).toContainText(
+      /نامشخص|Unknown/,
+    );
+    await expect(unknownRow.locator(".finance-itemized-monthly")).toContainText(
+      /نامشخص|Unknown/,
+    );
+    await expect(unknownRow.locator(".finance-itemized-counting")).toHaveText(
+      /معادل ماهانه نامشخص؛ در جمع عددی نیامده|Monthly equivalent unknown; not included in numeric totals/,
+    );
+    await quarterlyRow.locator("details > summary").click();
+    await expect(quarterlyRow.locator(".finance-notes")).toHaveText(
+      breakdownNotes,
+    );
+    expect(await quarterlyRow.locator(".finance-notes").innerText()).toContain(
+      "\n",
+    );
+    await quarterlyRow
+      .getByRole("button", {
+        name: new RegExp(`^(ویرایش|Edit) ${prefix} Quarterly$`),
+      })
+      .click();
+    dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel(/^توضیحات$|^Notes$/)).toHaveValue(
+      breakdownNotes,
+    );
+    await dialog
+      .getByRole("button", { name: "Close / بستن", exact: true })
+      .click();
+    await itemized
+      .getByRole("button", { name: /مدیریت همهٔ موارد|Manage all items/ })
+      .click();
     const planCard = page.locator(".finance-record").filter({
       has: page.getByRole("heading", {
         name: `${prefix} Quarterly`,
@@ -462,6 +535,91 @@ test("finance workspace separates plans from registered payments and preserves h
     expect(
       savedPayments.filter((item) => item.title.startsWith(prefix)),
     ).toHaveLength(3);
+
+    // A future archive must not hide a line that still contributes to history.
+    const archiveMonth = "2032-05";
+    const historicalBefore = await read<FinanceSummaryDTO>(
+      request,
+      "finance_summary",
+      { month },
+    );
+    const futureBefore = await read<FinanceSummaryDTO>(
+      request,
+      "finance_summary",
+      { month: archiveMonth },
+    );
+    const futurePlan = (
+      await all<FinancePlanDTO>(request, "finance_plan_list", {
+        month: archiveMonth,
+      })
+    ).find((item) => item.plan_id === planId)!;
+    await mutate(
+      request,
+      "finance_plan_archive",
+      { plan_id: planId, effective_month: archiveMonth },
+      futurePlan.revision,
+    );
+    try {
+      await page.reload();
+      await page.getByLabel(/ماه گزارش|Report month/).fill(month);
+      const historicalRow = page.locator(
+        `.finance-itemized-row[data-plan-id="${planId}"]`,
+      );
+      await expect(historicalRow).toBeVisible();
+      await expect(
+        historicalRow.locator(".finance-itemized-archived"),
+      ).toHaveText(/بایگانی‌شده؛ نسخهٔ این ماه|Archived; this month's version/);
+      await expect(
+        historicalRow.locator(".finance-itemized-monthly .finance-money"),
+      ).toHaveText(money(10000));
+      await expect(
+        historicalRow.getByRole("button", { name: /^(ویرایش|Edit) / }),
+      ).toHaveCount(0);
+      const historicalAfter = await read<FinanceSummaryDTO>(
+        request,
+        "finance_summary",
+        { month },
+      );
+      expect(historicalAfter.monthly_cost_cents).toBe(
+        historicalBefore.monthly_cost_cents,
+      );
+      await expect(
+        page
+          .locator(".finance-metrics .metric-card")
+          .nth(0)
+          .locator("strong .finance-money"),
+      ).toHaveText(money(historicalAfter.recurring_monthly_cents));
+      await page.getByLabel(/ماه گزارش|Report month/).fill(archiveMonth);
+      await expect(historicalRow).toHaveCount(0);
+      const futureAfter = await read<FinanceSummaryDTO>(
+        request,
+        "finance_summary",
+        { month: archiveMonth },
+      );
+      expect(futureAfter.monthly_cost_cents).toBe(
+        futureBefore.monthly_cost_cents - futurePlan.monthly_equivalent_cents!,
+      );
+      await expect(
+        page
+          .locator(".finance-metrics .metric-card")
+          .nth(0)
+          .locator("strong .finance-money"),
+      ).toHaveText(money(futureAfter.recurring_monthly_cents));
+    } finally {
+      const archivedPlan = (
+        await all<FinancePlanDTO>(request, "finance_plan_list", {
+          month: archiveMonth,
+          archived: true,
+        })
+      ).find((item) => item.plan_id === planId);
+      if (archivedPlan)
+        await mutate(
+          request,
+          "finance_plan_restore",
+          { plan_id: planId, effective_month: archiveMonth },
+          archivedPlan.revision,
+        );
+    }
   } finally {
     await cleanup(request, prefix);
   }

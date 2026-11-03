@@ -1,4 +1,20 @@
 {
+  "finance_itemized_expenses_2026_11_03": {
+    "status": "implementation_verified_release_pending",
+    "problem": "The default finance overview showed category aggregates while individual costs and their component notes were hidden in a separate tab.",
+    "change": "A first-class itemized panel precedes projections and category reports. Each applicable plan shows its own amount, monthly equivalent, account, timing precision and counting status, with expandable details and canonical editing. The existing archived-list query also loads for the overview so an active historical version remains visible after later archiving. Archived history is read only; no new ledger or schema was added.",
+    "observed": {
+      "static": "PASS full formatting, ESLint, TypeScript and production build.",
+      "private_note_readability": "PASS reviewed source notes converted to readable Persian/euro breakdowns through revision-guarded canonical commands. Exact finance export reconciliation confirmed only notes changed; the complete monthly summary stayed identical. No records, financial values or payment states changed.",
+      "independent_review": "PASS independent before/after comparison: changes were confined to notes, and source monetary mentions retained their historical/estimate/unknown meanings. The review found a real historical coverage gap; the itemized view now includes an archived plan's active selected-month version, deduplicated by identity/revision and read only. A future-archive regression and dynamic REST-to-row sums were added to the release browser gates.",
+      "local_browser_setup": "The default local port belonged to another application. An alternate auth-origin launch was rejected by automatic command review; no auth configuration was changed. Browser mutation scenarios will run on the existing isolated CI server instead."
+    },
+    "pending": [
+      "Isolated CI browser scenarios and complete verification workflow.",
+      "Production release and actual itemized UI readback against owner REST."
+    ],
+    "privacy": "Private report content, proposals, before/after exports, operation journals, credentials and real screenshots remain outside Git; public fixtures are synthetic."
+  },
   "personal_finance_2026_11_02": {
     "status": "released_live_ui_rest_mcp_verified",
     "plan": "docs/FINANCE_PLAN_FA.md",
