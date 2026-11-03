@@ -1,9 +1,14 @@
 {
   "design_overhaul_2026_11_03": {
-    "status": "implemented_awaiting_full_CI_and_live_release",
+    "status": "released_live_visual_ui_rest_mcp_verified",
     "goal": "Project-local design skill installation and complete Life OS visual/motion overhaul with preserved product semantics.",
     "branch": "codex/life-os-visual-overhaul",
     "baseline_commit": "330987e72eedcdeb2a84344d26f898e5b75e6221",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/21",
+    "tested_source_commit": "d11e30e603a7a88ec51d07270dd543f0ea350871",
+    "release_commit": "559ff9bb52aff2ddc603c121838b29ce39c6d4e8",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/41586194132",
+    "production_url": "https://ramin-life-os.vercel.app",
     "plan": "docs/DESIGN_OVERHAUL_PLAN_FA.md",
     "executable_superprompt": "docs/DESIGN_OVERHAUL_SUPERPROMPT_FA.md",
     "design_system": "DESIGN.md",
@@ -29,12 +34,24 @@
       "scroll_region_correction": "PASS four existing financial/category/account/trend/scheduling table wrappers now expose named keyboard-focusable regions.16 before/after synthetic actual-source cases reproduce mobile failures and then pass axe, outline/focus, native RTL/LTR Arrow scrolling and no page overflow. Existing work/import tables already met the rule.",
       "finance_test_login_observability": "Original denial status is unproven. The isolated mutation test helper now records only safe HTTP status/error code and may retry once only after an explicit429 with a valid numeric Retry-After no longer than65seconds. Other denials fail. Product authentication/rate limits were not changed; final CI must establish current behavior.",
       "CI_0ce85c95": "FAILED only Files tablet overflow:61browser cases passed,1failed,4explicit production skips. Both finance sign-ins were accepted on attempt1/HTTP200; no429 or retry occurred. Calendar contrast, financial keyboard scrolling, source-details recovery and mobile-focus tests passed. Unit/native PostgreSQL/static/security/build passed; HTTP-security step still was not reached.",
-      "files_tablet_correction": "PASS real hydrated FileWorkspace with full styles/sidebar reproduced2022px document at768px: inherited white-space:nowrap defeated overflow-wrap.18CSS lines restore full title wrapping and bounded flex metadata; an inline-size container switches to one column below640px available content.84 candidate Files/Reports/Settings layout scenes show no page/element overflow,12 representative tablet axe checks pass, and2 awaited keyboard open/Escape/opener/selection scenarios pass. No file/data/API flow changed."
+      "files_tablet_correction": "PASS real hydrated FileWorkspace with full styles/sidebar reproduced2022px document at768px: inherited white-space:nowrap defeated overflow-wrap.18CSS lines restore full title wrapping and bounded flex metadata; an inline-size container switches to one column below640px available content.84 candidate Files/Reports/Settings layout scenes show no page/element overflow,12 representative tablet axe checks pass, and2 awaited keyboard open/Escape/opener/selection scenarios pass. No file/data/API flow changed.",
+      "final_CI": "PASS exact d11e30e source, run41586194132/job125752147713:720 unit tests with36 opt-in skips;14 native PostgreSQL plus4 finance integrity tests;62 browser scenarios with4 explicit environment-only skips,0 unexpected and0 flaky;39 main-view axe checks across13 views at desktop/mobile/tablet,0 findings;18 HTTP authorization/authority/revocation/notification/finance tests,1 OIDC,6 rate-limit and1 real expiry test. Formatting/lint/type/public scan/high-severity dependency gate and production build all passed. Both finance sign-ins succeeded at attempt1/HTTP200 without retry.",
+      "runtime_MCP_calendar": "PASS isolated final-CI real SDK/runtime smoke:182 tools, shared MCP write/readback, exactly-once replay, CSRF/PKCE; calendar read-only denial, retained draft replay, promotion/undo/readback and archive. External calendar writes0. These synthetic mutations were not run against Production.",
+      "CI_receipt": "PASS independently inspected final job/log and report. Artifact13208784928 has463395 bytes and verified SHA2565f080c87bc43488df8154ba11f121fc5f169b4933a5993dc7051e3a36d800c5b. Its report contains synthetic test evidence, not real owner screenshots.",
+      "release": "PASS both addressed review threads resolved;PR21 merged at559ff9b and exact git tree comparison with tested d11e30e was empty. Canonical Vercel Production ramin-life-os READY on that merge with the expected project/team and canonical alias. No database migration was needed; the subsequent receipt changes documentation only.",
+      "production_owner_UI": "PASS20 actual authenticated read-only captures:all10 primary routes at1440 and390,all settled,0 page errors,0 document overflow and0 business writes sent. Six automatic source-refresh commands were intentionally blocked by the capture guard; resulting failure messages are capture-only evidence. Cached source freshness is still shown, and this read-only capture does not claim live Google/provider health.",
+      "production_finance_UI_REST": "PASS explicitly enabled existing Production readback:every eligible active/historical item and note, per-interval amount, unknown state, monthly accounting label and aggregate cost/reserve/allocation matched authenticated REST. Itemized rows precede reports;tabs/search/mobile layout passed;financial writes0.",
+      "production_public_UI": "PASS16 live anonymous login/about/privacy/terms scenes across1440/390 and two DOM theme states:0 page errors,0 WCAG2A/2AA axe findings,0 document overflow,local Vazirmatn loaded in all16,0 blocked requests and0 business writes. Independent visual review of mobile/desktop and light/dark screenshots found no concrete defect.",
+      "production_static_replay": "PASS60 inert specimens derived from the final captured DOM:10 routes,1440/768/390,two themes,RTL;0 document overflow,JavaScript and network disabled. This is visual-only evidence and does not claim saved preference changes, translations or authenticated interactions.",
+      "production_MCP_health_font": "PASS fresh native MCP whoami:owner,actor and scopes match the pre-overhaul baseline with no new grant. Canonical health HTTP200/status ok;anonymous owner query401. Served Vazirmatn111152 bytes/SHA256 exactly matches the pinned official font source.",
+      "independent_live_visual_review": "PASS separate reviewer inspected all10 primary pages in16 representative page/width combinations, including desktop/mobile Dashboard,Tasks,Finance andWork. Long-page screenshots were supplemented with inert private viewport captures. No unresolved P0/P1, permanent content crop or use-blocking readability defect found. Intentional table/timeline local scrolling and capture-guard messages were distinguished from page overflow/provider failure. No production data or original image changed.",
+      "cleanup": "PASS PR21 merged and the owned feature branch removed locally and remotely. No temporary database branch was created for this visual release. Project-local ignored skills and pinned sources remain installed for the next turn; final documentation-deployment readback is retained privately."
     },
-    "pending": [
-      "Pass full exact-source CI after the focused Files tablet correction.",
-      "Resolve addressed reviews, merge and verify release/source tree equivalence.",
-      "Canonical Production UI/REST/MCP readback and final evidence."
+    "pending": [],
+    "limits": [
+      "Third-party media/provider/3D/Figma/archive skills remain conditional guidance; installation is not a claim of paid or unavailable runtime capabilities. Catalog pointers and incomplete upstream references stay explicit.",
+      "Production visual verification used Chrome and private read-only captures; physical touch hardware and Safari were not tested. Synthetic isolated CI covers the changed functional paths and shared service writes.",
+      "The existing Excel dependency tree retains one moderate advisory; the production high-severity gate passed. This visual release did not change that export dependency."
     ],
     "privacy": "Real captures/HTML/credentials and detailed receipts remain outside public Git; third-party source installs are local ignored guidance. Public fixtures remain synthetic."
   },
