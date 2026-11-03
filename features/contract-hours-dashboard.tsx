@@ -131,8 +131,8 @@ export function ContractHoursDashboard({
           <h2>{t("محدودیت ساعات کار", "Work-hour limits")}</h2>
           <p className="small muted">
             {t(
-              "هفتهٔ کامل، دوشنبه تا یکشنبه به وقت برلین؛ ساعت‌های پیش‌نویس در جمع نیستند.",
-              "Full Monday–Sunday weeks in Berlin time; drafts are excluded.",
+              "دوشنبه تا یکشنبه · برلین · بدون ساعت‌های پیش‌نویس",
+              "Monday–Sunday · Berlin · excludes drafts",
             )}
           </p>
         </div>

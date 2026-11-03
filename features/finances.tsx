@@ -411,7 +411,7 @@ export function FinanceWorkspace({ action }: { action: Action }) {
     );
   }
   return (
-    <>
+    <div className="lifeos-section-screen lifeos-finances">
       <div className="page-heading finance-heading">
         <div>
           <div className="eyebrow">
@@ -557,6 +557,30 @@ export function FinanceWorkspace({ action }: { action: Action }) {
           className="finance-overview"
         >
           <QueryState {...summary} retry={summary.refresh} />
+          <FinanceItemizedPlans
+            plans={itemizedPlans}
+            loading={plans.loading || archivedPlans.loading}
+            error={itemizedError}
+            retry={() => {
+              plans.refresh();
+              archivedPlans.refresh();
+            }}
+            labels={labels}
+            accountName={accountName}
+            categoryName={categoryName}
+            renderMoney={(cents) => <Money cents={cents} />}
+            cadence={(plan) => cadence(plan, labels, t)}
+            onEdit={(plan) => setEditor({ kind: "plan", entity: plan })}
+            onManage={() => {
+              setTab("plans");
+              setSearch("");
+              setKind("");
+              setPlanState("");
+              setArchived(false);
+              setFilterAccount("");
+              setFilterCategory("");
+            }}
+          />
           {summary.data && (
             <>
               <div className="metric-grid finance-metrics">
@@ -631,30 +655,7 @@ export function FinanceWorkspace({ action }: { action: Action }) {
                   )}
                 </p>
               )}
-              <FinanceItemizedPlans
-                plans={itemizedPlans}
-                loading={plans.loading || archivedPlans.loading}
-                error={itemizedError}
-                retry={() => {
-                  plans.refresh();
-                  archivedPlans.refresh();
-                }}
-                labels={labels}
-                accountName={accountName}
-                categoryName={categoryName}
-                renderMoney={(cents) => <Money cents={cents} />}
-                cadence={(plan) => cadence(plan, labels, t)}
-                onEdit={(plan) => setEditor({ kind: "plan", entity: plan })}
-                onManage={() => {
-                  setTab("plans");
-                  setSearch("");
-                  setKind("");
-                  setPlanState("");
-                  setArchived(false);
-                  setFilterAccount("");
-                  setFilterCategory("");
-                }}
-              />
+
               <div className="finance-columns">
                 <section className="panel">
                   <SectionHeading
@@ -910,7 +911,15 @@ export function FinanceWorkspace({ action }: { action: Action }) {
                     )}
                   </p>
                 ) : (
-                  <div className="data-table-wrap">
+                  <div
+                    className="data-table-wrap"
+                    role="region"
+                    tabIndex={0}
+                    aria-label={t(
+                      "جدول هزینه‌ها به تفکیک دسته؛ قابل پیمایش افقی",
+                      "Expenses by category; horizontally scrollable table",
+                    )}
+                  >
                     <table className="finance-table">
                       <thead>
                         <tr>
@@ -959,7 +968,15 @@ export function FinanceWorkspace({ action }: { action: Action }) {
                     )}
                   </p>
                 ) : (
-                  <div className="data-table-wrap">
+                  <div
+                    className="data-table-wrap"
+                    role="region"
+                    tabIndex={0}
+                    aria-label={t(
+                      "جدول مانده و گردش حساب‌ها؛ قابل پیمایش افقی",
+                      "Account balances and activity; horizontally scrollable table",
+                    )}
+                  >
                     <table className="finance-table">
                       <thead>
                         <tr>
@@ -1474,7 +1491,7 @@ export function FinanceWorkspace({ action }: { action: Action }) {
         setOpen={setTransferOpen}
         action={action}
       />
-    </>
+    </div>
   );
 }
 

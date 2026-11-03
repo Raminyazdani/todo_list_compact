@@ -142,7 +142,7 @@ export function PlanningPanel({
     }
   }
   return (
-    <section className="panel planning-panel">
+    <section className="panel planning-panel lifeos-planning">
       <SectionHeading
         title={t(
           "برنامهٔ وابستگی‌ها و پیشنهاد زمان‌بندی",
@@ -356,7 +356,15 @@ export function PlanningPanel({
                 "Only start dates change; existing deadlines are preserved.",
               )}
         </p>
-        <div className="data-table-wrap">
+        <div
+          className="data-table-wrap"
+          role="region"
+          tabIndex={0}
+          aria-label={t(
+            "جدول پیش‌نمایش زمان‌بندی؛ قابل پیمایش افقی",
+            "Schedule preview; horizontally scrollable table",
+          )}
+        >
           <table>
             <thead>
               <tr>

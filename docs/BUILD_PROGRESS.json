@@ -1,4 +1,43 @@
 {
+  "design_overhaul_2026_11_03": {
+    "status": "implemented_awaiting_full_CI_and_live_release",
+    "goal": "Project-local design skill installation and complete Life OS visual/motion overhaul with preserved product semantics.",
+    "branch": "codex/life-os-visual-overhaul",
+    "baseline_commit": "330987e72eedcdeb2a84344d26f898e5b75e6221",
+    "plan": "docs/DESIGN_OVERHAUL_PLAN_FA.md",
+    "executable_superprompt": "docs/DESIGN_OVERHAUL_SUPERPROMPT_FA.md",
+    "design_system": "DESIGN.md",
+    "skill_catalog": "docs/DESIGN_SKILL_CATALOG.md",
+    "source_lock": "docs/DESIGN_SKILLS_LOCK.json",
+    "observed": {
+      "sources": "All13 requested URLs visited/classified.404 uniquely named local wrappers, including2 archive choosers; source bodies/support retained with pinned revisions and licenses.85 original catalog pointers remain explicitly distinguished;11 priority declarations supplemented by25 primary wrappers. No source script executed.",
+      "independent_install_verification": "PASS404 names unique/valid, wrapper original links resolve inside project, fonts official blob verified; ignored source paths excluded from app type/lint/format scans.",
+      "live_baseline": "PASS authenticated read-only captures of all10 primary routes at1440: all settled,0 page errors,0 desktop page overflow,0 business writes.3 automatic sync requests were blocked by the capture guard and are labeled capture-only warnings, not provider defects.",
+      "static_baseline": "PASS60 inert/closed-network/JavaScript-disabled visual specimens across10routes,3widths and2themes; derived viewports/theme overrides are explicitly not functional proof.",
+      "design_findings": "Observed tiny primary task text on mobile, clipped native month input, work grid pushed below long controls, long equal-weight finance/card stacks.",
+      "implementation": "PASS shared self-hosted typography/tokens, desktop/mobile shell, accessible controls/dialogs and all10 primary screens updated. Finance itemized ledger leads the overview; tasks have five labeled existing views and clear hierarchy controls; source attention remains explicit; compact contract warnings remain above the work timeline. Business handlers, schema and persisted records unchanged.",
+      "motion": "CSS feedback plus a small Motion14.9.0 navigation marker; no route/list cascades or animated financial values. Saved/OS reduced motion, keyboard input and unknown initial preferences suppress decorative movement; spinners remain static with readable loading text in reduced motion.",
+      "independent_review": "PASS cross-owner review found/fixed RTL finance overflow, sticky item context, mobile primary text/touch input sizing, source revoked/error status priority, visual-vs-DOM ordering and drawer-to-dialog focus handoff. Weekly contract warnings were kept above the grid after product review. No unresolved P0/P1 found in reviewed changes.",
+      "static_component_checks": "PASS12 actual FinanceItemizedPlans synthetic DOM cases across1440/768/390/320, two themes, large text, CSS200% zoom and narrow LTR: no document overflow; native details/edit focus work. PASS2 actual CalendarWorkspace/WorkPlanner/TaskExplorer synthetic SSR cases and15 existing work model/view-layout tests. These do not prove authenticated mutations.",
+      "base_token_contrast": "PASS calculated semantic text colors on canvas/surface/raised in both themes, minimum5.29:1; input boundary on surface3.57:1 dark and3.83:1 light. Whole-page combinations remain browser axe gates.",
+      "pre_CI": "PASS full ESLint, TypeScript, Prettier, production build, public-source secret scan and high-severity production dependency gate. Existing dependency tree reports one moderate advisory. Browser list resolves66 cases, including new mobile drawer/system-motion regression and expanded10-route visual matrix.",
+      "modal_focus_regression": "PASS actual React/Radix shared-Modal Chrome probe: original candidate failed3 opener/autofocus/mobile restoration cases with focus on BODY; corrected implementation passed8 scenarios including nested keyboard/parent restoration, replacement no theft, removed opener, unmount and interrupted close/reopen. No server/auth/network was used; exact synthetic proof retained privately. Browser E2E also asserts menu focus after palette closure and desktop opener restoration.",
+      "inherited_accent_contrast": "PASS replaced inherited white/ink on light accent for public primary links, today date and Gantt icons with semantic on-accent. Today date dark6.539:1/light6.051:1; blocked/closed icons minimum3.626:1. Whole-page axe remains final gate.",
+      "first_CI_candidate": "Superseded source ca208213 passed unit coverage, native PostgreSQL/finance integrity, static/security and production build. Final CI restarts after the actual modal-focus and inherited-accent corrections; earlier success is not substituted for the final source gate.",
+      "CI_66e246e": "FAILED browser gate:51passed,3failed,4explicitproduction skips,8serialcalendar cases not run after the first calendar failure. Unit/native PostgreSQL/static/security/build passed; HTTP security was not reached. Failures were transient theme color contrast, a non-focusable financial scroll region, and a pre-navigation finance sign-in denial whose original assertion omitted HTTP status.",
+      "theme_transition_correction": "PASS actual full-style WorkPlanner component proof reproduced1.061:1 mixed text/background during theme interpolation. Shared buttons now transition only border-color, keeping role pairs atomic.8 normal/hover/theme-direction scenarios and104 immediate/rAF samples pass, minimum6.051:1. No test sleeps or JS theme flags added.",
+      "scroll_region_correction": "PASS four existing financial/category/account/trend/scheduling table wrappers now expose named keyboard-focusable regions.16 before/after synthetic actual-source cases reproduce mobile failures and then pass axe, outline/focus, native RTL/LTR Arrow scrolling and no page overflow. Existing work/import tables already met the rule.",
+      "finance_test_login_observability": "Original denial status is unproven. The isolated mutation test helper now records only safe HTTP status/error code and may retry once only after an explicit429 with a valid numeric Retry-After no longer than65seconds. Other denials fail. Product authentication/rate limits were not changed; final CI must establish current behavior.",
+      "CI_0ce85c95": "FAILED only Files tablet overflow:61browser cases passed,1failed,4explicit production skips. Both finance sign-ins were accepted on attempt1/HTTP200; no429 or retry occurred. Calendar contrast, financial keyboard scrolling, source-details recovery and mobile-focus tests passed. Unit/native PostgreSQL/static/security/build passed; HTTP-security step still was not reached.",
+      "files_tablet_correction": "PASS real hydrated FileWorkspace with full styles/sidebar reproduced2022px document at768px: inherited white-space:nowrap defeated overflow-wrap.18CSS lines restore full title wrapping and bounded flex metadata; an inline-size container switches to one column below640px available content.84 candidate Files/Reports/Settings layout scenes show no page/element overflow,12 representative tablet axe checks pass, and2 awaited keyboard open/Escape/opener/selection scenarios pass. No file/data/API flow changed."
+    },
+    "pending": [
+      "Pass full exact-source CI after the focused Files tablet correction.",
+      "Resolve addressed reviews, merge and verify release/source tree equivalence.",
+      "Canonical Production UI/REST/MCP readback and final evidence."
+    ],
+    "privacy": "Real captures/HTML/credentials and detailed receipts remain outside public Git; third-party source installs are local ignored guidance. Public fixtures remain synthetic."
+  },
   "finance_itemized_expenses_2026_11_03": {
     "status": "released_live_itemized_ui_verified",
     "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/20",
@@ -224,7 +263,7 @@
     "production_url": "https://ramin-life-os.vercel.app/calendar?tab=work",
     "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/40108066500",
     "scope": "Interactive per-employer work-hours dashboard in the Life OS calendar work tab, with private time-scoped contract policies and conservative informational assessments.",
-    "implementation": "Full Berlin-local Monday–Sunday weeks, reported monthly totals, personal and contractual thresholds kept separate, period-to-date reference and rolling-average trends, source labels, review states for time-window/weekday/term and legacy elapsed/reporting differences, versioned policy edits and owner-bound audit.",
+    "implementation": "Full Berlin-local MondayÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œSunday weeks, reported monthly totals, personal and contractual thresholds kept separate, period-to-date reference and rolling-average trends, source labels, review states for time-window/weekday/term and legacy elapsed/reporting differences, versioned policy edits and owner-bound audit.",
     "observed": {
       "local_format_lint_type_security_and_build": "PASS",
       "local_unit_and_integration_tests": "PASS_646_tests_76_files_30_skipped",

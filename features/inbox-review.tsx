@@ -50,7 +50,7 @@ export function InboxReview({
   }
   return (
     <section
-      className="panel inbox-review"
+      className="panel inbox-review lifeos-inbox-review"
       aria-label={t("مرور صندوق ورودی", "Inbox review")}
     >
       <div className="inbox-review-heading">
@@ -63,14 +63,18 @@ export function InboxReview({
             )}
           </p>
         </div>
-        <Button onClick={() => setOpen((value) => !value)}>
+        <Button
+          aria-expanded={open}
+          aria-controls="inbox-review-content"
+          onClick={() => setOpen((value) => !value)}
+        >
           {open
             ? t("بستن مرور", "Close review")
             : t("شروع مرور", "Start review")}
         </Button>
       </div>
       {open && (
-        <div className="inbox-review-body">
+        <div className="inbox-review-body" id="inbox-review-content">
           <QueryState {...inbox} retry={inbox.refresh} />
           <QueryState {...projects} retry={projects.refresh} />
           {pinnedTask && (

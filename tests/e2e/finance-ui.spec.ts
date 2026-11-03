@@ -88,11 +88,61 @@ async function mutate(
 }
 
 async function login(request: APIRequestContext, page: Page) {
-  const response = await request.post("/api/auth/sign-in/email", {
+  // These cases share the real auth bucket with preceding browser files. Retry
+  // only an explicit, unaccepted 429 with a bounded server-advertised delay.
+  // Other failures stay failures, with safe diagnostics instead of a bare false.
+  let response = await request.post("/api/auth/sign-in/email", {
     headers: { Origin: origin },
     data: credentials,
   });
-  expect(response.ok()).toBeTruthy();
+  for (let attempt = 1; ; attempt++) {
+    const advertised = response.headers()["retry-after"];
+    let code: string | undefined;
+    if (!response.ok()) {
+      try {
+        const body = await response.json();
+        if (
+          typeof body.code === "string" &&
+          /^[A-Z0-9_]{1,80}$/.test(body.code)
+        )
+          code = body.code;
+      } catch {
+        // Do not expose response bodies, credentials, or authentication cookies.
+      }
+    }
+    console.log(
+      "FINANCE_SIGN_IN",
+      JSON.stringify({
+        attempt,
+        status: response.status(),
+        code,
+        retry_after: advertised,
+      }),
+    );
+    const seconds =
+      advertised && /^\d+$/.test(advertised) ? Number(advertised) : NaN;
+    if (
+      response.status() !== 429 ||
+      attempt !== 1 ||
+      !Number.isSafeInteger(seconds) ||
+      seconds < 0 ||
+      seconds > 65
+    )
+      break;
+    const deadline = Date.now() + seconds * 1000 + 250;
+    while (Date.now() < deadline)
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(30_000, deadline - Date.now())),
+      );
+    response = await request.post("/api/auth/sign-in/email", {
+      headers: { Origin: origin },
+      data: credentials,
+    });
+  }
+  expect(
+    response.ok(),
+    `Finance sign-in HTTP ${response.status()}`,
+  ).toBeTruthy();
   await page.context().addCookies((await request.storageState()).cookies);
 }
 

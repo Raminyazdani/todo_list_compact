@@ -948,18 +948,11 @@ kbd {
     background 0.15s,
     border-color 0.15s;
 }
-.button:hover:not(:disabled) {
-  border-color: #55556d;
-  background: var(--surface);
-}
 .button.primary {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: #fff;
   font-weight: 500;
-}
-.button.primary:hover:not(:disabled) {
-  background: #6955ba;
 }
 .button.quiet {
   background: transparent;

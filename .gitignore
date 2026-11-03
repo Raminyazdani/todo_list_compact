@@ -20,6 +20,7 @@ backups/
 **/live-source/
 **/bootstrap-credentials*
 .agents/skills/
+.agents/design-sources/
 skills-lock.json
 
 # Source publication: private/runtime and generated files

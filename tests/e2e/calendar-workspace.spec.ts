@@ -362,6 +362,7 @@ test("legacy_backup_preview_preserves_wall_policy_and_incomplete_drafts", async 
     timeout: 30000,
   });
   await page.getByLabel("ماه", { exact: true }).fill("2084-10");
+  await page.locator(".work-tools-disclosure > summary").click();
   await page.locator('input[type="file"]').setInputFiles({
     name: "synthetic-work-planner.json",
     mimeType: "application/json",
@@ -614,6 +615,7 @@ test("large_backup_refreshes_later_batch_preview_and_retries_uncertain_ACK_with_
   await expect(page.locator(".save-status")).toContainText("متصل به سرور", {
     timeout: 30000,
   });
+  await page.locator(".work-tools-disclosure > summary").click();
   await page.locator('input[type="file"]').setInputFiles({
     name: "synthetic-large-backup.json",
     mimeType: "application/json",
@@ -848,6 +850,12 @@ test("stale_calendar_source_and_failed_refresh_show_precise_persistent_status", 
   await expect(page.locator(".calendar-source-status .error")).toContainText(
     "تازه‌سازی تأیید نشد",
   );
+  const attention = page.locator(".calendar-source-attention");
+  await expect(attention).toBeVisible();
+  await expect(attention).toContainText("Synthetic Holidays");
+  await expect(attention).toContainText("Synthetic Broken Feed");
+  await expect(attention).toContainText("تنظیمات این منبع قابل خواندن نیست");
+  await page.locator(".calendar-source-details > summary").click();
   await expect(page.locator(".calendar-source-chips")).toContainText(
     "Synthetic Holidays",
   );

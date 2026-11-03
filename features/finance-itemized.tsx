@@ -109,7 +109,7 @@ export function FinanceItemizedPlans({
 
   return (
     <section
-      className="panel finance-itemized"
+      className="panel finance-itemized finance-ledger"
       aria-label={t("ریز هزینه‌های این ماه", "Itemized costs this month")}
       aria-busy={loading}
     >
@@ -134,92 +134,136 @@ export function FinanceItemizedPlans({
           )}
         </p>
       )}
-      <div className="finance-itemized-list">
-        {rows.map((plan) => (
-          <article
-            key={plan.plan_id}
-            data-plan-id={plan.plan_id}
-            className="finance-itemized-row"
-          >
-            <div className="finance-itemized-heading">
-              <div>
-                <h3>{plan.title}</h3>
-                <div className="finance-itemized-tags">
-                  <span className="finance-pill">{labels.plan[plan.kind]}</span>
-                  <span className="finance-pill">
-                    {labels.state[plan.state]}
-                  </span>
-                  {plan.archived_at && (
-                    <span className="finance-pill finance-itemized-archived">
-                      {t(
-                        "بایگانی‌شده؛ نسخهٔ این ماه",
-                        "Archived; this month's version",
+      {!!rows.length && (
+        <p className="finance-ledger-caption">
+          <span>
+            {rows.length} {t("مورد در این ماه", "items this month")}
+          </span>
+          <span>
+            {t(
+              "مبلغ هر دوره با معادل ماهانه فرق دارد؛ مبنا و توضیح هر مورد را باز کن.",
+              "Interval amounts and monthly equivalents differ; open an item for its source and notes.",
+            )}
+          </span>
+        </p>
+      )}
+      <div
+        className="finance-itemized-list finance-ledger-scroll"
+        role="region"
+        aria-label={t(
+          "جدول ریز هزینه‌ها؛ قابل پیمایش افقی",
+          "Itemized costs table; scroll horizontally",
+        )}
+        tabIndex={0}
+      >
+        <table className="finance-ledger-table">
+          <caption className="sr-only">
+            {t(
+              "ریز اقلام، مبلغ هر دوره، معادل ماهانه، حساب و زمان پرداخت",
+              "Items, interval amounts, monthly equivalents, payment accounts and timing",
+            )}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("مورد و جزئیات", "Item & details")}</th>
+              <th scope="col">
+                {t("مبلغ هر دوره / مورد", "Per interval / item")}
+              </th>
+              <th scope="col">{t("معادل ماهانه", "Monthly equivalent")}</th>
+              <th scope="col">{t("حساب پرداخت", "Payment account")}</th>
+              <th scope="col">{t("زمان پرداخت", "Payment timing")}</th>
+              <th scope="col">
+                <span className="sr-only">{t("اقدام", "Action")}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((plan) => (
+              <tr
+                key={plan.plan_id}
+                data-plan-id={plan.plan_id}
+                className="finance-itemized-row"
+              >
+                <th scope="row" className="finance-ledger-identity">
+                  <div className="finance-itemized-heading">
+                    <h3>{plan.title}</h3>
+                  </div>
+                  <details className="finance-itemized-details">
+                    <summary>
+                      <span className="finance-itemized-tags">
+                        <span className="finance-pill">
+                          {labels.plan[plan.kind]}
+                        </span>
+                        <span className="finance-pill">
+                          {labels.state[plan.state]}
+                        </span>
+                        {plan.archived_at && (
+                          <span className="finance-pill finance-itemized-archived">
+                            {t(
+                              "بایگانی‌شده؛ نسخهٔ این ماه",
+                              "Archived; this month's version",
+                            )}
+                          </span>
+                        )}
+                        <span>{categoryName(plan.category_id)}</span>
+                        <span className="finance-ledger-source-label">
+                          {t("جزئیات", "Details")}
+                        </span>
+                      </span>
+                    </summary>
+                    <div>
+                      <p className="small muted">
+                        {labels.basis[plan.amount_basis]} ·{" "}
+                        {t("اثر از ماه", "Effective from")}{" "}
+                        {plan.effective_month}
+                      </p>
+                      <p className="finance-notes">
+                        {plan.notes ||
+                          t(
+                            "توضیح بیشتری ثبت نشده است.",
+                            "No additional notes.",
+                          )}
+                      </p>
+                      {plan.source_label && (
+                        <p className="small muted">
+                          {t("مبنا:", "Source:")} {plan.source_label}
+                        </p>
                       )}
-                    </span>
+                    </div>
+                  </details>
+                </th>
+                <td>
+                  <div className="finance-itemized-amount">
+                    {renderMoney(plan.amount_cents)}
+                  </div>
+                  <div className="finance-itemized-meta">{cadence(plan)}</div>
+                </td>
+                <td>
+                  <div className="finance-itemized-monthly">
+                    {monthlyKinds.has(plan.kind)
+                      ? renderMoney(plan.monthly_equivalent_cents)
+                      : t("ماهانه نیست", "Not monthly")}
+                  </div>
+                  <div className="finance-itemized-counting">
+                    {countingStatus(plan)}
+                  </div>
+                </td>
+                <td>{accountName(plan.account_id)}</td>
+                <td className="finance-itemized-due">{due(plan)}</td>
+                <td className="finance-ledger-action">
+                  {!plan.archived_at && (
+                    <Button
+                      aria-label={`${t("ویرایش", "Edit")} ${plan.title}`}
+                      onClick={() => onEdit(plan)}
+                    >
+                      <Pencil size={14} /> {t("ویرایش", "Edit")}
+                    </Button>
                   )}
-                  <span>{categoryName(plan.category_id)}</span>
-                </div>
-              </div>
-              {!plan.archived_at && (
-                <Button
-                  aria-label={`${t("ویرایش", "Edit")} ${plan.title}`}
-                  onClick={() => onEdit(plan)}
-                >
-                  <Pencil size={14} /> {t("ویرایش", "Edit")}
-                </Button>
-              )}
-            </div>
-            <dl className="finance-itemized-facts">
-              <div>
-                <dt>{t("مبلغ هر دوره / مورد", "Per interval / item")}</dt>
-                <dd className="finance-itemized-amount">
-                  {renderMoney(plan.amount_cents)}
-                </dd>
-                <dd className="finance-itemized-meta">{cadence(plan)}</dd>
-              </div>
-              <div>
-                <dt>{t("معادل ماهانه", "Monthly equivalent")}</dt>
-                <dd className="finance-itemized-monthly">
-                  {monthlyKinds.has(plan.kind)
-                    ? renderMoney(plan.monthly_equivalent_cents)
-                    : t("ماهانه نیست", "Not monthly")}
-                </dd>
-                <dd className="finance-itemized-counting">
-                  {countingStatus(plan)}
-                </dd>
-              </div>
-              <div>
-                <dt>{t("حساب پرداخت", "Payment account")}</dt>
-                <dd>{accountName(plan.account_id)}</dd>
-              </div>
-              <div>
-                <dt>{t("زمان پرداخت", "Payment timing")}</dt>
-                <dd className="finance-itemized-due">{due(plan)}</dd>
-              </div>
-            </dl>
-            <details className="finance-itemized-details">
-              <summary>{t("جزئیات و مبنا", "Details & source")}</summary>
-              <div>
-                <p className="small muted">
-                  {labels.basis[plan.amount_basis]} ·{" "}
-                  {t("اثر از ماه", "Effective from")} {plan.effective_month}
-                </p>
-                {plan.notes ? (
-                  <p className="finance-notes">{plan.notes}</p>
-                ) : (
-                  <p className="small muted">
-                    {t("توضیح بیشتری ثبت نشده است.", "No additional notes.")}
-                  </p>
-                )}
-                {plan.source_label && (
-                  <p className="small muted">
-                    {t("مبنا:", "Source:")} {plan.source_label}
-                  </p>
-                )}
-              </div>
-            </details>
-          </article>
-        ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

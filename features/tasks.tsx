@@ -459,478 +459,493 @@ function TaskExplorerContent({
       tasks={rows}
       onOpen={onOpen}
     >
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">
-            {t("فضای اجرای کارها", "YOUR EXECUTION SPACE")}
+      <section className="lifeos-planning-tasks">
+        <div className="page-heading">
+          <div>
+            <div className="eyebrow">
+              {t("فضای اجرای کارها", "YOUR EXECUTION SPACE")}
+            </div>
+            <h1>{t("کارهای من", "My tasks")}</h1>
+            <p>
+              {t(
+                "هر کار، یک قدم روشن به سمت چیزهای مهم.",
+                "A clear next step for everything that matters.",
+              )}
+            </p>
           </div>
-          <h1>{t("کارهای من", "My tasks")}</h1>
-          <p>
-            {t(
-              "هر کار، یک قدم روشن به سمت چیزهای مهم.",
-              "A clear next step for everything that matters.",
-            )}
-          </p>
+          <AddButton onClick={() => setCreate(true)}>
+            {t("کار تازه", "New task")}
+          </AddButton>
         </div>
-        <AddButton onClick={() => setCreate(true)}>
-          {t("کار تازه", "New task")}
-        </AddButton>
-      </div>
-      <div className="view-bar">
-        <div className="tabs">
-          {[
-            ["all", t("همه", "All")],
-            ["ready", t("آماده", "Ready now")],
-            ["blocked", t("مسدود", "Blocked")],
-            ["Inbox", t("ورودی", "Inbox")],
-            ["Waiting", t("منتظر", "Waiting")],
-            ["Done", t("انجام شده", "Done")],
-            ["archived", t("بایگانی", "Archived")],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              className={filter === value ? "active" : ""}
-              onClick={() => {
-                setFilter(value);
+        <div className="view-bar">
+          <div className="tabs">
+            {[
+              ["all", t("همه", "All")],
+              ["ready", t("آماده", "Ready now")],
+              ["blocked", t("مسدود", "Blocked")],
+              ["Inbox", t("ورودی", "Inbox")],
+              ["Waiting", t("منتظر", "Waiting")],
+              ["Done", t("انجام شده", "Done")],
+              ["archived", t("بایگانی", "Archived")],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                className={filter === value ? "active" : ""}
+                onClick={() => {
+                  setFilter(value);
+                  setCursor(null);
+                  setGraphCursor(null);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div
+            className="icon-group task-view-switcher"
+            role="group"
+            aria-label={t("نمای کارها", "Task view")}
+          >
+            {[
+              ["list", List, t("نمای فهرستی", "List view")],
+              ["board", LayoutGrid, t("نمای ستونی", "Board view")],
+              ["tree", ListTree, t("نمای درختی", "Tree view")],
+              ["graph", Network, t("نمای گراف", "Graph view")],
+              ["timeline", GitBranch, t("نمای خط زمانی", "Timeline view")],
+            ].map(([value, Icon, label]) => {
+              const IconComponent = Icon as typeof List;
+              return (
+                <button
+                  key={String(value)}
+                  className={view === value ? "active" : ""}
+                  aria-label={String(label)}
+                  aria-pressed={view === value}
+                  title={String(label)}
+                  onClick={() => {
+                    setView(String(value));
+                    setActiveSavedViewId("");
+                  }}
+                >
+                  <IconComponent size={17} />
+                  <span className="task-view-label">{String(label)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="filter-bar">
+          <select
+            aria-label={t("نماهای ذخیره‌شده", "Saved views")}
+            value={activeSavedViewId}
+            onChange={(event) => {
+              setActiveSavedViewId(event.target.value);
+              const saved = savedViews.data?.items.find(
+                (item) => item.view_id === event.target.value,
+              );
+              if (saved) {
+                const filters = saved.configuration.filters ?? {};
+                setSearch(
+                  typeof filters.search === "string" ? filters.search : "",
+                );
+                setProjectId(
+                  typeof filters.project_id === "string"
+                    ? filters.project_id
+                    : "",
+                );
+                setPriorityFilter(
+                  typeof filters.priority === "string" ? filters.priority : "",
+                );
+                setGraphRoot("");
+                setSelected([]);
+                setFilter(
+                  filters.archived_only === true
+                    ? "archived"
+                    : filters.overdue === true
+                      ? "overdue"
+                      : typeof filters.readiness === "string"
+                        ? filters.readiness
+                        : typeof filters.status === "string"
+                          ? filters.status
+                          : "all",
+                );
+                setView(
+                  ["list", "board", "tree", "graph", "timeline"].includes(
+                    saved.configuration.layout ?? "",
+                  )
+                    ? saved.configuration.layout!
+                    : "list",
+                );
+                setCursor(null);
+                setGraphCursor(null);
+              }
+            }}
+          >
+            <option value="">{t("نماهای ذخیره‌شده", "Saved views")}</option>
+            {savedViews.data?.items.map((item) => (
+              <option key={item.view_id} value={item.view_id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={t("فیلتر پروژه", "Project filter")}
+            value={projectId}
+            onChange={(event) => {
+              setProjectId(event.target.value);
+              setCursor(null);
+              setGraphCursor(null);
+              setGraphRoot("");
+              setSelected([]);
+            }}
+          >
+            <option value="">{t("همهٔ پروژه‌ها", "All projects")}</option>
+            {projectId &&
+              !projects.data?.items.some(
+                (project) => project.project_id === projectId,
+              ) && (
+                <option value={projectId}>
+                  {selectedProject.data?.title ??
+                    t("پروژهٔ انتخاب‌شده", "Selected project")}
+                </option>
+              )}
+            {projects.data?.items.map((project) => (
+              <option key={project.project_id} value={project.project_id}>
+                {project.title}
+                {project.archived_at ? t(" (بایگانی)", " (archived)") : ""}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={t("فیلتر اولویت", "Priority filter")}
+            value={priorityFilter}
+            onChange={(event) => {
+              setPriorityFilter(event.target.value);
+              setCursor(null);
+              setGraphCursor(null);
+              setSelected([]);
+            }}
+          >
+            <option value="">{t("همهٔ اولویت‌ها", "All priorities")}</option>
+            {["Low", "Normal", "High", "Urgent"].map((value) => (
+              <option key={value} value={value}>
+                {labels.priority[value as keyof typeof labels.priority]}
+              </option>
+            ))}
+          </select>
+          {projectCursor && (
+            <Button onClick={() => setProjectCursor(null)}>
+              {t("ابتدای پروژه‌ها", "First projects")}
+            </Button>
+          )}
+          {projects.data?.next_cursor && (
+            <Button
+              onClick={() => setProjectCursor(projects.data!.next_cursor)}
+            >
+              {t("پروژه‌های بیشتر", "More projects")}
+            </Button>
+          )}
+          <label className="search-box">
+            <Search size={16} />
+            <input
+              value={search}
+              aria-label={t("جست‌وجو بین کارها", "Search tasks")}
+              onChange={(event) => {
+                setSearch(event.target.value);
                 setCursor(null);
                 setGraphCursor(null);
               }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="icon-group">
-          {[
-            ["list", List, t("نمای فهرستی", "List view")],
-            ["board", LayoutGrid, t("نمای ستونی", "Board view")],
-            ["tree", ListTree, t("نمای درختی", "Tree view")],
-            ["graph", Network, t("نمای گراف", "Graph view")],
-            ["timeline", GitBranch, t("نمای خط زمانی", "Timeline view")],
-          ].map(([value, Icon, label]) => {
-            const IconComponent = Icon as typeof List;
-            return (
-              <button
-                key={String(value)}
-                className={view === value ? "active" : ""}
-                aria-label={String(label)}
-                aria-pressed={view === value}
-                title={String(label)}
-                onClick={() => {
-                  setView(String(value));
-                  setActiveSavedViewId("");
-                }}
-              >
-                <IconComponent size={17} />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div className="filter-bar">
-        <select
-          aria-label={t("نماهای ذخیره‌شده", "Saved views")}
-          value={activeSavedViewId}
-          onChange={(event) => {
-            setActiveSavedViewId(event.target.value);
-            const saved = savedViews.data?.items.find(
-              (item) => item.view_id === event.target.value,
-            );
-            if (saved) {
-              const filters = saved.configuration.filters ?? {};
-              setSearch(
-                typeof filters.search === "string" ? filters.search : "",
-              );
-              setProjectId(
-                typeof filters.project_id === "string"
-                  ? filters.project_id
-                  : "",
-              );
-              setPriorityFilter(
-                typeof filters.priority === "string" ? filters.priority : "",
-              );
-              setGraphRoot("");
-              setSelected([]);
-              setFilter(
-                filters.archived_only === true
-                  ? "archived"
-                  : filters.overdue === true
-                    ? "overdue"
-                    : typeof filters.readiness === "string"
-                      ? filters.readiness
-                      : typeof filters.status === "string"
-                        ? filters.status
-                        : "all",
-              );
-              setView(
-                ["list", "board", "tree", "graph", "timeline"].includes(
-                  saved.configuration.layout ?? "",
-                )
-                  ? saved.configuration.layout!
-                  : "list",
-              );
-              setCursor(null);
-              setGraphCursor(null);
-            }
-          }}
-        >
-          <option value="">{t("نماهای ذخیره‌شده", "Saved views")}</option>
-          {savedViews.data?.items.map((item) => (
-            <option key={item.view_id} value={item.view_id}>
-              {item.title}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label={t("فیلتر پروژه", "Project filter")}
-          value={projectId}
-          onChange={(event) => {
-            setProjectId(event.target.value);
-            setCursor(null);
-            setGraphCursor(null);
-            setGraphRoot("");
-            setSelected([]);
-          }}
-        >
-          <option value="">{t("همهٔ پروژه‌ها", "All projects")}</option>
-          {projectId &&
-            !projects.data?.items.some(
-              (project) => project.project_id === projectId,
-            ) && (
-              <option value={projectId}>
-                {selectedProject.data?.title ??
-                  t("پروژهٔ انتخاب‌شده", "Selected project")}
-              </option>
-            )}
-          {projects.data?.items.map((project) => (
-            <option key={project.project_id} value={project.project_id}>
-              {project.title}
-              {project.archived_at ? t(" (بایگانی)", " (archived)") : ""}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label={t("فیلتر اولویت", "Priority filter")}
-          value={priorityFilter}
-          onChange={(event) => {
-            setPriorityFilter(event.target.value);
-            setCursor(null);
-            setGraphCursor(null);
-            setSelected([]);
-          }}
-        >
-          <option value="">{t("همهٔ اولویت‌ها", "All priorities")}</option>
-          {["Low", "Normal", "High", "Urgent"].map((value) => (
-            <option key={value} value={value}>
-              {labels.priority[value as keyof typeof labels.priority]}
-            </option>
-          ))}
-        </select>
-        {projectCursor && (
-          <Button onClick={() => setProjectCursor(null)}>
-            {t("ابتدای پروژه‌ها", "First projects")}
+              placeholder={t("جست‌وجو بین کارها…", "Search tasks…")}
+            />
+          </label>
+          <span className="muted small">
+            {tasks.data?.total ?? "—"} {t("کار", "tasks")}
+          </span>
+          <Button onClick={() => void saveView()}>
+            {t("ذخیرهٔ نما", "Save view")}
           </Button>
-        )}
-        {projects.data?.next_cursor && (
-          <Button onClick={() => setProjectCursor(projects.data!.next_cursor)}>
-            {t("پروژه‌های بیشتر", "More projects")}
-          </Button>
-        )}
-        <label className="search-box">
-          <Search size={16} />
-          <input
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setCursor(null);
-              setGraphCursor(null);
-            }}
-            placeholder={t("جست‌وجو بین کارها…", "Search tasks…")}
+          <TaskRowSettings
+            view={rowView}
+            enabled={view === "list" || view === "tree"}
+            layout={rowLayout.layout}
+            source={rowLayout.source}
+            invalid={rowLayout.invalid}
+            preferences={preferences.data}
+            savedView={activeSavedView}
+            mutate={mutateTask}
           />
-        </label>
-        <span className="muted small">
-          {tasks.data?.total ?? "—"} {t("کار", "tasks")}
-        </span>
-        <Button onClick={() => void saveView()}>
-          {t("ذخیرهٔ نما", "Save view")}
-        </Button>
-        <TaskRowSettings
-          view={rowView}
-          enabled={view === "list" || view === "tree"}
-          layout={rowLayout.layout}
-          source={rowLayout.source}
-          invalid={rowLayout.invalid}
-          preferences={preferences.data}
-          savedView={activeSavedView}
-          mutate={mutateTask}
-        />
-      </div>
-      <TaskRowDraftShelf projects={rowProjects.data?.items ?? []} />
-      {rowProjects.error && (
-        <QueryState {...rowProjects} retry={rowProjects.refresh} />
-      )}
-      {preferences.error && (
-        <QueryState {...preferences} retry={preferences.refresh} />
-      )}
-      {projectId && (
-        <p className="small muted">
-          {t("کارهای پروژه:", "Project tasks:")}{" "}
-          {selectedProject.data?.title ?? "…"} ·{" "}
-          {t(
-            "ترتیب نمایش از عدد کمتر به بیشتر است؛ آن را در جزئیات هر کار تغییر بده.",
-            "Tasks use ascending display order; change an individual task's order in its details.",
-          )}
-        </p>
-      )}
-      {(view === "graph" || view === "timeline") && (
-        <div className="filter-bar graph-scope">
-          <Field label={t("کار محوری گراف", "Graph focus task")}>
-            <select
-              value={graphRoot}
-              onChange={(event) => {
-                setGraphRoot(event.target.value);
-                setGraphCursor(null);
-              }}
-            >
-              <option value="">
-                {t("فهرست مطابق فیلتر", "Filtered task inventory")}
-              </option>
-              {graphRoot &&
-                !rows.some((task) => task.task_id === graphRoot) && (
-                  <option value={graphRoot}>
-                    {graph.data?.nodes.find(
-                      (task) => task.task_id === graphRoot,
-                    )?.title ?? t("کار انتخاب‌شده", "Selected task")}
-                  </option>
-                )}
-              {rows.map((task) => (
-                <option key={task.task_id} value={task.task_id}>
-                  {task.title}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t("محدودهٔ وابستگی‌ها", "Dependency direction")}>
-            <select
-              value={graphDirection}
-              disabled={!graphRoot}
-              onChange={(event) => {
-                setGraphDirection(event.target.value);
-                setGraphCursor(null);
-              }}
-            >
-              <option value="both">
-                {t(
-                  "پیش‌نیازها و کارهای وابسته",
-                  "Prerequisites and downstream tasks",
-                )}
-              </option>
-              <option value="upstream">
-                {t("زنجیرهٔ پیش‌نیازها", "Prerequisite chain")}
-              </option>
-              <option value="downstream">
-                {t("کارهای آزادشونده", "Downstream tasks")}
-              </option>
-            </select>
-          </Field>
+        </div>
+        <TaskRowDraftShelf projects={rowProjects.data?.items ?? []} />
+        {rowProjects.error && (
+          <QueryState {...rowProjects} retry={rowProjects.refresh} />
+        )}
+        {preferences.error && (
+          <QueryState {...preferences} retry={preferences.refresh} />
+        )}
+        {projectId && (
           <p className="small muted">
+            {t("کارهای پروژه:", "Project tasks:")}{" "}
+            {selectedProject.data?.title ?? "…"} ·{" "}
             {t(
-              "برای یافتن کار محوری جست‌وجو کن. با انتخاب آن، روابط مجاز بین پروژه‌ها و پیش‌نیازهای بایگانی‌شده هم نمایش داده می‌شوند.",
-              "Search for a focus task. Selecting it includes authorized cross-project and archived dependency context.",
+              "ترتیب نمایش از عدد کمتر به بیشتر است؛ آن را در جزئیات هر کار تغییر بده.",
+              "Tasks use ascending display order; change an individual task's order in its details.",
             )}
           </p>
-        </div>
-      )}
-      {selected.length > 0 && (
-        <div className="selection-bar">
-          {selected.length} {t("انتخاب شده", "selected")}
-          <Button onClick={() => void bulk()}>
-            {filter === "archived"
-              ? t("پیش‌نمایش بازیابی گروهی", "Preview restoration")
-              : t("پیش‌نمایش تکمیل گروهی", "Preview completion")}
-          </Button>
-          <Button onClick={() => setSelected([])}>
-            {t("لغو انتخاب", "Clear")}
-          </Button>
-        </div>
-      )}
-      <QueryState
-        {...(view === "graph" ? graph : tasks)}
-        retry={view === "graph" ? graph.refresh : tasks.refresh}
-      />
-      {!(view === "graph" ? graph.loading : tasks.loading) &&
-      !(view === "graph" ? graph.error : tasks.error) &&
-      (view === "graph" ? (graph.data?.nodes.length ?? 0) : rows.length) ===
-        0 ? (
-        <Empty
-          title={t("جا برای یک شروع تازه", "A fresh place to begin")}
-          detail={t(
-            "یک کار ثبت کن یا فیلتر را تغییر بده.",
-            "Capture a task or adjust your filters.",
-          )}
-          action={
-            <AddButton onClick={() => setCreate(true)}>
-              {t("ثبت اولین کار", "Capture a task")}
-            </AddButton>
-          }
+        )}
+        {(view === "graph" || view === "timeline") && (
+          <div className="filter-bar graph-scope">
+            <Field label={t("کار محوری گراف", "Graph focus task")}>
+              <select
+                value={graphRoot}
+                onChange={(event) => {
+                  setGraphRoot(event.target.value);
+                  setGraphCursor(null);
+                }}
+              >
+                <option value="">
+                  {t("فهرست مطابق فیلتر", "Filtered task inventory")}
+                </option>
+                {graphRoot &&
+                  !rows.some((task) => task.task_id === graphRoot) && (
+                    <option value={graphRoot}>
+                      {graph.data?.nodes.find(
+                        (task) => task.task_id === graphRoot,
+                      )?.title ?? t("کار انتخاب‌شده", "Selected task")}
+                    </option>
+                  )}
+                {rows.map((task) => (
+                  <option key={task.task_id} value={task.task_id}>
+                    {task.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("محدودهٔ وابستگی‌ها", "Dependency direction")}>
+              <select
+                value={graphDirection}
+                disabled={!graphRoot}
+                onChange={(event) => {
+                  setGraphDirection(event.target.value);
+                  setGraphCursor(null);
+                }}
+              >
+                <option value="both">
+                  {t(
+                    "پیش‌نیازها و کارهای وابسته",
+                    "Prerequisites and downstream tasks",
+                  )}
+                </option>
+                <option value="upstream">
+                  {t("زنجیرهٔ پیش‌نیازها", "Prerequisite chain")}
+                </option>
+                <option value="downstream">
+                  {t("کارهای آزادشونده", "Downstream tasks")}
+                </option>
+              </select>
+            </Field>
+            <p className="small muted">
+              {t(
+                "برای یافتن کار محوری جست‌وجو کن. با انتخاب آن، روابط مجاز بین پروژه‌ها و پیش‌نیازهای بایگانی‌شده هم نمایش داده می‌شوند.",
+                "Search for a focus task. Selecting it includes authorized cross-project and archived dependency context.",
+              )}
+            </p>
+          </div>
+        )}
+        {selected.length > 0 && (
+          <div className="selection-bar">
+            {selected.length} {t("انتخاب شده", "selected")}
+            <Button onClick={() => void bulk()}>
+              {filter === "archived"
+                ? t("پیش‌نمایش بازیابی گروهی", "Preview restoration")
+                : t("پیش‌نمایش تکمیل گروهی", "Preview completion")}
+            </Button>
+            <Button onClick={() => setSelected([])}>
+              {t("لغو انتخاب", "Clear")}
+            </Button>
+          </div>
+        )}
+        <QueryState
+          {...(view === "graph" ? graph : tasks)}
+          retry={view === "graph" ? graph.refresh : tasks.refresh}
         />
-      ) : view === "graph" ? (
-        <DependencyGraph graph={graph.data} onOpen={onOpen} />
-      ) : view === "board" ? (
-        <div className="board">
-          {WORKFLOW_STATUSES.map((status) => (
-            <div
-              className="board-column"
-              key={status}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                const id = event.dataTransfer.getData("text/lifeos-task");
-                const task = rows.find((item) => item.task_id === id);
-                if (task)
-                  void action(
-                    "task_update",
-                    { task_id: id, status },
-                    task.revision,
-                  );
-              }}
-            >
-              <header>
-                <span>{labels.statuses[status]}</span>
-                <b>{rows.filter((task) => task.status === status).length}</b>
-              </header>
-              {rows
-                .filter((task) => task.status === status)
-                .map((task) => (
-                  <div
-                    className="board-card"
-                    key={task.task_id}
-                    draggable
-                    onDragStart={(event) =>
-                      event.dataTransfer.setData(
-                        "text/lifeos-task",
-                        task.task_id,
-                      )
-                    }
-                  >
-                    <button onClick={() => onOpen(task.task_id)}>
-                      {task.title}
-                    </button>
-                    <TaskStatus task={task} />
-                    <select
-                      aria-label={t("تغییر وضعیت", "Change status")}
-                      value={task.status}
-                      onChange={(event) =>
-                        void action(
-                          "task_update",
-                          { task_id: task.task_id, status: event.target.value },
-                          task.revision,
+        {!(view === "graph" ? graph.loading : tasks.loading) &&
+        !(view === "graph" ? graph.error : tasks.error) &&
+        (view === "graph" ? (graph.data?.nodes.length ?? 0) : rows.length) ===
+          0 ? (
+          <Empty
+            title={t("جا برای یک شروع تازه", "A fresh place to begin")}
+            detail={t(
+              "یک کار ثبت کن یا فیلتر را تغییر بده.",
+              "Capture a task or adjust your filters.",
+            )}
+            action={
+              <AddButton onClick={() => setCreate(true)}>
+                {t("ثبت اولین کار", "Capture a task")}
+              </AddButton>
+            }
+          />
+        ) : view === "graph" ? (
+          <DependencyGraph graph={graph.data} onOpen={onOpen} />
+        ) : view === "board" ? (
+          <div className="board">
+            {WORKFLOW_STATUSES.map((status) => (
+              <div
+                className="board-column"
+                key={status}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const id = event.dataTransfer.getData("text/lifeos-task");
+                  const task = rows.find((item) => item.task_id === id);
+                  if (task)
+                    void action(
+                      "task_update",
+                      { task_id: id, status },
+                      task.revision,
+                    );
+                }}
+              >
+                <header>
+                  <span>{labels.statuses[status]}</span>
+                  <b>{rows.filter((task) => task.status === status).length}</b>
+                </header>
+                {rows
+                  .filter((task) => task.status === status)
+                  .map((task) => (
+                    <div
+                      className="board-card"
+                      key={task.task_id}
+                      draggable
+                      onDragStart={(event) =>
+                        event.dataTransfer.setData(
+                          "text/lifeos-task",
+                          task.task_id,
                         )
                       }
                     >
-                      {WORKFLOW_STATUSES.map((value) => (
-                        <option key={value}>{value}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-            </div>
-          ))}
-        </div>
-      ) : view === "timeline" ? (
-        <>
-          <TaskTimeline tasks={graph.data?.nodes ?? rows} onOpen={onOpen} />
-          <PlanningPanel graph={graph.data} onOpen={onOpen} action={action} />
-        </>
-      ) : view === "tree" ? (
-        <TaskTree tasks={rows} onOpen={onOpen} action={action} />
-      ) : (
-        <div className="task-list">
-          {rows.map((task) => (
-            <TaskRow
-              key={task.task_id}
-              task={task}
-              onOpen={onOpen}
-              onAction={action}
-              selected={selected.includes(task.task_id)}
-              onSelect={() =>
-                setSelected((ids) =>
-                  ids.includes(task.task_id)
-                    ? ids.filter((id) => id !== task.task_id)
-                    : [...ids, task.task_id],
-                )
-              }
-            />
-          ))}
-        </div>
-      )}
-      <div className="form-actions pagination">
-        {view === "graph" ? (
+                      <button onClick={() => onOpen(task.task_id)}>
+                        {task.title}
+                      </button>
+                      <TaskStatus task={task} />
+                      <select
+                        aria-label={t("تغییر وضعیت", "Change status")}
+                        value={task.status}
+                        onChange={(event) =>
+                          void action(
+                            "task_update",
+                            {
+                              task_id: task.task_id,
+                              status: event.target.value,
+                            },
+                            task.revision,
+                          )
+                        }
+                      >
+                        {WORKFLOW_STATUSES.map((value) => (
+                          <option key={value}>{value}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+              </div>
+            ))}
+          </div>
+        ) : view === "timeline" ? (
           <>
-            {graphCursor && (
-              <Button onClick={() => setGraphCursor(null)}>
-                {t("ابتدای گراف", "First graph page")}
-              </Button>
-            )}
-            {graph.data?.next_cursor && (
-              <Button
-                onClick={() => setGraphCursor(graph.data?.next_cursor ?? null)}
-              >
-                {t("بخش بعدی گراف", "Next graph page")}
-              </Button>
-            )}
+            <TaskTimeline tasks={graph.data?.nodes ?? rows} onOpen={onOpen} />
+            <PlanningPanel graph={graph.data} onOpen={onOpen} action={action} />
           </>
+        ) : view === "tree" ? (
+          <TaskTree tasks={rows} onOpen={onOpen} action={action} />
         ) : (
-          <>
-            {cursor && (
-              <Button onClick={() => setCursor(null)}>
-                {t("صفحهٔ اول", "First page")}
-              </Button>
-            )}
-            {tasks.data?.next_cursor && (
-              <Button
-                onClick={() => setCursor(tasks.data?.next_cursor ?? null)}
-              >
-                {t("صفحهٔ بعد", "Next page")}
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-      <CreateTask
-        open={create}
-        setOpen={setCreate}
-        action={action}
-        projectId={projectId || undefined}
-      />
-      <Modal
-        title={t("تأیید تغییر گروهی", "Confirm batch change")}
-        open={!!bulkPreview}
-        onOpenChange={() => setBulkPreview(null)}
-      >
-        {bulkPreview && (
-          <>
-            <pre className="preview-json">
-              {JSON.stringify(bulkPreview.changes, null, 2)}
-            </pre>
-            <p>{bulkPreview.warnings.join("\n")}</p>
-            <Button
-              variant="primary"
-              onClick={async () => {
-                const result = await action("task_batch_commit", {
-                  preview_id: bulkPreview.preview_id,
-                });
-                if (result) {
-                  setBulkPreview(null);
-                  setSelected([]);
+          <div className="task-list">
+            {rows.map((task) => (
+              <TaskRow
+                key={task.task_id}
+                task={task}
+                onOpen={onOpen}
+                onAction={action}
+                selected={selected.includes(task.task_id)}
+                onSelect={() =>
+                  setSelected((ids) =>
+                    ids.includes(task.task_id)
+                      ? ids.filter((id) => id !== task.task_id)
+                      : [...ids, task.task_id],
+                  )
                 }
-              }}
-            >
-              {t("تأیید و اجرا", "Confirm and apply")}
-            </Button>
-          </>
+              />
+            ))}
+          </div>
         )}
-      </Modal>
+        <div className="form-actions pagination">
+          {view === "graph" ? (
+            <>
+              {graphCursor && (
+                <Button onClick={() => setGraphCursor(null)}>
+                  {t("ابتدای گراف", "First graph page")}
+                </Button>
+              )}
+              {graph.data?.next_cursor && (
+                <Button
+                  onClick={() =>
+                    setGraphCursor(graph.data?.next_cursor ?? null)
+                  }
+                >
+                  {t("بخش بعدی گراف", "Next graph page")}
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              {cursor && (
+                <Button onClick={() => setCursor(null)}>
+                  {t("صفحهٔ اول", "First page")}
+                </Button>
+              )}
+              {tasks.data?.next_cursor && (
+                <Button
+                  onClick={() => setCursor(tasks.data?.next_cursor ?? null)}
+                >
+                  {t("صفحهٔ بعد", "Next page")}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+        <CreateTask
+          open={create}
+          setOpen={setCreate}
+          action={action}
+          projectId={projectId || undefined}
+        />
+        <Modal
+          title={t("تأیید تغییر گروهی", "Confirm batch change")}
+          open={!!bulkPreview}
+          onOpenChange={() => setBulkPreview(null)}
+        >
+          {bulkPreview && (
+            <>
+              <pre className="preview-json">
+                {JSON.stringify(bulkPreview.changes, null, 2)}
+              </pre>
+              <p>{bulkPreview.warnings.join("\n")}</p>
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  const result = await action("task_batch_commit", {
+                    preview_id: bulkPreview.preview_id,
+                  });
+                  if (result) {
+                    setBulkPreview(null);
+                    setSelected([]);
+                  }
+                }}
+              >
+                {t("تأیید و اجرا", "Confirm and apply")}
+              </Button>
+            </>
+          )}
+        </Modal>
+      </section>
     </TaskRowLayoutProvider>
   );
 }
@@ -1009,7 +1024,12 @@ function TaskTree({
         const collapsed = isCollapsed(task.task_id);
         const summary = hasVisibleChildren ? branchSummary(task.task_id) : null;
         return (
-          <div key={task.task_id} style={{ marginInlineStart: depth ? 20 : 0 }}>
+          <div
+            className="task-tree-branch"
+            data-depth={depth}
+            key={task.task_id}
+            style={{ marginInlineStart: depth ? 20 : 0 }}
+          >
             <div className="tree-row">
               {hasVisibleChildren ? (
                 <button
@@ -1070,18 +1090,37 @@ function TaskTree({
           {parentIds.size} {t("شاخه", "branches")} ·{" "}
           {t("فقط کارهای این صفحه", "Only tasks on this page")}
         </span>
-        <Button
-          disabled={parentIds.size === 0}
-          onClick={() => setAllBranches(true)}
+        <div
+          className="tree-toolbar-actions"
+          role="group"
+          aria-label={t(
+            "باز و بسته کردن همهٔ شاخه‌های این صفحه",
+            "Expand or collapse all branches on this page",
+          )}
         >
-          {t("بستن همهٔ شاخه‌های این صفحه", "Collapse all on this page")}
-        </Button>
-        <Button
-          disabled={parentIds.size === 0}
-          onClick={() => setAllBranches(false)}
-        >
-          {t("بازکردن همهٔ شاخه‌های این صفحه", "Expand all on this page")}
-        </Button>
+          <Button
+            disabled={parentIds.size === 0}
+            aria-label={t(
+              "بستن همهٔ شاخه‌های این صفحه",
+              "Collapse all on this page",
+            )}
+            onClick={() => setAllBranches(true)}
+          >
+            <ArrowUp size={15} />
+            {t("بستن همه", "Collapse all")}
+          </Button>
+          <Button
+            disabled={parentIds.size === 0}
+            aria-label={t(
+              "بازکردن همهٔ شاخه‌های این صفحه",
+              "Expand all on this page",
+            )}
+            onClick={() => setAllBranches(false)}
+          >
+            <ArrowDown size={15} />
+            {t("بازکردن همه", "Expand all")}
+          </Button>
+        </div>
       </div>
       {branch(null, 0)}
       {missingParentIds.map((parentId) => (

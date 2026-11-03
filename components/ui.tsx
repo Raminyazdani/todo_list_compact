@@ -6,7 +6,9 @@ import {
   Children,
   cloneElement,
   isValidElement,
+  useCallback,
   useId,
+  useRef,
   useSyncExternalStore,
   type ReactElement,
   type ReactNode,
@@ -64,18 +66,74 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
+  const opener = useRef<HTMLElement | null>(null);
+  const openerRecorded = useRef(false);
+  const content = useRef<HTMLDivElement | null>(null);
+  // Overlay commits before Content's autoFocus children. Keep this capture
+  // through ref detach/re-attach and interrupted exits until the real close.
+  const recordOpener = useCallback((node: HTMLDivElement | null) => {
+    if (!node || openerRecorded.current) return;
+    const active = document.activeElement;
+    opener.current =
+      active instanceof HTMLElement && active !== document.body ? active : null;
+    openerRecorded.current = true;
+  }, []);
+  const available = (element: HTMLElement | null): element is HTMLElement =>
+    !!element?.isConnected &&
+    element.getClientRects().length > 0 &&
+    !element.closest(
+      '[inert],[aria-hidden="true"],[role="dialog"][data-state="closed"]',
+    ) &&
+    !element.matches(":disabled") &&
+    !["hidden", "collapse"].includes(getComputedStyle(element).visibility);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay" />
+        <Dialog.Overlay ref={recordOpener} className="dialog-overlay" />
         <Dialog.Content
+          ref={content}
           className={`dialog ${wide ? "wide" : ""}`}
           aria-describedby={undefined}
+          onCloseAutoFocus={(event) => {
+            // There is no Dialog.Trigger in this controlled wrapper, so the
+            // default Radix trigger restoration cannot restore an opener.
+            event.preventDefault();
+            if (
+              content.current?.isConnected &&
+              content.current.dataset.state === "open"
+            )
+              return;
+            const target = available(opener.current)
+              ? opener.current
+              : [
+                  ...document.querySelectorAll<HTMLElement>(
+                    "[data-dialog-focus-fallback]",
+                  ),
+                  ...document.querySelectorAll<HTMLElement>(
+                    'main[tabindex="-1"]',
+                  ),
+                ].find(available);
+            opener.current = null;
+            openerRecorded.current = false;
+            const remainingDialog = [
+              ...document.querySelectorAll<HTMLElement>(
+                '[role="dialog"][data-state="open"]',
+              ),
+            ]
+              .filter(available)
+              .at(-1);
+            if (
+              remainingDialog &&
+              (!target || !remainingDialog.contains(target))
+            )
+              return;
+            target?.focus();
+          }}
         >
           <div className="dialog-heading">
             <Dialog.Title>{title}</Dialog.Title>
             <Dialog.Close className="icon-button" aria-label="Close / بستن">
-              <X size={19} />
+              <X size={19} aria-hidden="true" />
             </Dialog.Close>
           </div>
           {children}
@@ -123,7 +181,7 @@ export function Empty({
 }) {
   return (
     <div className="empty">
-      <div className="empty-icon">
+      <div className="empty-icon" aria-hidden="true">
         <ArrowUpRight size={24} />
       </div>
       <h3>{title}</h3>
@@ -144,15 +202,15 @@ export function QueryState({
   if (error)
     return (
       <div className="error-state" role="alert">
-        <AlertCircle size={20} />
+        <AlertCircle size={20} aria-hidden="true" />
         <span>{error}</span>
         <Button onClick={retry}>تلاش دوباره / Retry</Button>
       </div>
     );
   if (loading)
     return (
-      <div className="loading-state" role="status">
-        <LoaderCircle className="spin" size={22} />
+      <div className="loading-state" role="status" aria-busy="true">
+        <LoaderCircle className="spin" size={22} aria-hidden="true" />
         <span>در حال دریافت / Loading</span>
       </div>
     );

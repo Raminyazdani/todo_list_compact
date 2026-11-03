@@ -40,6 +40,8 @@ pnpm build
 - [انتشار](docs/DEPLOYMENT.md)، [API و MCP](docs/MCP.md)
 - [راهنمای اختیاری ChatGPT](docs/CHATGPT_CONNECTION_FA.md)، [Google](docs/GOOGLE_INTEGRATIONS.md)
 - [مهاجرت](docs/MIGRATION_PLAN.md)، [پشتیبان و بازیابی](docs/BACKUP_AND_RECOVERY.md)
+- [سیستم طراحی](DESIGN.md)، [برنامهٔ بازطراحی](docs/DESIGN_OVERHAUL_PLAN_FA.md)، [سوپرپرامپت اجرایی](docs/DESIGN_OVERHAUL_SUPERPROMPT_FA.md)
+- [کاربرد مهارت‌های طراحی و موشن](docs/DESIGN_SKILL_CATALOG.md)، [منشأ و نسخهٔ منابع](docs/DESIGN_SKILLS_LOCK.json)
 
 Work Planner and Drive originals remain read-only references. [Native calendar/work integration](docs/CALENDAR_WORKPLANNER.md) supports cached multi-source calendars and explicitly authorized personal Google event changes after app-specific OAuth activation; connector access in the build chat does not grant the deployed server access. Invites and mail sending remain disabled. New private uploads use verified Neon Object Storage; existing Drive/Blob records retain their provider. In-app AI remains deferred. Scheduled cron evidence is separate from manual backup verification.
 

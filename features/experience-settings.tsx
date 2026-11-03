@@ -47,7 +47,10 @@ export function ExperienceSettings({
     setDraft({ ...values, ...partial });
   }
   return (
-    <section className="panel">
+    <section
+      className="panel lifeos-settings-card lifeos-experience-settings"
+      id="settings-experience"
+    >
       <SectionHeading
         title={t(
           "خوانایی، دسترس‌پذیری و نگهداری",

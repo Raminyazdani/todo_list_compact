@@ -27,7 +27,7 @@ export function Trends({ trends }: { trends: TrendDTO }) {
       { month: "short", day: "numeric", timeZone: "UTC" },
     ).format(new Date(`${date}T12:00:00Z`));
   return (
-    <section className="panel trends-panel">
+    <section className="panel trends-panel lifeos-trends">
       <SectionHeading
         title={t("روند واقعی ۱۲ هفته", "Actual 12-week trends")}
         subtitle={`${trends.from_date} — ${trends.to_date} · ${trends.timezone}`}
@@ -60,6 +60,9 @@ export function Trends({ trends }: { trends: TrendDTO }) {
           )}
         </p>
       )}
+      <p className="lifeos-chart-label">
+        {label} · {t("به تفکیک هفته", "by week")}
+      </p>
       <div
         className="trend-bars"
         aria-label={t("روند هفتگی", "Weekly trend")}
@@ -69,10 +72,24 @@ export function Trends({ trends }: { trends: TrendDTO }) {
           <div className="trend-column" key={week.week_start}>
             <strong>{week[metric]}</strong>
             <div className="trend-bar-track">
-              <div
+              <svg
                 className="trend-bar"
-                style={{ height: `${(100 * week[metric]) / weeklyMax}%` }}
-              />
+                viewBox="0 0 24 100"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label={`${format(week.week_start)} · ${label}: ${week[metric]}`}
+              >
+                <title>
+                  {format(week.week_start)} · {label}: {week[metric]}
+                </title>
+                <rect
+                  x="0"
+                  y={100 - (100 * week[metric]) / weeklyMax}
+                  width="24"
+                  height={(100 * week[metric]) / weeklyMax}
+                  rx="2"
+                />
+              </svg>
             </div>
             <span>{format(week.week_start)}</span>
           </div>
@@ -109,7 +126,15 @@ export function Trends({ trends }: { trends: TrendDTO }) {
         <summary>
           {t("جدول قابل خواندن روند هفتگی", "Readable weekly trend table")}
         </summary>
-        <div className="data-table-wrap">
+        <div
+          className="data-table-wrap"
+          role="region"
+          tabIndex={0}
+          aria-label={t(
+            "جدول روند هفتگی؛ قابل پیمایش افقی",
+            "Weekly trends; horizontally scrollable table",
+          )}
+        >
           <table>
             <thead>
               <tr>

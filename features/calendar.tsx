@@ -320,7 +320,7 @@ export function CalendarView({
           {t("رویداد تازه", "New event")}
         </AddButton>
       </div>
-      <div className="calendar-toolbar">
+      <div className="calendar-toolbar calendar-view-toolbar">
         <div className="calendar-navigation">
           <Button onClick={() => move(-1)} aria-label={t("قبلی", "Previous")}>
             <ChevronRight size={17} />
@@ -328,6 +328,7 @@ export function CalendarView({
           <h2>{monthLabel}</h2>
           <input
             type="date"
+            dir="ltr"
             aria-label={t("تاریخ تقویم", "Calendar date")}
             value={date}
             onChange={(e) => {
@@ -358,6 +359,7 @@ export function CalendarView({
           ].map(([value, label]) => (
             <button
               key={value}
+              aria-pressed={view === value}
               className={view === value ? "active" : ""}
               onClick={() => {
                 setView(value);

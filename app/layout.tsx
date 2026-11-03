@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { PwaProvider } from "../components/pwa";
 import { PersistentTaskRowProvider } from "../features/task-row-persistence";
 import "../styles/globals.css";
+import "../styles/design-system.css";
+import "../styles/design-sections.css";
+import "../styles/design-planning.css";
 
 export const metadata: Metadata = {
   title: "Ramin Life OS",
@@ -18,7 +21,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#15171c",
+  themeColor: "#111318",
 };
 
 export default function RootLayout({
