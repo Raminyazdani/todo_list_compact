@@ -1,6 +1,12 @@
 {
   "personal_finance_2026_11_02": {
-    "status": "implementation_verified_release_pending",
+    "status": "released_live_ui_rest_mcp_verified",
+    "plan": "docs/FINANCE_PLAN_FA.md",
+    "source_pull_request": "https://github.com/Raminyazdani/todo_list_compact/pull/19",
+    "tested_source_commit": "b504b1d9c0298e9d91c5fdf709bde281d587cedb",
+    "release_commit": "3b31d08bf1890b7f4f2b533698dda0d112ae7e24",
+    "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/41513803793",
+    "production_url": "https://ramin-life-os.vercel.app/finances",
     "scope": "Owner-bound finance accounts, categories, versioned plans, actual transactions, monthly summaries and reviewed idempotent source import through the shared UI/REST/MCP service.",
     "observed": {
       "static_checks": "PASS formatting, lint, TypeScript and production build.",
@@ -15,11 +21,23 @@
       "PR_boundary_review": "Five additional review findings fixed: canonical-vs-raw size bounds, compact CLI/UI download sizes, canonical readback reconciliation and Markdown code-span backslashes. PASS domain 14 tests, source 12 tests and UI model 7 tests, including exact 2 MB UTF-8 boundaries and zero unusable previews.",
       "security": "PASS public-source secret scan and production dependency high-severity gate. Existing Excel export dependencies retain one moderate minimatch glob-pattern denial-of-service advisory; the new finance path does not accept or evaluate user glob patterns.",
       "production_backup": "PASS authenticated identity check and private encrypted backup with verified decryption/manifest before production schema changes.",
-      "local_full_suite": "Initial coverage run exhausted local worker memory. A later local run exposed an outdated ordered-migration assertion; its corrected full eight-test file passes. Complete CI remains a release gate."
+      "local_full_suite": "Initial coverage run exhausted local worker memory. A later local run exposed an outdated ordered-migration assertion; its corrected full eight-test file passes. Final Linux CI completed successfully.",
+      "final_CI": "PASS at tested source b504b1d: 720 unit/integration tests with 36 opt-in skips; 18 native PostgreSQL tests; 61 browser scenarios with 4 explicit production-only skips; 18 HTTP authorization tests, 1 OIDC test, 6 rate-limit tests and 1 real token-expiry test. Formatting, lint, TypeScript, safety scan, dependency high-severity gate and production build passed.",
+      "production_migration": "PASS verified Production Neon main, schema version 4 and all five finance tables; original table content fingerprints unchanged during additive migration.",
+      "production_release": "PASS canonical Vercel Production READY at release 3b31d08; exact git tree comparison with tested source b504b1d was empty. The later evidence update changes documentation only.",
+      "source_freshness": "PASS original private Markdown and pinned mapping normalized again immediately before cutover; retained payload unchanged and original source read only.",
+      "production_source_cutover": "PASS owner/actor-bound preview with zero conflicts, atomic commit and authoritative canonical export reconciliation. Counts and monthly aggregates matched the private reviewed report; unknown balances, unknown cadence and reserve comparison were preserved. No actual payment transactions were inferred. A second preview reported every source entity unchanged and zero creates.",
+      "production_UI_REST": "PASS actual authenticated production browser: rendered totals matched REST, unknown balances and plans remained explicit, tabs/search and empty registered-payment state worked, Persian RTL mobile had no horizontal overflow. Private desktop/mobile screenshots were visually reviewed with the existing Life OS theme.",
+      "production_MCP": "PASS real SDK over HTTPS: finance summary exactly matched owner REST, anonymous reads returned 401, the read-only token could not create an account and advertised finance:write as required. The temporary QA client was revoked and its token then returned 401. Synthetic financial writes were tested locally and intentionally skipped in production.",
+      "post_cutover_preservation": "PASS encrypted pre/post-cutover backups, decryption and all 47 table manifests verified. All 39 prior business tables compared unchanged; finance transactions remained unchanged. Only expected seeded finance definitions and append-only activity/idempotency records differed.",
+      "final_independent_audit": "PASS direct review of CI logs, source/release tree equivalence, private cutover/reconciliation/UI/MCP/backup receipts and fresh canonical deployment state. No remaining finance acceptance gate or unresolved P0/P1 was found.",
+      "cleanup": "PASS owned expiring verification clone deleted with its exact identity/parent checked; Production main independently read back ready. PR merged and feature branch removed."
     },
-    "pending": [
-      "Complete CI.",
-      "Production migration, deployment, source cutover and authenticated UI/REST/MCP readback."
+    "pending": [],
+    "limits": [
+      "EUR only, with integer cents; recorded payments are not a complete bank statement or a banking/payment connection.",
+      "Direct finance JSON import/export is bounded to 1000 entities and 2000000 UTF-8 bytes; larger data uses the full application backup workflow.",
+      "Existing OAuth grants are not expanded automatically. An older MCP connection needs explicit finance scopes and a refreshed tool inventory to access finance data. The live transport proof used a separately scoped temporary client, which was revoked."
     ],
     "privacy": "Private source rows, source identifiers, amounts, credentials, receipts, backups and real screenshots remain outside public Git. Public fixtures are synthetic."
   },
