@@ -61,6 +61,7 @@ import {
   shiftFinanceMonth,
 } from "./finance-model";
 import { useLocale } from "./locale";
+import { FinanceItemizedPlans } from "./finance-itemized";
 
 type Action = (
   name: CommandName,
@@ -603,6 +604,27 @@ export function FinanceWorkspace({ action }: { action: Action }) {
                   )}
                 </p>
               )}
+              <FinanceItemizedPlans
+                plans={plans.data?.items ?? []}
+                loading={plans.loading}
+                error={plans.error}
+                retry={plans.refresh}
+                labels={labels}
+                accountName={accountName}
+                categoryName={categoryName}
+                renderMoney={(cents) => <Money cents={cents} />}
+                cadence={(plan) => cadence(plan, labels, t)}
+                onEdit={(plan) => setEditor({ kind: "plan", entity: plan })}
+                onManage={() => {
+                  setTab("plans");
+                  setSearch("");
+                  setKind("");
+                  setPlanState("");
+                  setArchived(false);
+                  setFilterAccount("");
+                  setFilterCategory("");
+                }}
+              />
               <div className="finance-columns">
                 <section className="panel">
                   <SectionHeading
