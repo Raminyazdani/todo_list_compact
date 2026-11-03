@@ -23,12 +23,16 @@
       "pre_CI": "PASS full ESLint, TypeScript, Prettier, production build, public-source secret scan and high-severity production dependency gate. Existing dependency tree reports one moderate advisory. Browser list resolves66 cases, including new mobile drawer/system-motion regression and expanded10-route visual matrix.",
       "modal_focus_regression": "PASS actual React/Radix shared-Modal Chrome probe: original candidate failed3 opener/autofocus/mobile restoration cases with focus on BODY; corrected implementation passed8 scenarios including nested keyboard/parent restoration, replacement no theft, removed opener, unmount and interrupted close/reopen. No server/auth/network was used; exact synthetic proof retained privately. Browser E2E also asserts menu focus after palette closure and desktop opener restoration.",
       "inherited_accent_contrast": "PASS replaced inherited white/ink on light accent for public primary links, today date and Gantt icons with semantic on-accent. Today date dark6.539:1/light6.051:1; blocked/closed icons minimum3.626:1. Whole-page axe remains final gate.",
-      "first_CI_candidate": "Superseded source ca208213 passed unit coverage, native PostgreSQL/finance integrity, static/security and production build. Final CI restarts after the actual modal-focus and inherited-accent corrections; earlier success is not substituted for the final source gate."
+      "first_CI_candidate": "Superseded source ca208213 passed unit coverage, native PostgreSQL/finance integrity, static/security and production build. Final CI restarts after the actual modal-focus and inherited-accent corrections; earlier success is not substituted for the final source gate.",
+      "CI_66e246e": "FAILED browser gate:51passed,3failed,4explicitproduction skips,8serialcalendar cases not run after the first calendar failure. Unit/native PostgreSQL/static/security/build passed; HTTP security was not reached. Failures were transient theme color contrast, a non-focusable financial scroll region, and a pre-navigation finance sign-in denial whose original assertion omitted HTTP status.",
+      "theme_transition_correction": "PASS actual full-style WorkPlanner component proof reproduced1.061:1 mixed text/background during theme interpolation. Shared buttons now transition only border-color, keeping role pairs atomic.8 normal/hover/theme-direction scenarios and104 immediate/rAF samples pass, minimum6.051:1. No test sleeps or JS theme flags added.",
+      "scroll_region_correction": "PASS four existing financial/category/account/trend/scheduling table wrappers now expose named keyboard-focusable regions.16 before/after synthetic actual-source cases reproduce mobile failures and then pass axe, outline/focus, native RTL/LTR Arrow scrolling and no page overflow. Existing work/import tables already met the rule.",
+      "finance_test_login_observability": "Original denial status is unproven. The isolated mutation test helper now records only safe HTTP status/error code and may retry once only after an explicit429 with a valid numeric Retry-After no longer than65seconds. Other denials fail. Product authentication/rate limits were not changed; final CI must establish current behavior."
     },
     "pending": [
-      "Finish native PostgreSQL/unit/browser/HTTP/security gates on isolated CI.",
-      "Review actual synthetic browser screenshots and resolve any regression.",
-      "Merge/release verified source and inspect canonical Production live."
+      "Pass full final-source CI after the actual accessibility corrections and observe finance login statuses.",
+      "Review release changes and merge exact tested source.",
+      "Inspect canonical Production and record actual live UI/REST/MCP evidence."
     ],
     "privacy": "Real captures/HTML/credentials and detailed receipts remain outside public Git; third-party source installs are local ignored guidance. Public fixtures remain synthetic."
   },
@@ -257,7 +261,7 @@
     "production_url": "https://ramin-life-os.vercel.app/calendar?tab=work",
     "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/40108066500",
     "scope": "Interactive per-employer work-hours dashboard in the Life OS calendar work tab, with private time-scoped contract policies and conservative informational assessments.",
-    "implementation": "Full Berlin-local MondayÃ¢â‚¬â€œSunday weeks, reported monthly totals, personal and contractual thresholds kept separate, period-to-date reference and rolling-average trends, source labels, review states for time-window/weekday/term and legacy elapsed/reporting differences, versioned policy edits and owner-bound audit.",
+    "implementation": "Full Berlin-local MondayÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“Sunday weeks, reported monthly totals, personal and contractual thresholds kept separate, period-to-date reference and rolling-average trends, source labels, review states for time-window/weekday/term and legacy elapsed/reporting differences, versioned policy edits and owner-bound audit.",
     "observed": {
       "local_format_lint_type_security_and_build": "PASS",
       "local_unit_and_integration_tests": "PASS_646_tests_76_files_30_skipped",

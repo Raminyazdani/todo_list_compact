@@ -445,10 +445,8 @@ body:has(.sidebar.mobile-open[aria-modal="true"]) {
   font-weight: 500;
   line-height: 1.6;
   gap: 8px;
-  transition:
-    background-color var(--motion-fast) ease,
-    border-color var(--motion-fast) ease,
-    color var(--motion-fast) ease;
+  /* Theme foreground/background pairs change together, without mixed frames. */
+  transition: border-color var(--motion-fast) ease;
 }
 
 .button.primary,

@@ -911,7 +911,15 @@ export function FinanceWorkspace({ action }: { action: Action }) {
                     )}
                   </p>
                 ) : (
-                  <div className="data-table-wrap">
+                  <div
+                    className="data-table-wrap"
+                    role="region"
+                    tabIndex={0}
+                    aria-label={t(
+                      "جدول هزینه‌ها به تفکیک دسته؛ قابل پیمایش افقی",
+                      "Expenses by category; horizontally scrollable table",
+                    )}
+                  >
                     <table className="finance-table">
                       <thead>
                         <tr>
@@ -960,7 +968,15 @@ export function FinanceWorkspace({ action }: { action: Action }) {
                     )}
                   </p>
                 ) : (
-                  <div className="data-table-wrap">
+                  <div
+                    className="data-table-wrap"
+                    role="region"
+                    tabIndex={0}
+                    aria-label={t(
+                      "جدول مانده و گردش حساب‌ها؛ قابل پیمایش افقی",
+                      "Account balances and activity; horizontally scrollable table",
+                    )}
+                  >
                     <table className="finance-table">
                       <thead>
                         <tr>

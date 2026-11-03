@@ -126,7 +126,15 @@ export function Trends({ trends }: { trends: TrendDTO }) {
         <summary>
           {t("جدول قابل خواندن روند هفتگی", "Readable weekly trend table")}
         </summary>
-        <div className="data-table-wrap">
+        <div
+          className="data-table-wrap"
+          role="region"
+          tabIndex={0}
+          aria-label={t(
+            "جدول روند هفتگی؛ قابل پیمایش افقی",
+            "Weekly trends; horizontally scrollable table",
+          )}
+        >
           <table>
             <thead>
               <tr>
