@@ -416,6 +416,9 @@
 .lifeos-projects .templates-panel {
   margin-block-start: 8px;
 }
+.lifeos-files {
+  container-type: inline-size;
+}
 .lifeos-files .file-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -456,6 +459,9 @@
 }
 .lifeos-files .file-grid .file-art span {
   font-size: var(--type-tiny, 11px);
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 .lifeos-files .file-info {
   display: flex;
@@ -464,10 +470,17 @@
   gap: 6px;
   padding: 0;
   flex: 1;
+  min-inline-size: 0;
+}
+.lifeos-files .file-info > * {
+  max-inline-size: 100%;
 }
 .lifeos-files .file-info strong {
   font-size: var(--type-body, 14px);
   overflow-wrap: anywhere;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 .lifeos-files .file-info small {
   font-size: var(--type-meta, 12px);
@@ -703,6 +716,11 @@
   }
   .lifeos-routines .routine-card-actions {
     inline-size: 100%;
+  }
+}
+@container (max-width: 640px) {
+  .lifeos-files .file-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 760px) {

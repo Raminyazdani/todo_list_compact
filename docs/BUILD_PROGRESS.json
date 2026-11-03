@@ -27,12 +27,14 @@
       "CI_66e246e": "FAILED browser gate:51passed,3failed,4explicitproduction skips,8serialcalendar cases not run after the first calendar failure. Unit/native PostgreSQL/static/security/build passed; HTTP security was not reached. Failures were transient theme color contrast, a non-focusable financial scroll region, and a pre-navigation finance sign-in denial whose original assertion omitted HTTP status.",
       "theme_transition_correction": "PASS actual full-style WorkPlanner component proof reproduced1.061:1 mixed text/background during theme interpolation. Shared buttons now transition only border-color, keeping role pairs atomic.8 normal/hover/theme-direction scenarios and104 immediate/rAF samples pass, minimum6.051:1. No test sleeps or JS theme flags added.",
       "scroll_region_correction": "PASS four existing financial/category/account/trend/scheduling table wrappers now expose named keyboard-focusable regions.16 before/after synthetic actual-source cases reproduce mobile failures and then pass axe, outline/focus, native RTL/LTR Arrow scrolling and no page overflow. Existing work/import tables already met the rule.",
-      "finance_test_login_observability": "Original denial status is unproven. The isolated mutation test helper now records only safe HTTP status/error code and may retry once only after an explicit429 with a valid numeric Retry-After no longer than65seconds. Other denials fail. Product authentication/rate limits were not changed; final CI must establish current behavior."
+      "finance_test_login_observability": "Original denial status is unproven. The isolated mutation test helper now records only safe HTTP status/error code and may retry once only after an explicit429 with a valid numeric Retry-After no longer than65seconds. Other denials fail. Product authentication/rate limits were not changed; final CI must establish current behavior.",
+      "CI_0ce85c95": "FAILED only Files tablet overflow:61browser cases passed,1failed,4explicit production skips. Both finance sign-ins were accepted on attempt1/HTTP200; no429 or retry occurred. Calendar contrast, financial keyboard scrolling, source-details recovery and mobile-focus tests passed. Unit/native PostgreSQL/static/security/build passed; HTTP-security step still was not reached.",
+      "files_tablet_correction": "PASS real hydrated FileWorkspace with full styles/sidebar reproduced2022px document at768px: inherited white-space:nowrap defeated overflow-wrap.18CSS lines restore full title wrapping and bounded flex metadata; an inline-size container switches to one column below640px available content.84 candidate Files/Reports/Settings layout scenes show no page/element overflow,12 representative tablet axe checks pass, and2 awaited keyboard open/Escape/opener/selection scenarios pass. No file/data/API flow changed."
     },
     "pending": [
-      "Pass full final-source CI after the actual accessibility corrections and observe finance login statuses.",
-      "Review release changes and merge exact tested source.",
-      "Inspect canonical Production and record actual live UI/REST/MCP evidence."
+      "Pass full exact-source CI after the focused Files tablet correction.",
+      "Resolve addressed reviews, merge and verify release/source tree equivalence.",
+      "Canonical Production UI/REST/MCP readback and final evidence."
     ],
     "privacy": "Real captures/HTML/credentials and detailed receipts remain outside public Git; third-party source installs are local ignored guidance. Public fixtures remain synthetic."
   },
@@ -261,7 +263,7 @@
     "production_url": "https://ramin-life-os.vercel.app/calendar?tab=work",
     "ci_run": "https://github.com/Raminyazdani/todo_list_compact/actions/runs/40108066500",
     "scope": "Interactive per-employer work-hours dashboard in the Life OS calendar work tab, with private time-scoped contract policies and conservative informational assessments.",
-    "implementation": "Full Berlin-local MondayÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“Sunday weeks, reported monthly totals, personal and contractual thresholds kept separate, period-to-date reference and rolling-average trends, source labels, review states for time-window/weekday/term and legacy elapsed/reporting differences, versioned policy edits and owner-bound audit.",
+    "implementation": "Full Berlin-local MondayÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œSunday weeks, reported monthly totals, personal and contractual thresholds kept separate, period-to-date reference and rolling-average trends, source labels, review states for time-window/weekday/term and legacy elapsed/reporting differences, versioned policy edits and owner-bound audit.",
     "observed": {
       "local_format_lint_type_security_and_build": "PASS",
       "local_unit_and_integration_tests": "PASS_646_tests_76_files_30_skipped",
