@@ -946,6 +946,12 @@ td {
   font-size: var(--type-meta);
 }
 
+.public-info-actions .public-info-primary,
+.public-info-actions .public-info-primary:hover,
+.public-info-actions .public-info-primary:focus-visible {
+  color: var(--on-accent);
+}
+
 /* State preferences change density, never remove essential data or focus. */
 html[data-density="compact"] {
   --panel-padding: 18px;

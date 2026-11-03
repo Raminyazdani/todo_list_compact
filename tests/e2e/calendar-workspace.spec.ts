@@ -850,6 +850,12 @@ test("stale_calendar_source_and_failed_refresh_show_precise_persistent_status", 
   await expect(page.locator(".calendar-source-status .error")).toContainText(
     "تازه‌سازی تأیید نشد",
   );
+  const attention = page.locator(".calendar-source-attention");
+  await expect(attention).toBeVisible();
+  await expect(attention).toContainText("Synthetic Holidays");
+  await expect(attention).toContainText("Synthetic Broken Feed");
+  await expect(attention).toContainText("تنظیمات این منبع قابل خواندن نیست");
+  await page.locator(".calendar-source-details > summary").click();
   await expect(page.locator(".calendar-source-chips")).toContainText(
     "Synthetic Holidays",
   );

@@ -6,6 +6,7 @@ import {
   Children,
   cloneElement,
   isValidElement,
+  useCallback,
   useId,
   useRef,
   useSyncExternalStore,
@@ -65,36 +66,68 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
-  const focusFallback = useRef<HTMLElement | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const openerRecorded = useRef(false);
+  const content = useRef<HTMLDivElement | null>(null);
+  // Overlay commits before Content's autoFocus children. Keep this capture
+  // through ref detach/re-attach and interrupted exits until the real close.
+  const recordOpener = useCallback((node: HTMLDivElement | null) => {
+    if (!node || openerRecorded.current) return;
+    const active = document.activeElement;
+    opener.current =
+      active instanceof HTMLElement && active !== document.body ? active : null;
+    openerRecorded.current = true;
+  }, []);
+  const available = (element: HTMLElement | null): element is HTMLElement =>
+    !!element?.isConnected &&
+    element.getClientRects().length > 0 &&
+    !element.closest(
+      '[inert],[aria-hidden="true"],[role="dialog"][data-state="closed"]',
+    ) &&
+    !element.matches(":disabled") &&
+    !["hidden", "collapse"].includes(getComputedStyle(element).visibility);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay" />
+        <Dialog.Overlay ref={recordOpener} className="dialog-overlay" />
         <Dialog.Content
+          ref={content}
           className={`dialog ${wide ? "wide" : ""}`}
           aria-describedby={undefined}
-          onOpenAutoFocus={() => {
-            const active = document.activeElement;
-            const lostOpener =
-              active === document.body ||
-              (active instanceof HTMLElement && !!active.closest("[inert]"));
-            const fallback = document.querySelector<HTMLElement>(
-              "[data-dialog-focus-fallback]",
-            );
-            focusFallback.current =
-              lostOpener && fallback?.getClientRects().length ? fallback : null;
-          }}
           onCloseAutoFocus={(event) => {
-            const fallback = focusFallback.current;
-            focusFallback.current = null;
+            // There is no Dialog.Trigger in this controlled wrapper, so the
+            // default Radix trigger restoration cannot restore an opener.
+            event.preventDefault();
             if (
-              fallback?.isConnected &&
-              fallback.getClientRects().length &&
-              !fallback.closest("[inert]")
-            ) {
-              event.preventDefault();
-              fallback.focus();
-            }
+              content.current?.isConnected &&
+              content.current.dataset.state === "open"
+            )
+              return;
+            const target = available(opener.current)
+              ? opener.current
+              : [
+                  ...document.querySelectorAll<HTMLElement>(
+                    "[data-dialog-focus-fallback]",
+                  ),
+                  ...document.querySelectorAll<HTMLElement>(
+                    'main[tabindex="-1"]',
+                  ),
+                ].find(available);
+            opener.current = null;
+            openerRecorded.current = false;
+            const remainingDialog = [
+              ...document.querySelectorAll<HTMLElement>(
+                '[role="dialog"][data-state="open"]',
+              ),
+            ]
+              .filter(available)
+              .at(-1);
+            if (
+              remainingDialog &&
+              (!target || !remainingDialog.contains(target))
+            )
+              return;
+            target?.focus();
           }}
         >
           <div className="dialog-heading">

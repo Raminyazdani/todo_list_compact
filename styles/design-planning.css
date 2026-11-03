@@ -538,6 +538,11 @@
   padding-block: var(--space-3, 12px);
 }
 
+.lifeos-planning-tasks .gantt-bar,
+.lifeos-planning-workspace .month-cell.today .day-number {
+  color: var(--on-accent);
+}
+
 .lifeos-planning-workspace
   :is(.calendar-event, .holiday-label, .agenda-row, .week-day-head) {
   font-size: var(--type-meta, 12px);

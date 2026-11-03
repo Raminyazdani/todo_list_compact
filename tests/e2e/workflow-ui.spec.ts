@@ -2718,6 +2718,7 @@ test("mobile_navigation_traps_and_restores_focus_and_respects_system_reduced_mot
     ).toBeLessThanOrEqual(0.001);
     await page.keyboard.press("Escape");
     await expect(palette).not.toBeVisible();
+    await expect(menu).toBeFocused();
     await page.setViewportSize({ width: 1440, height: 1000 });
     await expect(page.locator('.nav-selection[data-ready="true"]')).toHaveCount(
       0,
@@ -2725,6 +2726,13 @@ test("mobile_navigation_traps_and_restores_focus_and_respects_system_reduced_mot
     await expect(page.locator('.sidebar a[aria-current="page"]')).toHaveCount(
       1,
     );
+    const capture = page.getByRole("button", { name: "ثبت سریع", exact: true });
+    await capture.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('.dialog[data-state="open"]')).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator('.dialog[data-state="open"]')).toHaveCount(0);
+    await expect(capture).toBeFocused();
   } finally {
     const current = await readQuery<{ revision: number }>(
       request,
