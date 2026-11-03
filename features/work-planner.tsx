@@ -257,7 +257,7 @@ export function WorkPlanner({
     onDate(value.toISOString().slice(0, 10));
   }
   return (
-    <>
+    <div className="lifeos-planning-work">
       <div className="page-heading">
         <div>
           <div className="eyebrow">
@@ -289,6 +289,7 @@ export function WorkPlanner({
           </Button>
           <input
             type="month"
+            dir="ltr"
             aria-label={t("ماه", "Month")}
             value={month}
             onChange={(event) => {
@@ -433,7 +434,6 @@ export function WorkPlanner({
       </div>
       <QueryState {...summary} retry={summary.refresh} />
       <ContractHoursDashboard month={month} date={date} />
-      <TimeTransfer from={from} to={to} month={month} action={action} />
       {error && (
         <p className="error" role="alert">
           {error}
@@ -443,13 +443,32 @@ export function WorkPlanner({
       <QueryState {...drafts} retry={drafts.refresh} />
       <QueryState {...events} retry={events.refresh} />
       {showExternal && sourceIssues.length > 0 ? (
-        <div className="warning work-source-warning" role="status">
-          <strong>
-            {t(
-              "وضعیت منابع مؤثر بر تداخل تقویم",
-              "Calendar sources affecting conflict coverage",
-            )}
-          </strong>
+        <details className="warning work-source-warning">
+          <summary>
+            <span role="status">
+              {t(
+                `پوشش تداخل کامل نیست · ${sourceIssues.length} منبع نیازمند بررسی`,
+                `Conflict coverage is incomplete · ${sourceIssues.length} sources need attention`,
+              )}
+            </span>
+            <span className="work-source-warning-summary">
+              {sourceIssues
+                .map((coverage) => {
+                  const source = sources.data?.items.find(
+                    (item) => item.source_id === coverage.source_id,
+                  );
+                  const reason = coverage.unavailable
+                    ? t("در این نما در دسترس نیست", "unavailable in this view")
+                    : coverage.stale
+                      ? t("داده قدیمی", "stale data")
+                      : coverage.complete !== true
+                        ? t("پوشش ناقص", "incomplete coverage")
+                        : t("نیازمند بررسی دریافت", "sync needs review");
+                  return `${source?.title ?? t("منبع انتخابی", "Selected source")}: ${reason}`;
+                })
+                .join(" · ")}
+            </span>
+          </summary>
           <ul>
             {sourceIssues.map((coverage, index) => {
               const source = sources.data?.items.find(
@@ -503,7 +522,7 @@ export function WorkPlanner({
               "Conflicts use only received events. Refresh calendars for temporary errors; reconnect the account in Settings if access is unavailable.",
             )}
           </span>
-        </div>
+        </details>
       ) : null}
       <MonthlyWorkTimeline
         days={days}
@@ -572,7 +591,16 @@ export function WorkPlanner({
           ))}
         </details>
       )}
-      <section className="panel">
+      <details className="work-tools-disclosure">
+        <summary>
+          {t(
+            "انتقال داده و خروجی‌های ساعات کار",
+            "Work-time data transfer and exports",
+          )}
+        </summary>
+        <TimeTransfer from={from} to={to} month={month} action={action} />
+      </details>
+      <section className="panel work-entries-panel">
         <h2>{t("جدول ساعات و توضیحات", "Work intervals and descriptions")}</h2>
         <p className="small muted">
           {t(
@@ -772,7 +800,7 @@ export function WorkPlanner({
           </>
         )}
       </Modal>
-    </>
+    </div>
   );
 }
 
@@ -1272,12 +1300,17 @@ function MonthlyWorkTimeline({
   return (
     <section className="panel work-month-panel">
       <h2>{t("خط زمانی ماهانهٔ ۲۴ ساعته", "Monthly 24-hour timeline")}</h2>
-      <p className="small muted">
-        {t(
-          "در فضای خالی بکش؛ بازه را جابه‌جا کن یا دستگیرهٔ ابتدا و انتها را بکش. با صفحه‌کلید، فلش‌ها ۱۵ دقیقه جابه‌جا می‌کنند؛ روی دستگیره طول را تغییر می‌دهند. Enter ویرایش دقیق را باز می‌کند.",
-          "Draw in empty space; move intervals or drag either endpoint. Arrow keys move by 15 minutes, or resize on an endpoint handle. Enter opens the exact editor.",
-        )}
-      </p>
+      <details className="work-grid-help">
+        <summary>
+          {t("راهنمای رسم و ویرایش بازه‌ها", "Drawing and editing intervals")}
+        </summary>
+        <p className="small muted">
+          {t(
+            "در فضای خالی بکش؛ بازه را جابه‌جا کن یا دستگیرهٔ ابتدا و انتها را بکش. با صفحه‌کلید، فلش‌ها ۱۵ دقیقه جابه‌جا می‌کنند؛ روی دستگیره طول را تغییر می‌دهند. Enter ویرایش دقیق را باز می‌کند.",
+            "Draw in empty space; move intervals or drag either endpoint. Arrow keys move by 15 minutes, or resize on an endpoint handle. Enter opens the exact editor.",
+          )}
+        </p>
+      </details>
       {error && (
         <p className="error" role="alert">
           {error}

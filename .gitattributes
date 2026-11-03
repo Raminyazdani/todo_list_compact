@@ -1,0 +1,3 @@
+# Preserve verified upstream font notices byte for byte, including whitespace.
+public/fonts/vazirmatn/AUTHORS.txt -text -whitespace
+public/fonts/vazirmatn/OFL.txt -text -whitespace

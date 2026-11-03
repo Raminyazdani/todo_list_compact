@@ -1248,6 +1248,13 @@ test("dashboard_preferences_accessibility_and_pwa_capabilities_are_persistent_an
       "data-large-text",
       "true",
     );
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-reduce-motion",
+      "true",
+    );
+    await expect(page.locator('.nav-selection[data-ready="true"]')).toHaveCount(
+      0,
+    );
     await safeAxe(page, "settings-persisted-accessibility-preferences");
     await expect(
       page
@@ -1399,7 +1406,7 @@ test("deferred_in_app_ai_has_no_ui_entry_or_requests_and_mcp_remains_available",
   });
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "امروز را روشن شروع کن.", exact: true }),
+    page.getByRole("heading", { name: "امروز", exact: true }),
   ).toBeVisible();
   await expect(page.locator("main .loading-state")).toHaveCount(0);
   await expect(page.locator('a[href="/assistant"]')).toHaveCount(0);
@@ -2638,11 +2645,113 @@ async function safeAxe(page: Page, name: string) {
   expect(violations, `${name} automated accessibility findings`).toEqual([]);
 }
 
+test("mobile_navigation_traps_and_restores_focus_and_respects_system_reduced_motion", async ({
+  page,
+  request,
+}) => {
+  const initial = await readQuery<{
+    settings: Record<string, unknown>;
+    revision: number;
+  }>(request, "preferences_get");
+  try {
+    await mutate(
+      request,
+      "preferences_update",
+      {
+        settings: {
+          accessibility: {
+            ...((initial.settings.accessibility ?? {}) as Record<
+              string,
+              unknown
+            >),
+            reduced_motion: false,
+          },
+        },
+      },
+      initial.revision,
+    );
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/tasks");
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-motion-ready",
+      "true",
+    );
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-reduce-motion",
+      "false",
+    );
+    const menu = page.getByRole("button", { name: "بازکردن منو", exact: true });
+    await menu.focus();
+    await page.keyboard.press("Enter");
+    const navigation = page.locator("#workspace-navigation");
+    await expect(navigation).toBeVisible();
+    await expect(page.locator(".workspace-body")).toHaveAttribute("inert", "");
+    const close = navigation.locator(".sidebar-close");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(navigation.locator(".owner-profile")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeFocused();
+    await expect(navigation).toHaveAttribute("inert", "");
+    await menu.click();
+    await navigation.locator(".sidebar-search").click();
+    const palette = page.getByRole("dialog", {
+      name: "جست‌وجو و فرمان‌ها",
+      exact: true,
+    });
+    await expect(palette).toBeVisible();
+    await expect(navigation).toHaveAttribute("inert", "");
+    await expect(palette.locator("input")).toBeFocused();
+    const duration = await palette.evaluate((element) =>
+      Math.max(
+        ...getComputedStyle(element)
+          .animationDuration.split(",")
+          .map(parseFloat),
+      ),
+    );
+    expect(
+      duration,
+      "System reduced-motion disables the modal's entrance animation",
+    ).toBeLessThanOrEqual(0.001);
+    await page.keyboard.press("Escape");
+    await expect(palette).not.toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await expect(page.locator('.nav-selection[data-ready="true"]')).toHaveCount(
+      0,
+    );
+    await expect(page.locator('.sidebar a[aria-current="page"]')).toHaveCount(
+      1,
+    );
+  } finally {
+    const current = await readQuery<{ revision: number }>(
+      request,
+      "preferences_get",
+    );
+    await mutate(
+      request,
+      "preferences_update",
+      {
+        settings: {
+          accessibility: initial.settings.accessibility ?? {
+            reduced_motion: false,
+            high_contrast: false,
+            large_text: false,
+          },
+        },
+      },
+      current.revision,
+    );
+  }
+});
+
 test("all_main_views_have_synthetic_desktop_mobile_and_tablet_evidence", async ({
   page,
   request,
 }) => {
-  test.setTimeout(300000);
+  test.setTimeout(600000);
   const current = await readQuery<{
     settings: Record<string, unknown>;
     revision: number;
@@ -2669,9 +2778,13 @@ test("all_main_views_have_synthetic_desktop_mobile_and_tablet_evidence", async (
     all_day: true,
   });
   const views = [
+    ["", "امروز"],
+    ["tasks", "کارهای من"],
     ["projects", "پروژه‌ها"],
     ["calendar", "تقویم"],
+    ["routines", "روتین‌ها"],
     ["time", "ساعات کار"],
+    ["finances", "مدیریت مالی"],
     ["files", "فایل‌ها و منابع"],
     ["reports", "گزارش و مرور"],
     ["settings", "تنظیمات و اتصال‌ها"],
@@ -2683,12 +2796,30 @@ test("all_main_views_have_synthetic_desktop_mobile_and_tablet_evidence", async (
   ]) {
     await page.setViewportSize(viewport);
     for (const [route, heading] of views) {
+      // Ten views fan out into more reads than the old six-view matrix. Honor
+      // the unchanged server limits inside this long case as well as between cases.
+      await authIdleBoundary();
       await page.goto(`/${route}`);
       await expect(
         page.getByRole("heading", { name: heading, exact: true }),
       ).toBeVisible();
       await expect(page.locator("main .loading-state")).toHaveCount(0);
       await expect(page.locator("main [role=alert]")).toHaveCount(0);
+      await expect
+        .poll(() =>
+          page.evaluate(() => document.fonts.check('14px "Vazirmatn"')),
+        )
+        .toBeTruthy();
+      if (route === "tasks") {
+        const primaryTitle = page.locator(".task-title").first();
+        if (await primaryTitle.count())
+          expect(
+            await primaryTitle.evaluate((element) =>
+              parseFloat(getComputedStyle(element).fontSize),
+            ),
+            "Primary task titles must stay readable on mobile and tablet",
+          ).toBeGreaterThanOrEqual(13);
+      }
       if (route === "settings")
         await expect(
           page.getByRole("button", { name: "تازه‌سازی اتصال‌ها", exact: true }),
@@ -2798,6 +2929,7 @@ test("worklog_exact_edit_month_summary_json_preview_export_and_archive_are_canon
     ],
   };
   const input = page.locator(".time-transfer input[type=file]");
+  await page.locator(".work-tools-disclosure > summary").click();
   await input.setInputFiles({
     name: "synthetic-time.json",
     mimeType: "application/json",

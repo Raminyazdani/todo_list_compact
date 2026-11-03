@@ -10,7 +10,10 @@ export function PasswordSettings() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <section className="panel">
+    <section
+      className="panel lifeos-settings-card lifeos-password-settings"
+      id="settings-password"
+    >
       <SectionHeading
         title={t("تغییر رمز صاحب حساب", "Change owner password")}
       />

@@ -54,7 +54,7 @@ export function CalendarWorkspace({
     router.push(`/calendar?${next}`);
   }
   return (
-    <>
+    <div className="lifeos-planning-workspace">
       <div
         className="tabs calendar-workspace-tabs"
         role="tablist"
@@ -106,7 +106,7 @@ export function CalendarWorkspace({
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -136,6 +136,17 @@ function CalendarSources({ action }: { action: CalendarAction }) {
   }>("calendar_operation_status");
   const unresolved = (operations.data?.items ?? []).filter(
     (operation) => !["confirmed", "succeeded"].includes(operation.state),
+  );
+  const activeSources = (sources.data?.items ?? []).filter(
+    (source) => source.enabled,
+  );
+  const attentionSources = activeSources.filter(
+    (source) =>
+      source.status === "error" ||
+      source.status === "revoked" ||
+      !!source.last_error ||
+      source.fresh === false ||
+      source.coverage.complete !== true,
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -187,21 +198,36 @@ function CalendarSources({ action }: { action: CalendarAction }) {
       className="calendar-source-status"
       aria-label={t("همگام‌سازی تقویم", "Calendar synchronization")}
     >
-      <div className="form-actions">
-        <Button disabled={busy} onClick={() => void sync(true)}>
-          <RefreshCw size={15} className={busy ? "spin" : ""} />
-          {t("تازه‌سازی تقویم‌ها", "Refresh calendars")}
-        </Button>
-        <Button onClick={() => setConfigure(true)}>
-          {t("مدیریت منابع", "Manage sources")}
-        </Button>
-        <span className="small muted">
-          {t(
-            "هنگام استفاده، هر ۵ دقیقه و هنگام بازگشت",
-            "While active, every 5 minutes and on return",
-          )}
-        </span>
+      <div className="calendar-source-summary">
+        <div className="calendar-source-overview" role="status">
+          <strong>{t("منابع تقویم", "Calendar sources")}</strong>
+          <span className="small muted">
+            {busy
+              ? t("در حال تازه‌سازی…", "Refreshing…")
+              : sources.data
+                ? t(
+                    `${activeSources.length} منبع فعال`,
+                    `${activeSources.length} active sources`,
+                  )
+                : t("در حال بررسی منابع", "Checking sources")}
+          </span>
+        </div>
+        <div className="form-actions">
+          <Button disabled={busy} onClick={() => void sync(true)}>
+            <RefreshCw size={15} className={busy ? "spin" : ""} />
+            {t("تازه‌سازی تقویم‌ها", "Refresh calendars")}
+          </Button>
+          <Button onClick={() => setConfigure(true)}>
+            {t("مدیریت منابع", "Manage sources")}
+          </Button>
+        </div>
       </div>
+      <p className="calendar-source-cadence small muted">
+        {t(
+          "تازه‌سازی هنگام بازگشت و هر ۵ دقیقه در زمان استفاده",
+          "Refreshes on return and every 5 minutes while active",
+        )}
+      </p>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -222,49 +248,90 @@ function CalendarSources({ action }: { action: CalendarAction }) {
             </Link>
           </p>
         )}
-      <div className="calendar-source-chips">
-        {sources.data?.items
-          .filter((source) => source.enabled)
-          .map((source) => (
-            <span
-              className={`chip ${source.status === "error" || source.last_error || source.fresh === false ? "orange" : ""}`}
-              key={source.source_id}
-            >
-              {source.title} · {sourceStatusLabel(source.status, t)} ·{" "}
-              {source.last_success_at
-                ? t("آخرین دریافت موفق:", "Last successful sync:") +
-                  " " +
-                  new Date(source.last_success_at).toLocaleString(
-                    language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
-                    { timeZone: "Europe/Berlin" },
-                  )
-                : t("هنوز همگام نشده", "Not synced yet")}
-              {source.last_error &&
-                ` · ${sourceErrorLabel(source.last_error, t)}`}
-              {source.last_error === "SOURCE_CONFIG_UNREADABLE" && (
-                <>
-                  {" "}
-                  <button
-                    type="button"
-                    className="text-link"
-                    onClick={() => setConfigure(true)}
-                  >
-                    {t("بازکردن مدیریت منابع", "Open Manage sources")}
-                  </button>
-                </>
-              )}
-              {source.fresh === false &&
-                !source.last_error &&
-                ` · ${t("این داده برای محاسبهٔ کامل تداخل تازه نیست؛ تازه‌سازی کن.", "This data is not fresh enough for complete conflict coverage; refresh it.")}`}
-              {source.next_attempt_at &&
-                !Number.isNaN(Date.parse(source.next_attempt_at)) &&
-                ` · ${t("امکان تلاش دوباره از این زمان، هنگام استفاده از برنامه:", "Retry allowed after this time while the app is open:")} ${new Date(source.next_attempt_at).toLocaleString(language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB", { timeZone: "Europe/Berlin" })}`}
-              {source.enabled &&
-                source.coverage.complete !== true &&
-                ` · ${t("پوشش ناقص", "Incomplete coverage")}`}
-            </span>
+      {attentionSources.length > 0 && (
+        <ul
+          className="calendar-source-attention"
+          aria-label={t("منابع نیازمند بررسی", "Sources needing attention")}
+        >
+          {attentionSources.map((source) => (
+            <li key={source.source_id}>
+              <strong>{source.title}</strong>
+              {" · "}
+              {source.last_error
+                ? sourceErrorLabel(source.last_error, t)
+                : source.status === "revoked"
+                  ? t(
+                      "دسترسی قطع شده؛ در تنظیمات دوباره وصل کن.",
+                      "Access removed; reconnect in Settings.",
+                    )
+                  : source.status === "error"
+                    ? t(
+                        "آخرین دریافت ناموفق بود؛ جزئیات و زمان تلاش دوباره را بررسی کن.",
+                        "The last sync failed; check its details and retry time.",
+                      )
+                    : source.fresh === false
+                      ? t(
+                          "داده قدیمی است؛ برای پوشش کامل تداخل تازه‌سازی کن.",
+                          "Cached data is stale; refresh for complete conflict coverage.",
+                        )
+                      : source.coverage.complete !== true
+                        ? t(
+                            "پوشش رویدادها هنوز کامل نیست.",
+                            "Event coverage is not complete yet.",
+                          )
+                        : sourceStatusLabel(source.status, t)}
+            </li>
           ))}
-      </div>
+        </ul>
+      )}
+      <details className="calendar-source-details">
+        <summary>
+          {t("وضعیت و آخرین دریافت هر منبع", "Per-source status and last sync")}
+        </summary>
+        <div className="calendar-source-chips">
+          {sources.data?.items
+            .filter((source) => source.enabled)
+            .map((source) => (
+              <span
+                className={`chip ${source.status === "error" || source.last_error || source.fresh === false ? "orange" : ""}`}
+                key={source.source_id}
+              >
+                {source.title} · {sourceStatusLabel(source.status, t)} ·{" "}
+                {source.last_success_at
+                  ? t("آخرین دریافت موفق:", "Last successful sync:") +
+                    " " +
+                    new Date(source.last_success_at).toLocaleString(
+                      language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB",
+                      { timeZone: "Europe/Berlin" },
+                    )
+                  : t("هنوز همگام نشده", "Not synced yet")}
+                {source.last_error &&
+                  ` · ${sourceErrorLabel(source.last_error, t)}`}
+                {source.last_error === "SOURCE_CONFIG_UNREADABLE" && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={() => setConfigure(true)}
+                    >
+                      {t("بازکردن مدیریت منابع", "Open Manage sources")}
+                    </button>
+                  </>
+                )}
+                {source.fresh === false &&
+                  !source.last_error &&
+                  ` · ${t("این داده برای محاسبهٔ کامل تداخل تازه نیست؛ تازه‌سازی کن.", "This data is not fresh enough for complete conflict coverage; refresh it.")}`}
+                {source.next_attempt_at &&
+                  !Number.isNaN(Date.parse(source.next_attempt_at)) &&
+                  ` · ${t("امکان تلاش دوباره از این زمان، هنگام استفاده از برنامه:", "Retry allowed after this time while the app is open:")} ${new Date(source.next_attempt_at).toLocaleString(language === "fa" ? "fa-IR-u-ca-gregory" : "en-GB", { timeZone: "Europe/Berlin" })}`}
+                {source.enabled &&
+                  source.coverage.complete !== true &&
+                  ` · ${t("پوشش ناقص", "Incomplete coverage")}`}
+              </span>
+            ))}
+        </div>
+      </details>
       {!!unresolved.length && (
         <details className="calendar-pending-operations">
           <summary>

@@ -1,0 +1,758 @@
+/* Quiet Control: task, calendar and work surfaces. Never transform time-grid ancestors. */
+.lifeos-planning-tasks,
+.lifeos-planning-workspace {
+  min-inline-size: 0;
+}
+
+.lifeos-planning-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+}
+
+.lifeos-planning-work {
+  display: contents;
+}
+
+.lifeos-planning-workspace .page-heading {
+  margin-block-end: 0;
+}
+
+.lifeos-planning-workspace > .calendar-workspace-tabs {
+  align-self: flex-start;
+  margin: 0;
+}
+
+.calendar-source-status {
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel, 16px);
+  background: var(--surface);
+}
+
+.calendar-source-summary,
+.calendar-source-overview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+}
+
+.calendar-source-summary {
+  justify-content: space-between;
+}
+
+.calendar-source-summary .form-actions {
+  margin: 0;
+  gap: var(--space-2, 8px);
+}
+
+.calendar-source-overview strong {
+  font-size: var(--type-ui, 13px);
+}
+
+.calendar-source-cadence {
+  margin: var(--space-1, 4px) 0;
+  line-height: 1.7;
+}
+
+.calendar-source-attention {
+  display: grid;
+  gap: var(--space-1, 4px);
+  margin: var(--space-2, 8px) 0;
+  padding-inline-start: var(--space-4, 16px);
+  color: var(--orange);
+  font-size: var(--type-meta, 12px);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.calendar-source-attention strong {
+  font-weight: 600;
+}
+
+.calendar-source-details > summary,
+.work-tools-disclosure > summary,
+.work-source-warning > summary {
+  padding-block: var(--space-2, 8px);
+  min-block-size: 36px;
+  cursor: pointer;
+  font-size: var(--type-meta, 12px);
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.calendar-source-details > summary {
+  color: var(--accent);
+}
+
+.calendar-source-details[open] > summary {
+  margin-block-end: var(--space-2, 8px);
+}
+
+.calendar-source-details .calendar-source-chips {
+  display: grid;
+  gap: var(--space-2, 8px);
+}
+
+.calendar-source-chips > .chip {
+  display: block;
+  padding: var(--space-3, 12px);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+  font-size: var(--type-meta, 12px);
+  line-height: 1.85;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.calendar-source-chips > .chip.orange {
+  color: var(--orange);
+}
+
+.calendar-source-details summary:focus-visible,
+.work-tools-disclosure summary:focus-visible,
+.work-source-warning summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.lifeos-planning-workspace .calendar-toolbar {
+  margin: 0;
+  gap: var(--space-3, 12px);
+  align-items: center;
+}
+
+.lifeos-planning-workspace .calendar-navigation {
+  gap: var(--space-2, 8px);
+}
+
+.lifeos-planning-workspace
+  .calendar-navigation
+  input:is([type="month"], [type="date"]) {
+  inline-size: 176px;
+  min-inline-size: 160px;
+  max-inline-size: 100%;
+  flex: 0 0 auto;
+  padding-inline: var(--space-3, 12px);
+  font-size: var(--type-ui, 13px);
+  font-variant-numeric: tabular-nums;
+  text-align: start;
+}
+
+.lifeos-planning-workspace
+  input:is([type="month"], [type="date"])::-webkit-date-and-time-value {
+  text-align: start;
+}
+
+.lifeos-planning-workspace
+  input:is([type="month"], [type="date"])::-webkit-datetime-edit {
+  padding: 0;
+  overflow: visible;
+}
+
+.lifeos-planning-workspace .calendar-layers {
+  gap: var(--space-3, 12px) var(--space-4, 16px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: var(--type-meta, 12px);
+}
+
+.lifeos-planning-workspace .calendar-layers .field {
+  min-inline-size: 145px;
+}
+
+.lifeos-planning-workspace .calendar-layers > label {
+  min-block-size: 36px;
+}
+
+.lifeos-planning-work .metric-grid {
+  gap: var(--space-3, 12px);
+  margin: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.lifeos-planning-work .metric-card {
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  min-inline-size: 0;
+}
+
+.lifeos-planning-work .metric-card strong {
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lifeos-planning-work .metric-card :is(span, small) {
+  font-size: var(--type-meta, 12px);
+  line-height: 1.65;
+}
+
+.work-source-warning {
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  margin: 0;
+}
+
+.work-source-warning > summary {
+  padding: 0;
+  min-block-size: 28px;
+  align-content: center;
+}
+
+.work-source-warning[open] > summary {
+  margin-block-end: var(--space-3, 12px);
+}
+
+.work-source-warning-summary {
+  display: block;
+  padding-inline-start: var(--space-4, 16px);
+  font-size: var(--type-meta, 12px);
+  font-weight: 400;
+  line-height: 1.8;
+}
+
+.work-grid-help {
+  margin-block: 0 var(--space-3, 12px);
+}
+
+.work-grid-help > summary {
+  padding-block: var(--space-2, 8px);
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--type-meta, 12px);
+  line-height: 1.7;
+}
+
+.work-grid-help > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.work-grid-help p {
+  font-size: var(--type-meta, 12px);
+  line-height: 1.8;
+}
+
+.work-tools-disclosure {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  background: var(--surface);
+}
+
+.work-tools-disclosure > summary {
+  color: var(--ink);
+}
+
+.work-month-panel,
+.work-entries-panel,
+.contract-hours-panel {
+  margin: 0;
+}
+
+.work-month-panel > :is(h2, .section-heading),
+.work-entries-panel > h2,
+.contract-hours-heading h2 {
+  font-size: 17px;
+  line-height: 1.6;
+  margin-block-end: var(--space-2, 8px);
+}
+
+.work-month-panel > p,
+.work-entries-panel > p {
+  margin-block: 0 var(--space-3, 12px);
+  font-size: var(--type-meta, 12px);
+  line-height: 1.8;
+}
+
+.work-month-ruler > div > span,
+.work-month-date small {
+  font-size: var(--type-tiny, 11px);
+}
+
+.work-month-date strong {
+  font-size: var(--type-meta, 12px);
+}
+
+.work-inline-table :is(th, input, select, textarea),
+.work-row-status,
+.work-inline-table td > small {
+  font-size: var(--type-meta, 12px);
+  line-height: 1.7;
+}
+
+.contract-limit-grid {
+  gap: var(--space-3, 12px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-block-start: var(--space-2, 8px);
+}
+
+.lifeos-planning-work .contract-hours-panel {
+  padding: var(--space-4, 16px);
+}
+
+.lifeos-planning-work .contract-hours-heading {
+  align-items: center;
+  gap: var(--space-2, 8px) var(--space-4, 16px);
+}
+
+.lifeos-planning-work .contract-hours-heading h2 {
+  margin-block-end: var(--space-1, 4px);
+  font-size: 16px;
+}
+
+.lifeos-planning-work .contract-hours-heading p {
+  margin: 0;
+}
+
+.lifeos-planning-work .contract-week-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-inline-size: 0;
+  min-width: 0;
+}
+
+.lifeos-planning-work .contract-week-select select {
+  inline-size: 230px;
+  max-inline-size: 100%;
+}
+
+.contract-limit-card {
+  padding: var(--space-3, 12px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1, 4px) var(--space-2, 8px);
+  border-radius: 12px;
+  background: var(--raised);
+}
+
+.contract-limit-card > :is(.small, small, .contract-limit-result) {
+  grid-column: 1 / -1;
+}
+
+.contract-limit-value {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.contract-limit-card :is(small, .small),
+.contract-limit-result {
+  font-size: var(--type-meta, 12px);
+  line-height: 1.75;
+}
+
+.lifeos-planning-tasks > .view-bar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3, 12px);
+  margin-block-end: var(--space-3, 12px);
+}
+
+.task-view-switcher {
+  display: flex;
+  gap: var(--space-1, 4px);
+  padding: var(--space-1, 4px);
+  max-inline-size: 100%;
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.task-view-switcher button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2, 8px);
+  inline-size: auto;
+  min-inline-size: max-content;
+  min-block-size: var(--control-height, 38px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: 7px;
+  font-size: var(--type-meta, 12px);
+}
+
+.task-view-switcher button.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.task-view-switcher svg {
+  flex-shrink: 0;
+}
+
+.lifeos-planning-tasks > .filter-bar {
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.lifeos-planning-tasks > .filter-bar > select {
+  flex: 1 1 150px;
+  inline-size: auto;
+  max-inline-size: 240px;
+  min-inline-size: 0;
+  font-size: var(--type-meta, 12px);
+}
+
+.lifeos-planning-tasks .filter-bar .search-box {
+  flex: 2 1 220px;
+  min-inline-size: 150px;
+}
+
+.lifeos-planning-tasks .task-title,
+.lifeos-planning-tasks .board-card > button,
+.lifeos-planning-tasks .gantt-row > button,
+.lifeos-planning-tasks .linear-graph-row > button {
+  font-size: var(--type-body, 14px);
+  line-height: 1.8;
+  letter-spacing: 0;
+}
+
+.lifeos-planning-tasks .task-title > span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.lifeos-planning-tasks .task-title small,
+.lifeos-planning-tasks
+  :is(.task-meta, .task-date, .task-workflow, .readiness, .board-card select) {
+  font-size: var(--type-meta, 12px);
+  line-height: 1.75;
+}
+
+.lifeos-planning-tasks .task-workflow {
+  inline-size: auto;
+  min-inline-size: 75px;
+}
+
+.lifeos-planning-tasks .task-row {
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  min-block-size: 64px;
+}
+
+.lifeos-planning-tasks .task-row.completed .task-title > span {
+  opacity: 0.85;
+}
+
+.lifeos-planning-tasks .board {
+  gap: var(--space-3, 12px);
+  grid-template-columns: repeat(6, minmax(230px, 1fr));
+  overscroll-behavior-inline: contain;
+}
+
+.lifeos-planning-tasks .board-column {
+  padding: var(--space-3, 12px);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.lifeos-planning-tasks .board-column > header {
+  font-size: var(--type-ui, 13px);
+  padding-block-end: var(--space-4, 16px);
+  color: var(--ink);
+}
+
+.lifeos-planning-tasks .board-column > header b {
+  font: inherit;
+  font-size: var(--type-meta, 12px);
+  font-variant-numeric: tabular-nums;
+}
+
+.lifeos-planning-tasks .board-card {
+  padding: var(--space-4, 16px);
+  box-shadow: none;
+}
+
+.tree-toolbar {
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  gap: var(--space-3, 12px);
+}
+
+.tree-toolbar-actions {
+  display: flex;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+}
+
+.task-tree-branch:not([data-depth="0"]) {
+  border-inline-start: 1px solid var(--line);
+}
+
+.lifeos-planning-tasks .tree-branch-summary {
+  padding-inline-start: 52px;
+  font-size: var(--type-meta, 12px);
+}
+
+.lifeos-planning-tasks .graph-section {
+  --planning-graph-mask: color-mix(in srgb, var(--surface) 65%, transparent);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.lifeos-planning-tasks .graph-section > .section-heading {
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px);
+  font-size: var(--type-meta, 12px);
+}
+
+.lifeos-planning-tasks .graph-label {
+  font-size: var(--type-body, 14px);
+  line-height: 1.65;
+  gap: var(--space-2, 8px);
+}
+
+.lifeos-planning-tasks .graph-label > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lifeos-planning-tasks .linear-graph-row {
+  font-size: var(--type-ui, 13px);
+}
+
+.lifeos-planning-tasks .linear-graph-row > div {
+  flex-wrap: wrap;
+}
+
+.lifeos-planning-tasks .timeline-range {
+  font-size: var(--type-meta, 12px);
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+}
+
+.lifeos-planning-tasks .gantt-row {
+  gap: var(--space-4, 16px);
+  grid-template-columns: minmax(160px, 240px) minmax(160px, 1fr);
+  padding-block: var(--space-3, 12px);
+}
+
+.lifeos-planning-workspace
+  :is(.calendar-event, .holiday-label, .agenda-row, .week-day-head) {
+  font-size: var(--type-meta, 12px);
+}
+
+.lifeos-planning-workspace .calendar-event {
+  line-height: 1.6;
+}
+
+.lifeos-planning-workspace .month-cell {
+  min-inline-size: 0;
+}
+
+.lifeos-planning-workspace .day-number {
+  font-size: var(--type-ui, 13px);
+}
+
+@media (max-width: 900px) {
+  .lifeos-planning-tasks > .view-bar {
+    align-items: stretch;
+  }
+  .task-view-switcher {
+    inline-size: 100%;
+  }
+  .task-view-switcher button {
+    flex: 1 0 auto;
+  }
+  .lifeos-planning-work .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .lifeos-planning-workspace {
+    gap: var(--space-3, 12px);
+  }
+  .calendar-source-status {
+    padding: var(--space-3, 12px);
+  }
+  .calendar-source-summary,
+  .calendar-source-summary .form-actions {
+    inline-size: 100%;
+  }
+  .calendar-source-summary .button {
+    flex: 1 1 auto;
+  }
+  .calendar-source-details > summary,
+  .work-tools-disclosure > summary,
+  .work-source-warning > summary {
+    min-block-size: 44px;
+    align-content: center;
+  }
+  .lifeos-planning-workspace .calendar-toolbar {
+    align-items: stretch;
+  }
+  .lifeos-planning-workspace .calendar-navigation {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    inline-size: 100%;
+    gap: var(--space-2, 8px);
+  }
+  .lifeos-planning-workspace
+    .calendar-navigation
+    input:is([type="month"], [type="date"]) {
+    inline-size: 100%;
+    min-inline-size: 0;
+    padding-inline: var(--space-2, 8px);
+    min-block-size: 44px;
+  }
+  .lifeos-planning-work .calendar-navigation > .button:last-child {
+    grid-column: 1 / -1;
+  }
+  .calendar-view-toolbar .calendar-navigation h2 {
+    grid-column: 1 / 3;
+    grid-row: 1;
+    font-size: 19px;
+    min-inline-size: 0;
+    white-space: normal;
+  }
+  .calendar-view-toolbar .calendar-navigation > .button:last-child {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .calendar-view-toolbar .calendar-navigation > .button:first-child {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .calendar-view-toolbar .calendar-navigation > input {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .calendar-view-toolbar .calendar-navigation > .button:nth-last-child(2) {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .lifeos-planning-workspace .calendar-toolbar > .form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2, 8px);
+    margin: 0;
+  }
+  .lifeos-planning-workspace .calendar-toolbar > .form-actions > * {
+    flex: 1 1 auto;
+  }
+  .lifeos-planning-workspace .calendar-layers {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: var(--space-3, 12px);
+    gap: var(--space-2, 8px);
+  }
+  .lifeos-planning-workspace .calendar-layers .field {
+    min-inline-size: 0;
+  }
+  .lifeos-planning-workspace .calendar-layers select {
+    inline-size: 100%;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    font-size: var(--type-meta, 12px);
+  }
+  .lifeos-planning-workspace .calendar-layers > label {
+    min-block-size: 44px;
+    font-size: var(--type-meta, 12px);
+  }
+  .lifeos-planning-work .metric-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-1, 4px) var(--space-2, 8px);
+    padding: var(--space-3, 12px);
+  }
+  .lifeos-planning-work .metric-card strong {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 21px;
+    line-height: 1.4;
+  }
+  .lifeos-planning-work .metric-card small {
+    grid-column: 1 / -1;
+  }
+  .lifeos-planning-tasks > .filter-bar > select {
+    flex-basis: 44%;
+    max-inline-size: none;
+  }
+  .lifeos-planning-tasks .filter-bar .search-box {
+    flex-basis: 100%;
+  }
+  .lifeos-planning-tasks .task-row {
+    padding-inline: var(--space-3, 12px);
+  }
+  .task-tree-branch:not([data-depth="0"]) {
+    margin-inline-start: 8px !important;
+  }
+  .lifeos-planning-tasks .tree-row > .icon-button,
+  .lifeos-planning-tasks .tree-toggle-spacer {
+    flex-basis: 36px;
+  }
+  .tree-toolbar-actions {
+    inline-size: 100%;
+  }
+  .tree-toolbar-actions .button {
+    flex: 1 1 auto;
+  }
+  .lifeos-planning-tasks .board {
+    grid-template-columns: repeat(6, minmax(250px, 82vw));
+  }
+  .lifeos-planning-tasks .gantt-row {
+    grid-template-columns: minmax(110px, 40%) minmax(0, 1fr);
+    gap: var(--space-3, 12px);
+  }
+  .lifeos-planning-tasks .graph-canvas {
+    block-size: 440px;
+  }
+  .lifeos-planning-tasks .graph-section > .section-heading {
+    flex-wrap: wrap;
+  }
+  .contract-hours-heading {
+    align-items: stretch;
+  }
+  .contract-week-select,
+  .contract-week-select select {
+    min-inline-size: 0;
+    inline-size: 100%;
+  }
+  .lifeos-planning-work .contract-week-select select {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+  .contract-limit-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-3, 12px);
+  }
+  .contract-limit-value {
+    font-size: 20px;
+  }
+}
+
+@media (pointer: coarse) {
+  .lifeos-planning-workspace
+    .calendar-navigation
+    input:is([type="month"], [type="date"]),
+  .lifeos-planning-workspace
+    :is(
+      input:not([type="checkbox"], [type="radio"], [type="range"]),
+      select,
+      textarea
+    ),
+  .lifeos-planning-tasks
+    :is(
+      input:not([type="checkbox"], [type="radio"], [type="range"]),
+      select,
+      textarea
+    ) {
+    font-size: max(16px, var(--type-body, 14px));
+  }
+  .work-grid-help > summary {
+    min-block-size: 44px;
+    align-content: center;
+  }
+}

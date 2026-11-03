@@ -416,7 +416,7 @@ export function Dashboard({
   const [capture, setCapture] = useState("");
   const now = new Date();
   return (
-    <>
+    <div className="lifeos-section-screen lifeos-dashboard">
       <div className="page-heading">
         <div>
           <div className="eyebrow">
@@ -430,11 +430,11 @@ export function Dashboard({
               },
             ).format(now)}
           </div>
-          <h1>{t("امروز را روشن شروع کن.", "Make room for what matters.")}</h1>
+          <h1>{t("امروز", "Today")}</h1>
           <p>
             {t(
-              "یک نگاه به روزت، یک قدم به جلو.",
-              "A view of your day. A clear next step.",
+              "تمرکزت را انتخاب کن؛ برنامه و پیگیری‌های روزت اینجاست.",
+              "Choose your focus, then review your schedule and follow-ups.",
             )}
           </p>
         </div>
@@ -477,12 +477,14 @@ export function Dashboard({
           <ArrowUpRight size={16} />
         </Button>
       </form>
-      <DailyFocus
-        date={instantToLocalDate(calendarFrom, "Europe/Berlin")}
-        action={action}
-        onOpen={onOpen}
-      />
-      <InboxReview action={action} onOpen={onOpen} />
+      <div className="lifeos-today-priorities">
+        <DailyFocus
+          date={instantToLocalDate(calendarFrom, "Europe/Berlin")}
+          action={action}
+          onOpen={onOpen}
+        />
+        <InboxReview action={action} onOpen={onOpen} />
+      </div>
       <form
         className="filter-bar"
         onSubmit={async (event) => {
@@ -1144,7 +1146,7 @@ export function Dashboard({
           )}
         </p>
       </Modal>
-    </>
+    </div>
   );
 }
 function ChevronIcon() {
@@ -1197,14 +1199,14 @@ export function Projects({
   onOpen: (id: string) => void;
 }) {
   return (
-    <>
+    <div className="lifeos-section-screen lifeos-projects">
       <ProjectWorkspace
         action={action}
         onOpen={onOpen}
         knowledge={(id) => <ProjectKnowledge projectId={id} action={action} />}
       />
       <Templates action={action} />
-    </>
+    </div>
   );
 }
 
@@ -1588,7 +1590,11 @@ export function Files({
   action: Action;
   onOpen: (id: string) => void;
 }) {
-  return <FileWorkspace action={action} onOpen={onOpen} />;
+  return (
+    <div className="lifeos-section-screen lifeos-files">
+      <FileWorkspace action={action} onOpen={onOpen} />
+    </div>
+  );
 }
 
 interface AIPlan {
@@ -1817,7 +1823,11 @@ function InAppAssistant() {
 }
 
 export function Reports() {
-  return <FullReports />;
+  return (
+    <div className="lifeos-section-screen lifeos-reports">
+      <FullReports />
+    </div>
+  );
 }
 
 export function Settings({
@@ -1882,7 +1892,7 @@ export function Settings({
     }
   }
   return (
-    <>
+    <div className="lifeos-section-screen lifeos-settings">
       <div className="page-heading">
         <div>
           <div className="eyebrow">
@@ -1891,8 +1901,29 @@ export function Settings({
           <h1>{t("تنظیمات و اتصال‌ها", "Settings & connections")}</h1>
         </div>
       </div>
+      <nav
+        className="lifeos-settings-index"
+        aria-label={t("بخش‌های تنظیمات", "Settings sections")}
+      >
+        <a href="#settings-appearance">{t("ظاهر و زبان", "Appearance")}</a>
+        <a href="#settings-experience">
+          {t("خوانایی و دسترسی", "Accessibility")}
+        </a>
+        <a href="#settings-security">{t("امنیت حساب", "Account security")}</a>
+        <a href="#settings-google">{t("تقویم Google", "Google Calendar")}</a>
+        <a href="#settings-connections">
+          {t("ابزارهای متصل", "Connected tools")}
+        </a>
+        <a href="#settings-backup">{t("پشتیبان", "Backup")}</a>
+      </nav>
+      <div className="lifeos-section-divider">
+        <h2>{t("فضای کار و حساب", "Workspace & account")}</h2>
+      </div>
       <div className="settings-grid">
-        <section className="panel">
+        <section
+          className="panel lifeos-settings-card"
+          id="settings-appearance"
+        >
           <SectionHeading title={t("ظاهر و زبان", "Appearance & language")} />
           <Field label={t("زبان", "Language")}>
             <select
@@ -1928,7 +1959,7 @@ export function Settings({
           </Field>
           <p className="muted small">Europe/Berlin · Ctrl/Cmd + K · N · /</p>
         </section>
-        <section className="panel">
+        <section className="panel lifeos-settings-card" id="settings-security">
           <SectionHeading title={t("ورود امن", "Secure sign-in")} />
           <div className="connection-card">
             <LockKeyhole size={22} />
@@ -1970,7 +2001,7 @@ export function Settings({
             {t("خروج از حساب", "Sign out")}
           </Button>
         </section>
-        <section className="panel">
+        <section className="panel lifeos-settings-card" id="settings-backup">
           <SectionHeading title={t("نسخهٔ پشتیبان", "Your backup")} />
           <p>
             {t(
@@ -1989,7 +2020,7 @@ export function Settings({
             )}
           </p>
         </section>
-        <section className="panel" id="mcp-connection">
+        <section className="panel lifeos-settings-card" id="mcp-connection">
           <SectionHeading
             title={t("اتصال Codex از طریق MCP", "Connect Codex through MCP")}
           />
@@ -2015,7 +2046,10 @@ export function Settings({
             </Link>
           )}
         </section>
-        <section className="panel">
+        <section
+          className="panel lifeos-settings-card lifeos-settings-google"
+          id="settings-google"
+        >
           <SectionHeading
             title={t(
               "Google Calendar؛ همگام‌سازی دوطرفه",
@@ -2121,6 +2155,11 @@ export function Settings({
           )}
         </section>
       </div>
+      <div className="lifeos-section-divider">
+        <h2>
+          {t("دسترسی، دستگاه و خوانایی", "Access, devices & readability")}
+        </h2>
+      </div>
       <Connections />
       <InstallAppCard fa={language === "fa"} />
       <PasswordSettings />
@@ -2130,7 +2169,10 @@ export function Settings({
         pending={preferences.fetching || !!preferences.error}
         action={action}
       />
-      <section className="panel">
+      <div className="lifeos-section-divider">
+        <h2>{t("نگهداری و پیگیری", "Maintenance & follow-up")}</h2>
+      </div>
+      <section className="panel lifeos-system-status">
         <SectionHeading
           title={t("وضعیت سیستم و منابع", "System & source status")}
         />
@@ -2328,6 +2370,6 @@ export function Settings({
           {message}
         </p>
       )}
-    </>
+    </div>
   );
 }

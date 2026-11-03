@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -9,7 +15,6 @@ import {
   Bell,
   CalendarDays,
   Check,
-  ChevronDown,
   Command,
   FileText,
   Folder,
@@ -51,6 +56,16 @@ import {
   Settings,
 } from "@/features/modules";
 import { Button, Field, Modal, QueryState, ToastPortal } from "./ui";
+import { NavigationIndicator, WorkspaceMotion } from "./motion";
+
+function subscribeToCompactNavigation(notify: () => void) {
+  const media = window.matchMedia("(max-width: 720px)");
+  media.addEventListener("change", notify);
+  return () => media.removeEventListener("change", notify);
+}
+function compactNavigation() {
+  return window.matchMedia("(max-width: 720px)").matches;
+}
 
 const navigation = [
   { path: "/", fa: "امروز", en: "Today", icon: LayoutDashboard },
@@ -115,7 +130,27 @@ export default function Workspace() {
     document.documentElement.dataset.reduceMotion = String(
       accessibility?.reduced_motion === true,
     );
-  }, [preferences.data?.settings]);
+    document.documentElement.dataset.motionReady = String(!!preferences.data);
+  }, [preferences.data]);
+  useEffect(() => {
+    const keyboard = () => {
+      const root = document.documentElement;
+      if (root.dataset.inputMethod !== "keyboard")
+        root.dataset.inputMethod = "keyboard";
+    };
+    const pointer = () => {
+      const root = document.documentElement;
+      if (root.dataset.inputMethod !== "pointer")
+        root.dataset.inputMethod = "pointer";
+    };
+    window.addEventListener("keydown", keyboard, true);
+    window.addEventListener("pointerdown", pointer, true);
+    return () => {
+      window.removeEventListener("keydown", keyboard, true);
+      window.removeEventListener("pointerdown", pointer, true);
+      document.documentElement.dataset.motionReady = "false";
+    };
+  }, []);
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const update = () => {
@@ -128,13 +163,15 @@ export default function Workspace() {
   }, [theme]);
   return (
     <LocaleContext.Provider value={language}>
-      <WorkspaceContent
-        language={language}
-        setLanguage={setLanguage}
-        theme={theme}
-        setTheme={setTheme}
-        connected={!!preferences.data && !preferences.error}
-      />
+      <WorkspaceMotion>
+        <WorkspaceContent
+          language={language}
+          setLanguage={setLanguage}
+          theme={theme}
+          setTheme={setTheme}
+          connected={!!preferences.data && !preferences.error}
+        />
+      </WorkspaceMotion>
     </LocaleContext.Provider>
   );
 }
@@ -157,6 +194,51 @@ function WorkspaceContent({
   const router = useRouter();
   const routeParams = useSearchParams();
   const [mobile, setMobile] = useState(false);
+  const compact = useSyncExternalStore(
+    subscribeToCompactNavigation,
+    compactNavigation,
+    () => false,
+  );
+  const navigationRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!compact || !mobile) return;
+    const navigation = navigationRef.current;
+    if (!navigation) return;
+    const menuOpener = menuButtonRef.current;
+    const previous = menuOpener ?? document.activeElement;
+    const controls = () =>
+      [
+        ...navigation.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),[tabindex="0"]',
+        ),
+      ].filter((element) => element.getClientRects().length > 0);
+    controls()[0]?.focus();
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const items = controls();
+      const first = items[0];
+      const last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    navigation.addEventListener("keydown", trap);
+    return () => {
+      navigation.removeEventListener("keydown", trap);
+      const replacingDialog = document.querySelector(
+        '[role="dialog"][data-state="open"]:not([aria-hidden="true"])',
+      );
+      if (replacingDialog && replacingDialog !== navigation) return;
+      if (previous instanceof HTMLElement && previous.isConnected)
+        previous.focus();
+      else menuOpener?.focus();
+    };
+  }, [compact, mobile]);
   const [capture, setCapture] = useState(false);
   const linkedTaskId = routeParams.get("task");
   const [taskChoice, setTaskChoice] = useState<{
@@ -289,7 +371,10 @@ function WorkspaceContent({
     const error = (event: Event) =>
       showToast(String((event as CustomEvent).detail), true);
     const inspect = (event: Event) => setPreview((event as CustomEvent).detail);
-    const captureHandler = () => setCapture(true);
+    const captureHandler = () => {
+      setMobile(false);
+      setCapture(true);
+    };
     window.addEventListener("lifeos:error", error);
     window.addEventListener("lifeos:preview", inspect);
     window.addEventListener("lifeos:capture", captureHandler);
@@ -307,12 +392,15 @@ function WorkspaceContent({
         target.isContentEditable;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        setMobile(false);
         setCommandOpen((value) => !value);
       } else if (!editing && event.key.toLowerCase() === "n") {
         event.preventDefault();
+        setMobile(false);
         setCapture(true);
       } else if (!editing && event.key === "/") {
         event.preventDefault();
+        setMobile(false);
         setCommandOpen(true);
       } else if (event.key === "Escape") setMobile(false);
     };
@@ -330,16 +418,32 @@ function WorkspaceContent({
         <a href="#workspace-main" className="skip-link">
           {t("رفتن به محتوا", "Skip to content")}
         </a>
-        {mobile && (
+        {compact && mobile && (
           <button
             className="mobile-backdrop"
             aria-label={t("بستن منو", "Close menu")}
             onClick={() => setMobile(false)}
           />
         )}
-        <aside className={`sidebar ${mobile ? "mobile-open" : ""}`}>
+        <aside
+          ref={navigationRef}
+          id="workspace-navigation"
+          className={`sidebar ${mobile ? "mobile-open" : ""}`}
+          inert={compact && !mobile}
+          aria-hidden={compact && !mobile ? true : undefined}
+          role={compact ? "dialog" : undefined}
+          aria-modal={compact && mobile ? true : undefined}
+          aria-label={t("ناوبری فضای شخصی", "Personal workspace navigation")}
+        >
+          <button
+            className="icon-button sidebar-close"
+            onClick={() => setMobile(false)}
+            aria-label={t("بستن فهرست ناوبری", "Close navigation menu")}
+          >
+            <X size={19} aria-hidden="true" />
+          </button>
           <Link href="/" className="brand">
-            <span className="brand-symbol">
+            <span className="brand-symbol" aria-hidden="true">
               r<span>o</span>
             </span>
             <div>
@@ -349,18 +453,30 @@ function WorkspaceContent({
           </Link>
           <button
             className="workspace-switcher"
-            onClick={() => setCommandOpen(true)}
+            onClick={() => {
+              setMobile(false);
+              setCommandOpen(true);
+            }}
+            aria-haspopup="dialog"
+            aria-label={t(
+              "جست‌وجو و فرمان‌ها در فضای شخصی",
+              "Search and commands in your personal workspace",
+            )}
           >
             <span className="workspace-avatar">R</span>
             <div>
               <strong>{t("فضای شخصی", "Personal workspace")}</strong>
               <small>{t("خصوصی · فقط تو", "Private · only you")}</small>
             </div>
-            <ChevronDown size={15} />
+            <Command size={15} aria-hidden="true" />
           </button>
           <button
             className="sidebar-search"
-            onClick={() => setCommandOpen(true)}
+            onClick={() => {
+              setMobile(false);
+              setCommandOpen(true);
+            }}
+            aria-haspopup="dialog"
           >
             <Search size={16} />
             {t("جست‌وجو در فضا", "Search workspace")}
@@ -368,11 +484,13 @@ function WorkspaceContent({
           </button>
           <div className="nav-label">{t("فضای من", "WORKSPACE")}</div>
           <nav aria-label={t("منوی اصلی", "Main navigation")}>
+            <NavigationIndicator selected={pathname} />
             {navigation.slice(0, 8).map((item) => (
               <Link
                 href={item.path}
                 key={item.path}
                 className={pathname === item.path ? "active" : ""}
+                aria-current={pathname === item.path ? "page" : undefined}
                 onClick={() => setMobile(false)}
               >
                 <item.icon size={18} />
@@ -384,12 +502,14 @@ function WorkspaceContent({
           <div className="nav-label second">
             {t("بینش و ابزار", "INSIGHT & TOOLS")}
           </div>
-          <nav>
+          <nav aria-label={t("ابزارها و تنظیمات", "Tools and settings")}>
+            <NavigationIndicator selected={pathname} />
             {navigation.slice(8).map((item) => (
               <Link
                 href={item.path}
                 key={item.path}
                 className={pathname === item.path ? "active" : ""}
+                aria-current={pathname === item.path ? "page" : undefined}
                 onClick={() => setMobile(false)}
               >
                 <item.icon size={18} />
@@ -425,13 +545,17 @@ function WorkspaceContent({
             </Link>
           </div>
         </aside>
-        <div className="workspace-body">
+        <div className="workspace-body" inert={compact && mobile}>
           <header className="topbar">
             <div className="topbar-breadcrumb">
               <button
+                ref={menuButtonRef}
                 className="icon-button mobile-menu"
                 onClick={() => setMobile(true)}
                 aria-label={t("بازکردن منو", "Open menu")}
+                aria-expanded={compact && mobile}
+                aria-controls="workspace-navigation"
+                data-dialog-focus-fallback="true"
               >
                 <Menu size={20} />
               </button>
@@ -476,7 +600,7 @@ function WorkspaceContent({
               <span className="topbar-avatar">R</span>
             </div>
           </header>
-          <main id="workspace-main" className="main-content">
+          <main id="workspace-main" className="main-content" tabIndex={-1}>
             {pathname === "/tasks" ? (
               <TaskExplorer
                 onOpen={setTaskId}
@@ -534,12 +658,14 @@ function WorkspaceContent({
         <nav
           className="mobile-bottom-nav"
           aria-label={t("پیمایش موبایل", "Mobile navigation")}
+          inert={compact && mobile}
         >
           {navigation.slice(0, 4).map((item) => (
             <Link
               key={item.path}
               href={item.path}
               className={pathname === item.path ? "active" : ""}
+              aria-current={pathname === item.path ? "page" : undefined}
             >
               <item.icon size={19} />
               <span>{language === "fa" ? item.fa : item.en}</span>

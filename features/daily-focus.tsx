@@ -178,7 +178,7 @@ export function DailyFocus({
     !!focus.data && !focus.fetching && !saving && !pendingSelection;
   return (
     <section
-      className="panel daily-focus"
+      className="panel daily-focus lifeos-focus-primary"
       aria-label={t("تمرکز امروز", "Today's focus")}
     >
       <div className="daily-focus-heading">

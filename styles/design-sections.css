@@ -1,0 +1,785 @@
+/* Working surfaces: the shared palette, type and motion tokens live in globals. */
+.lifeos-section-screen {
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--space-6, 24px);
+}
+.lifeos-section-screen > .page-heading,
+.lifeos-section-screen > .metric-grid,
+.lifeos-section-screen > .filter-bar,
+.lifeos-section-screen > .panel {
+  margin-block: 0;
+}
+.lifeos-section-screen > .page-heading h1 {
+  margin-block: 4px 8px;
+}
+.lifeos-section-screen > .page-heading p {
+  max-inline-size: 62ch;
+  color: var(--muted);
+  font-size: var(--type-body, 14px);
+  line-height: 1.8;
+}
+.lifeos-section-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-block-start: 8px;
+}
+.lifeos-section-divider::after {
+  content: "";
+  flex: 1;
+  border-block-start: 1px solid var(--line);
+}
+.lifeos-section-divider h2 {
+  margin: 0;
+  font-size: var(--type-body, 14px);
+  font-weight: 600;
+}
+.lifeos-section-count {
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: var(--type-meta, 12px);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Today: selected priorities remain visually ahead of the configurable widgets. */
+.lifeos-dashboard .quick-capture {
+  margin: 0;
+  border-color: var(--control-line, var(--line));
+  background: var(--surface);
+  box-shadow: none;
+}
+.lifeos-dashboard .quick-capture input {
+  font-size: var(--type-body, 14px);
+}
+.lifeos-today-priorities {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+.lifeos-today-priorities > .panel {
+  margin: 0;
+  min-inline-size: 0;
+}
+.lifeos-focus-primary {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+}
+[dir="rtl"] .lifeos-focus-primary {
+  box-shadow: inset -3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.lifeos-focus-primary .daily-focus-list {
+  gap: 0;
+  border-block: 1px solid var(--line);
+}
+.lifeos-focus-primary .daily-focus-list li {
+  border: 0;
+  border-block-end: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 14px 0;
+}
+.lifeos-focus-primary .daily-focus-list li:last-child {
+  border-block-end: 0;
+}
+.lifeos-focus-primary .daily-focus-number {
+  inline-size: 28px;
+  flex: none;
+  text-align: center;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.lifeos-focus-primary .daily-focus-task strong {
+  font-size: var(--type-body, 14px);
+  line-height: 1.8;
+}
+.lifeos-focus-primary .daily-focus-task small {
+  font-size: var(--type-meta, 12px);
+}
+.lifeos-focus-primary .daily-capacity {
+  padding-block-start: 20px;
+  margin-block-start: 20px;
+}
+.lifeos-inbox-review .inbox-review-heading,
+.lifeos-focus-primary .daily-focus-heading {
+  flex-wrap: wrap;
+}
+.lifeos-inbox-review .inbox-review-heading h2 {
+  font-size: 18px;
+  margin-block: 0 8px;
+}
+.lifeos-inbox-review .inbox-review-heading .button {
+  flex-shrink: 0;
+}
+.lifeos-inbox-review .inbox-review-body {
+  border-block-start: 1px solid var(--line);
+  padding-block-start: 16px;
+  margin-block-start: 16px;
+}
+.lifeos-dashboard > .filter-bar {
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 16px);
+  background: var(--surface);
+  align-items: end;
+}
+.lifeos-dashboard > .metric-grid {
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 16px);
+  overflow: hidden;
+}
+.lifeos-dashboard > .metric-grid .metric-card {
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  padding: 20px;
+  box-shadow: none;
+  transform: none;
+}
+.lifeos-dashboard .dashboard-grid {
+  gap: 20px;
+  align-items: start;
+}
+.lifeos-dashboard .priority-matrix > div {
+  background: transparent;
+  border-color: var(--line);
+  border-radius: 9px;
+  padding: 14px;
+}
+.lifeos-dashboard .priority-matrix .text-link {
+  font-size: var(--type-ui, 13px);
+  text-align: start;
+  line-height: 1.8;
+}
+.lifeos-dashboard .activity-list small,
+.lifeos-dashboard .peek-event small,
+.lifeos-dashboard .dashboard-grid .small {
+  font-size: var(--type-meta, 12px);
+}
+
+/* Finance: actual records first, aligned columns and local horizontal scrolling. */
+.lifeos-finances .finance-overview {
+  display: grid;
+  gap: 24px;
+  min-inline-size: 0;
+}
+.lifeos-finances .finance-toolbar,
+.lifeos-finances .finance-tabs {
+  margin: 0;
+}
+.lifeos-finances .finance-toolbar {
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 16px);
+  background: var(--surface);
+}
+.finance-ledger {
+  min-inline-size: 0;
+  margin: 0;
+}
+.finance-ledger > .section-heading {
+  align-items: start;
+}
+.finance-ledger-caption {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  color: var(--muted);
+  font-size: var(--type-meta, 12px);
+  margin-block: 8px 16px;
+}
+.finance-ledger-caption > :first-child {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.finance-ledger .finance-ledger-scroll {
+  position: relative;
+  display: block;
+  max-inline-size: 100%;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overscroll-behavior-inline: contain;
+}
+.finance-ledger-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.finance-ledger-table {
+  inline-size: 100%;
+  min-inline-size: 960px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--type-ui, 13px);
+  line-height: 1.8;
+}
+.finance-ledger-table th,
+.finance-ledger-table td {
+  padding: 14px 12px;
+  text-align: start;
+  vertical-align: top;
+  border: 0;
+  border-block-end: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.finance-ledger-table thead th {
+  background: var(--raised);
+  color: var(--muted);
+  font-size: var(--type-meta, 12px);
+  font-weight: 500;
+  padding-block: 12px;
+}
+.finance-ledger-table th:first-child {
+  inline-size: 28%;
+}
+.finance-ledger-table th:nth-child(2) {
+  inline-size: 13%;
+}
+.finance-ledger-table th:nth-child(3) {
+  inline-size: 17%;
+}
+.finance-ledger-table th:nth-child(4) {
+  inline-size: 13%;
+}
+.finance-ledger-table th:nth-child(5) {
+  inline-size: 19%;
+}
+.finance-ledger-table th:nth-child(6) {
+  inline-size: 10%;
+}
+.finance-ledger-table .finance-itemized-row {
+  padding: 0;
+  border: 0;
+}
+.finance-ledger-table tbody tr:last-child > * {
+  border-block-end: 0;
+}
+.finance-ledger-table .finance-ledger-identity {
+  font-weight: 400;
+  background: var(--surface);
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  border-inline-end: 1px solid var(--line);
+}
+.finance-ledger-table thead th:first-child {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+}
+.finance-ledger .finance-itemized-heading {
+  display: block;
+}
+.finance-ledger .finance-itemized-heading h3 {
+  font-size: var(--type-body, 14px);
+  line-height: 1.8;
+  margin-block: 0 6px;
+}
+.finance-ledger .finance-itemized-tags {
+  display: inline-flex;
+  gap: 4px 8px;
+  font-size: var(--type-meta, 12px);
+  line-height: 1.7;
+}
+.finance-ledger .finance-pill {
+  font-size: inherit;
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+.finance-ledger .finance-itemized-amount,
+.finance-ledger .finance-itemized-monthly {
+  font-size: calc(var(--type-body, 14px) + 1px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.finance-ledger .finance-money {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.finance-ledger .finance-itemized-meta,
+.finance-ledger .finance-itemized-counting {
+  color: var(--muted);
+  font-size: var(--type-meta, 12px);
+  margin-block-start: 5px;
+}
+.finance-ledger .finance-itemized-details {
+  margin-block-start: 4px;
+}
+.finance-ledger-source-label {
+  color: var(--accent);
+}
+.finance-ledger .finance-itemized-details summary {
+  color: var(--accent);
+  padding-block: 2px;
+}
+.finance-ledger .finance-itemized-details[open] > div {
+  border-inline-start: 2px solid var(--line);
+  padding-inline-start: 12px;
+  margin-block: 8px 2px;
+  font-size: var(--type-ui, 13px);
+}
+.finance-ledger .finance-itemized-details p {
+  margin-block: 0 8px;
+}
+.finance-ledger .finance-ledger-action .button {
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+.lifeos-finances .finance-metrics {
+  gap: 16px;
+  margin: 0;
+}
+.lifeos-finances .finance-metrics .metric-card {
+  box-shadow: none;
+  min-inline-size: 0;
+}
+.lifeos-finances .finance-columns {
+  gap: 20px;
+  margin: 0;
+}
+.lifeos-finances .finance-totals > div {
+  gap: 12px;
+  padding-block: 10px;
+}
+.lifeos-finances .finance-record {
+  padding-block: 16px;
+}
+
+/* Projects and files use readable working rows instead of oversized tile art. */
+.lifeos-projects .project-area-controls,
+.lifeos-files > .filter-bar,
+.lifeos-reports > .filter-bar {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 0;
+}
+.lifeos-projects .project-area {
+  min-inline-size: 0;
+}
+.lifeos-projects .project-area-heading {
+  padding-block: 8px 14px;
+  border-block-end: 1px solid var(--line);
+  margin-block-end: 16px;
+}
+.lifeos-projects .project-grid {
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+}
+.lifeos-projects .project-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-radius: 12px;
+  box-shadow: none;
+  transform: none;
+}
+.lifeos-projects .project-icon {
+  inline-size: 36px;
+  block-size: 36px;
+  padding: 8px;
+  margin-block-end: 12px;
+  border-radius: 8px;
+}
+.lifeos-projects .project-card > .chip {
+  align-self: start;
+  float: none;
+  margin-block-end: 4px;
+}
+.lifeos-projects .project-card h2 {
+  font-size: calc(var(--type-body, 14px) + 3px);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  margin-block: 6px 8px;
+}
+.lifeos-projects .project-card p {
+  font-size: var(--type-ui, 13px);
+  line-height: 1.8;
+  margin-block: 0 20px;
+  flex: 1;
+}
+.lifeos-projects .project-card footer {
+  font-size: var(--type-meta, 12px);
+  margin-block-start: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lifeos-projects .templates-panel {
+  margin-block-start: 8px;
+}
+.lifeos-files .file-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.lifeos-files .file-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 14px;
+}
+.lifeos-files .file-grid .check-label {
+  font-size: var(--type-meta, 12px);
+  color: var(--muted);
+  margin-block-end: 12px;
+}
+.lifeos-files .file-grid .file-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+  padding: 0;
+}
+.lifeos-files .file-grid .file-art {
+  inline-size: 58px;
+  block-size: 72px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  gap: 4px;
+}
+.lifeos-files .file-grid .file-art svg {
+  inline-size: 23px;
+  block-size: 23px;
+}
+.lifeos-files .file-grid .file-art span {
+  font-size: var(--type-tiny, 11px);
+}
+.lifeos-files .file-info {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 6px;
+  padding: 0;
+  flex: 1;
+}
+.lifeos-files .file-info strong {
+  font-size: var(--type-body, 14px);
+  overflow-wrap: anywhere;
+}
+.lifeos-files .file-info small {
+  font-size: var(--type-meta, 12px);
+}
+
+/* Routines: schedule and controls remain adjacent and usable at every width. */
+.lifeos-routines .routine-date-bar {
+  margin: 0;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  align-items: center;
+}
+.lifeos-routines .routine-list {
+  gap: 0;
+}
+.lifeos-routines .routine-card {
+  border: 0;
+  border-block-end: 1px solid var(--line);
+  border-radius: 0;
+  padding: 20px 0;
+  background: transparent;
+  gap: 16px;
+}
+.lifeos-routines .routine-card:last-child {
+  border-block-end: 0;
+}
+.lifeos-routines .routine-card-main {
+  gap: 14px;
+  flex: 1;
+  min-inline-size: 0;
+}
+.lifeos-routines .routine-card-main > div {
+  min-inline-size: 0;
+}
+.lifeos-routines .routine-card-main strong {
+  font-size: calc(var(--type-body, 14px) + 2px);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.lifeos-routines .routine-card-main p,
+.lifeos-routines .routine-card-main small {
+  font-size: var(--type-ui, 13px);
+  line-height: 1.8;
+}
+.lifeos-routines .routine-card[data-routine-state="paused"] .routine-card-icon,
+.lifeos-routines
+  .routine-card[data-routine-state="archived"]
+  .routine-card-icon {
+  color: var(--muted);
+  background: var(--raised);
+}
+.lifeos-routines .routine-card-actions {
+  gap: 6px;
+  align-self: center;
+}
+.routine-form .routine-weekdays button {
+  min-block-size: var(--control-height, 38px);
+  min-inline-size: 42px;
+}
+
+/* Settings: jump links and stable groups keep connection/security controls findable. */
+.lifeos-settings-index {
+  display: flex;
+  gap: 6px 8px;
+  flex-wrap: wrap;
+  padding-block-end: 18px;
+  border-block-end: 1px solid var(--line);
+}
+.lifeos-settings-index a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--control-height, 38px);
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--type-ui, 13px);
+  text-decoration: none;
+}
+.lifeos-settings .settings-grid {
+  gap: 20px;
+  margin: 0;
+  align-items: start;
+}
+.lifeos-settings .lifeos-settings-card {
+  scroll-margin-block-start: 24px;
+  margin: 0;
+}
+.lifeos-settings .lifeos-settings-google {
+  grid-column: 1 / -1;
+}
+.lifeos-settings-card > .section-heading {
+  margin-block-end: 18px;
+}
+.lifeos-settings-card p {
+  max-inline-size: 78ch;
+  line-height: 1.85;
+}
+.lifeos-settings-card .field {
+  max-inline-size: 480px;
+  margin-block-end: 16px;
+}
+.lifeos-settings-card > .button {
+  margin-block: 6px;
+  margin-inline-end: 8px;
+}
+.lifeos-password-settings .form-grid,
+.lifeos-experience-settings .form-grid {
+  max-inline-size: 640px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+.lifeos-password-settings .form-grid > .button {
+  justify-self: start;
+}
+.lifeos-settings .connection-card {
+  background: var(--raised);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 16px;
+  margin-block-end: 16px;
+}
+.lifeos-connections .grant-row {
+  gap: 16px;
+  padding-block: 18px;
+  align-items: center;
+}
+.lifeos-connections .grant-row > div {
+  min-inline-size: 0;
+  flex: 1;
+}
+.lifeos-connections .grant-row strong,
+.lifeos-connections .grant-row p {
+  overflow-wrap: anywhere;
+}
+.lifeos-connections .grant-row time {
+  display: block;
+  direction: ltr;
+  text-align: start;
+  unicode-bidi: isolate;
+  font-size: var(--type-meta, 12px);
+}
+.lifeos-settings .diagnostic-grid details {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--raised);
+  min-inline-size: 0;
+}
+.lifeos-settings .diagnostic-grid summary {
+  cursor: pointer;
+  font-size: var(--type-ui, 13px);
+}
+
+/* Reports: real data marks, readable labels and accessible tables remain paired. */
+.lifeos-trends .lifeos-chart-label {
+  color: var(--ink);
+  font-size: var(--type-meta, 12px);
+  font-weight: 600;
+  margin-block: 20px 12px;
+}
+.lifeos-trends .trend-bars {
+  gap: 12px;
+  border-block-end: 1px solid var(--line);
+  padding-block: 12px 16px;
+}
+.lifeos-trends .trend-bar-track {
+  background: transparent;
+  block-size: 130px;
+}
+.lifeos-trends svg.trend-bar {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  max-inline-size: 34px;
+  margin-inline: auto;
+  background: transparent;
+  color: var(--accent);
+  fill: currentColor;
+}
+.lifeos-trends .trend-column > strong,
+.lifeos-trends .trend-column > span {
+  font-size: var(--type-meta, 12px);
+  font-variant-numeric: tabular-nums;
+}
+.lifeos-trends .activity-heatmap {
+  padding-block: 12px;
+}
+.lifeos-trends > details {
+  margin-block-start: 20px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--line);
+}
+.lifeos-trends summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: var(--type-ui, 13px);
+}
+.lifeos-planning .planning-phases {
+  gap: 12px;
+}
+.lifeos-planning .planning-phases > div,
+.lifeos-planning .critical-path {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.lifeos-planning .planning-phases h3 {
+  font-size: var(--type-body, 14px);
+  line-height: 1.8;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .finance-ledger-table tbody tr:hover > td,
+  .finance-ledger-table tbody tr:hover > .finance-ledger-identity {
+    background: color-mix(in srgb, var(--raised) 60%, var(--surface));
+  }
+  .lifeos-settings-index a:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .lifeos-files .file-grid > div:has(.file-card:hover) {
+    border-color: var(--control-line, var(--accent));
+  }
+}
+@media (max-width: 1100px) {
+  .lifeos-today-priorities {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lifeos-routines .routine-card-actions {
+    inline-size: 100%;
+  }
+}
+@media (max-width: 760px) {
+  .lifeos-section-screen {
+    gap: 20px;
+  }
+  .lifeos-files .file-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lifeos-settings .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lifeos-routines .routine-date-bar,
+  .lifeos-finances .finance-toolbar,
+  .lifeos-dashboard > .filter-bar {
+    padding: 14px;
+  }
+  .lifeos-routines .routine-card {
+    padding-block: 18px;
+  }
+  .lifeos-focus-primary .daily-focus-actions {
+    flex-wrap: wrap;
+    max-inline-size: 88px;
+  }
+  .lifeos-settings-index {
+    gap: 8px;
+  }
+  .lifeos-settings-index a {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .finance-ledger-table th:first-child {
+    inline-size: 160px;
+  }
+  .finance-ledger-table th:nth-child(2) {
+    inline-size: 140px;
+  }
+  .finance-ledger-table th:nth-child(3) {
+    inline-size: 180px;
+  }
+  .finance-ledger-table th:nth-child(4) {
+    inline-size: 150px;
+  }
+  .finance-ledger-table th:nth-child(5) {
+    inline-size: 230px;
+  }
+  .finance-ledger-table th:nth-child(6) {
+    inline-size: 100px;
+  }
+}
+@media (pointer: coarse) {
+  .finance-ledger summary,
+  .lifeos-trends summary,
+  .lifeos-settings .diagnostic-grid summary {
+    min-block-size: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .lifeos-section-screen :is(input, select, textarea) {
+    font-size: max(16px, var(--type-body, 14px));
+  }
+}
+:root[data-density="compact"] .finance-ledger-table :is(th, td) {
+  padding-block: 10px;
+}
+:root[data-density="compact"] .lifeos-routines .routine-card {
+  padding-block: 14px;
+}
+@media (forced-colors: active) {
+  .lifeos-focus-primary {
+    border: 2px solid Highlight;
+    box-shadow: none;
+  }
+  .finance-ledger-table .finance-ledger-identity {
+    background: Canvas;
+  }
+  .lifeos-trends svg.trend-bar {
+    fill: Highlight;
+  }
+}

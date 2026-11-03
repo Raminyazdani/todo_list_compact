@@ -48,7 +48,7 @@ export function DependencyGraph({
       data: {
         label: (
           <div className="graph-label">
-            <span>{task.title}</span>
+            <span title={task.title}>{task.title}</span>
             <TaskStatus task={task} />
           </div>
         ),
@@ -56,7 +56,7 @@ export function DependencyGraph({
       style: {
         background: "var(--surface)",
         color: "var(--ink)",
-        border: "1px solid var(--line)",
+        border: "1px solid var(--control-line)",
         borderRadius: 12,
         width: 210,
       },
@@ -69,10 +69,10 @@ export function DependencyGraph({
     label: edge.operator,
     animated: false,
     style: {
-      stroke: edge.mode === "soft" ? "#838a9b" : "#a8a4ff",
+      stroke: edge.mode === "soft" ? "var(--muted)" : "var(--accent)",
       strokeDasharray: edge.mode === "soft" ? "5 5" : undefined,
     },
-    markerEnd: { type: "arrowclosed" as const, color: "#a8a4ff" },
+    markerEnd: { type: "arrowclosed" as const, color: "var(--accent)" },
   }));
   return (
     <div className="graph-section">
@@ -192,11 +192,11 @@ export function DependencyGraph({
             fitView
             minZoom={0.2}
           >
-            <Background color="#363a45" />
+            <Background color="var(--line)" />
             <Controls />
             <MiniMap
               nodeColor="var(--accent-strong)"
-              maskColor="#15171c99"
+              maskColor="var(--planning-graph-mask)"
               pannable
               zoomable
             />

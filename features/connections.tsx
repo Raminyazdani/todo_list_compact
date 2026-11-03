@@ -79,7 +79,10 @@ export function Connections() {
     }
   }
   return (
-    <section className="panel">
+    <section
+      className="panel lifeos-settings-card lifeos-connections"
+      id="settings-connections"
+    >
       <SectionHeading
         title={t("مجوزهای ابزارهای متصل", "Connected tool grants")}
         action={

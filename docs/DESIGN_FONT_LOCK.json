@@ -1,0 +1,28 @@
+{
+  "repository": "rastikerdar/vazirmatn",
+  "revision": "6e553e33489a8f9dfaccc76860a2e3f3c1e66de7",
+  "license": "OFL-1.1",
+  "files": [
+    {
+      "source_path": "fonts/webfonts/Vazirmatn[wght].woff2",
+      "local_path": "public/fonts/vazirmatn/Vazirmatn-variable.woff2",
+      "git_blob": "a501289a85595158570b0c2badcb4608b042e748",
+      "sha256": "4e3fa217d38fdafc1fea4414ceb58ca5e662cf0ab5fa735a8c8c20e8b42cad92",
+      "bytes": 111152
+    },
+    {
+      "source_path": "OFL.txt",
+      "local_path": "public/fonts/vazirmatn/OFL.txt",
+      "git_blob": "be66b3824e9772e75141e631695c5256f105fb57",
+      "sha256": "17e355067c8284f47743a1ee3b1ef7ff684ff0601eda357f9353b10b3016ab31",
+      "bytes": 4391
+    },
+    {
+      "source_path": "AUTHORS.txt",
+      "local_path": "public/fonts/vazirmatn/AUTHORS.txt",
+      "git_blob": "6efd2e62407e08b482647e134f9098b44e5ae5ec",
+      "sha256": "b57746a5f7002c0974c76c32af74079ff7ef1aaf8f35495e9409cfa1eb11e1ca",
+      "bytes": 339
+    }
+  ]
+}

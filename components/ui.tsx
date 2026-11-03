@@ -7,6 +7,7 @@ import {
   cloneElement,
   isValidElement,
   useId,
+  useRef,
   useSyncExternalStore,
   type ReactElement,
   type ReactNode,
@@ -64,6 +65,7 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
+  const focusFallback = useRef<HTMLElement | null>(null);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -71,11 +73,34 @@ export function Modal({
         <Dialog.Content
           className={`dialog ${wide ? "wide" : ""}`}
           aria-describedby={undefined}
+          onOpenAutoFocus={() => {
+            const active = document.activeElement;
+            const lostOpener =
+              active === document.body ||
+              (active instanceof HTMLElement && !!active.closest("[inert]"));
+            const fallback = document.querySelector<HTMLElement>(
+              "[data-dialog-focus-fallback]",
+            );
+            focusFallback.current =
+              lostOpener && fallback?.getClientRects().length ? fallback : null;
+          }}
+          onCloseAutoFocus={(event) => {
+            const fallback = focusFallback.current;
+            focusFallback.current = null;
+            if (
+              fallback?.isConnected &&
+              fallback.getClientRects().length &&
+              !fallback.closest("[inert]")
+            ) {
+              event.preventDefault();
+              fallback.focus();
+            }
+          }}
         >
           <div className="dialog-heading">
             <Dialog.Title>{title}</Dialog.Title>
             <Dialog.Close className="icon-button" aria-label="Close / بستن">
-              <X size={19} />
+              <X size={19} aria-hidden="true" />
             </Dialog.Close>
           </div>
           {children}
@@ -123,7 +148,7 @@ export function Empty({
 }) {
   return (
     <div className="empty">
-      <div className="empty-icon">
+      <div className="empty-icon" aria-hidden="true">
         <ArrowUpRight size={24} />
       </div>
       <h3>{title}</h3>
@@ -144,15 +169,15 @@ export function QueryState({
   if (error)
     return (
       <div className="error-state" role="alert">
-        <AlertCircle size={20} />
+        <AlertCircle size={20} aria-hidden="true" />
         <span>{error}</span>
         <Button onClick={retry}>تلاش دوباره / Retry</Button>
       </div>
     );
   if (loading)
     return (
-      <div className="loading-state" role="status">
-        <LoaderCircle className="spin" size={22} />
+      <div className="loading-state" role="status" aria-busy="true">
+        <LoaderCircle className="spin" size={22} aria-hidden="true" />
         <span>در حال دریافت / Loading</span>
       </div>
     );

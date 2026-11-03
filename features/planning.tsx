@@ -142,7 +142,7 @@ export function PlanningPanel({
     }
   }
   return (
-    <section className="panel planning-panel">
+    <section className="panel planning-panel lifeos-planning">
       <SectionHeading
         title={t(
           "برنامهٔ وابستگی‌ها و پیشنهاد زمان‌بندی",

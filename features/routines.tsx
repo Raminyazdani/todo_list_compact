@@ -371,7 +371,17 @@ export function RoutineWorkspace({ action }: { action: Action }) {
   function routineCard(routine: RoutineDTO) {
     const busy = busyId === routine.routine_id;
     return (
-      <article className="routine-card" key={routine.routine_id}>
+      <article
+        className="routine-card"
+        key={routine.routine_id}
+        data-routine-state={
+          routine.archived_at
+            ? "archived"
+            : routine.enabled
+              ? "active"
+              : "paused"
+        }
+      >
         <div className="routine-card-main">
           <span className="routine-card-icon">
             <Repeat2 size={18} />
@@ -451,7 +461,7 @@ export function RoutineWorkspace({ action }: { action: Action }) {
     );
   }
   return (
-    <>
+    <div className="lifeos-section-screen lifeos-routines">
       <div className="page-heading routine-heading">
         <div>
           <div className="eyebrow">
@@ -500,6 +510,11 @@ export function RoutineWorkspace({ action }: { action: Action }) {
       <section className="panel routine-list-panel">
         <SectionHeading
           title={t("روتین‌های من", "My routines")}
+          action={
+            <span className="lifeos-section-count">
+              {active.length} {t("روتین", "routines")}
+            </span>
+          }
           subtitle={t(
             "تغییر برنامه از فردای برلین اعمال می‌شود؛ انجام‌های قبلی حفظ می‌شوند. توقف و بایگانی فوری است.",
             "Schedule changes take effect tomorrow in Berlin; past check-ins stay saved. Pause and archive take effect now.",
@@ -657,6 +672,6 @@ export function RoutineWorkspace({ action }: { action: Action }) {
           </form>
         )}
       </Modal>
-    </>
+    </div>
   );
 }
