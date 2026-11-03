@@ -247,8 +247,35 @@ export function FinanceWorkspace({ action }: { action: Action }) {
   const archivedPlans = usePagedQuery<FinancePlanDTO>(
     "finance_plan_list",
     { month, archived: true },
-    tab === "plans" && archived,
+    tab === "overview" || (tab === "plans" && archived),
   );
+  const itemizedPlans = useMemo(() => {
+    const latest = new Map<string, FinancePlanDTO>();
+    for (const plan of [
+      ...(plans.data?.items ?? []),
+      ...(archivedPlans.data?.items ?? []),
+    ]) {
+      const previous = latest.get(plan.plan_id);
+      if (!previous || plan.revision > previous.revision)
+        latest.set(plan.plan_id, plan);
+    }
+    return [...latest.values()];
+  }, [plans.data, archivedPlans.data]);
+  const itemizedError =
+    [
+      plans.error &&
+        t(
+          "دریافت موارد جاری کامل نشد: ",
+          "Current items could not be fully loaded: ",
+        ) + plans.error,
+      archivedPlans.error &&
+        t(
+          "دریافت سوابق بایگانی‌شده کامل نشد: ",
+          "Archived history could not be fully loaded: ",
+        ) + archivedPlans.error,
+    ]
+      .filter(Boolean)
+      .join(" · ") || null;
   const transactions = usePagedQuery<FinanceTransactionDTO>(
     "finance_transaction_list",
     { month, archived },
@@ -605,10 +632,13 @@ export function FinanceWorkspace({ action }: { action: Action }) {
                 </p>
               )}
               <FinanceItemizedPlans
-                plans={plans.data?.items ?? []}
-                loading={plans.loading}
-                error={plans.error}
-                retry={plans.refresh}
+                plans={itemizedPlans}
+                loading={plans.loading || archivedPlans.loading}
+                error={itemizedError}
+                retry={() => {
+                  plans.refresh();
+                  archivedPlans.refresh();
+                }}
                 labels={labels}
                 accountName={accountName}
                 categoryName={categoryName}

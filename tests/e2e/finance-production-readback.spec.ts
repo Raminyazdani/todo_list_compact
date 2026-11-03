@@ -80,20 +80,29 @@ test("production finance rendered values match authenticated REST without financ
     month,
     horizon_months: 3,
   });
-  const plans: FinancePlanDTO[] = [];
-  let cursor: string | null = null;
-  const seen = new Set<string>();
-  do {
-    const data: PageDTO<FinancePlanDTO> = await read("finance_plan_list", {
-      month,
-      limit: 200,
-      cursor,
-    });
-    plans.push(...data.items);
-    cursor = data.next_cursor;
-    if (cursor && seen.has(cursor)) throw new Error("FINANCE_REPEATED_CURSOR");
-    if (cursor) seen.add(cursor);
-  } while (cursor);
+  const plansById = new Map<string, FinancePlanDTO>();
+  for (const archived of [false, true]) {
+    let cursor: string | null = null;
+    const seen = new Set<string>();
+    do {
+      const data: PageDTO<FinancePlanDTO> = await read("finance_plan_list", {
+        month,
+        archived,
+        limit: 200,
+        cursor,
+      });
+      for (const item of data.items) {
+        const previous = plansById.get(item.plan_id);
+        if (!previous || item.revision >= previous.revision)
+          plansById.set(item.plan_id, item);
+      }
+      cursor = data.next_cursor;
+      if (cursor && seen.has(cursor))
+        throw new Error("FINANCE_REPEATED_CURSOR");
+      if (cursor) seen.add(cursor);
+    } while (cursor);
+  }
+  const plans = [...plansById.values()];
   await page.goto(`${canonical}/finances`);
   await page.getByLabel(/ماه گزارش|Report month/).fill(month);
   await expect(page.locator(".finance-metrics .metric-card")).toHaveCount(4);
@@ -129,7 +138,7 @@ test("production finance rendered values match authenticated REST without financ
   });
   await expect(itemizedHeading).toBeVisible();
   const applicablePlans = plans.filter(
-    (plan) => plan.applicable && !plan.archived_at,
+    (plan) => plan.applicable && (!plan.archived_at || plan.state === "active"),
   );
   await expect(itemized.locator(".finance-itemized-row")).toHaveCount(
     applicablePlans.length,
@@ -156,6 +165,14 @@ test("production finance rendered values match authenticated REST without financ
       await expect(monthly).toContainText(/نامشخص|Unknown/);
     else await expect(monthly.locator(".finance-money")).toHaveCount(0);
     const counting = row.locator(".finance-itemized-counting");
+    if (plan.archived_at) {
+      await expect(row.locator(".finance-itemized-archived")).toHaveText(
+        /بایگانی‌شده؛ نسخهٔ این ماه|Archived; this month's version/,
+      );
+      await expect(
+        row.getByRole("button", { name: /^(ویرایش|Edit) / }),
+      ).toHaveCount(0);
+    }
     if (plan.state !== "active" || !plan.included)
       await expect(counting).toHaveText(
         /خارج از جمع ماهانه|Excluded from monthly totals/,
@@ -182,6 +199,23 @@ test("production finance rendered values match authenticated REST without financ
       itemizedNotesChecked++;
     }
   }
+  const selected = applicablePlans.filter(
+    (plan) =>
+      plan.state === "active" &&
+      plan.included &&
+      plan.monthly_equivalent_cents !== null,
+  );
+  const displayedCostCents = selected
+    .filter((plan) => plan.kind === "recurring" || plan.kind === "budget")
+    .reduce((total, plan) => total + plan.monthly_equivalent_cents!, 0);
+  const displayedReserveCents = selected
+    .filter((plan) => plan.kind === "reserve")
+    .reduce((total, plan) => total + plan.monthly_equivalent_cents!, 0);
+  expect(displayedCostCents).toBe(summary.monthly_cost_cents);
+  expect(displayedReserveCents).toBe(summary.reserve_monthly_cents);
+  expect(displayedCostCents + displayedReserveCents).toBe(
+    summary.monthly_allocation_cents,
+  );
   const categoryPanel = page.locator("section.panel").filter({
     has: page.getByRole("heading", {
       name: /هزینه‌ها بر اساس دسته|Costs by category/,
@@ -223,8 +257,9 @@ test("production finance rendered values match authenticated REST without financ
     .click();
   const unknown = plans.find(
     (item) =>
-      item.amount_cents === null ||
-      (item.kind === "recurring" && item.interval_months === null),
+      !item.archived_at &&
+      (item.amount_cents === null ||
+        (item.kind === "recurring" && item.interval_months === null)),
   );
   if (unknown) {
     await page
@@ -280,7 +315,7 @@ test("production finance rendered values match authenticated REST without financ
         plan_count: plans.length,
         itemized_plan_count: applicablePlans.length,
         itemized_notes_checked: itemizedNotesChecked,
-        unknown_plan_count: plans.filter(
+        unknown_plan_count: applicablePlans.filter(
           (item) =>
             item.amount_cents === null ||
             (item.kind === "recurring" && item.interval_months === null),

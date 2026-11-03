@@ -535,6 +535,91 @@ test("finance workspace separates plans from registered payments and preserves h
     expect(
       savedPayments.filter((item) => item.title.startsWith(prefix)),
     ).toHaveLength(3);
+
+    // A future archive must not hide a line that still contributes to history.
+    const archiveMonth = "2032-05";
+    const historicalBefore = await read<FinanceSummaryDTO>(
+      request,
+      "finance_summary",
+      { month },
+    );
+    const futureBefore = await read<FinanceSummaryDTO>(
+      request,
+      "finance_summary",
+      { month: archiveMonth },
+    );
+    const futurePlan = (
+      await all<FinancePlanDTO>(request, "finance_plan_list", {
+        month: archiveMonth,
+      })
+    ).find((item) => item.plan_id === planId)!;
+    await mutate(
+      request,
+      "finance_plan_archive",
+      { plan_id: planId, effective_month: archiveMonth },
+      futurePlan.revision,
+    );
+    try {
+      await page.reload();
+      await page.getByLabel(/ماه گزارش|Report month/).fill(month);
+      const historicalRow = page.locator(
+        `.finance-itemized-row[data-plan-id="${planId}"]`,
+      );
+      await expect(historicalRow).toBeVisible();
+      await expect(
+        historicalRow.locator(".finance-itemized-archived"),
+      ).toHaveText(/بایگانی‌شده؛ نسخهٔ این ماه|Archived; this month's version/);
+      await expect(
+        historicalRow.locator(".finance-itemized-monthly .finance-money"),
+      ).toHaveText(money(10000));
+      await expect(
+        historicalRow.getByRole("button", { name: /^(ویرایش|Edit) / }),
+      ).toHaveCount(0);
+      const historicalAfter = await read<FinanceSummaryDTO>(
+        request,
+        "finance_summary",
+        { month },
+      );
+      expect(historicalAfter.monthly_cost_cents).toBe(
+        historicalBefore.monthly_cost_cents,
+      );
+      await expect(
+        page
+          .locator(".finance-metrics .metric-card")
+          .nth(0)
+          .locator("strong .finance-money"),
+      ).toHaveText(money(historicalAfter.recurring_monthly_cents));
+      await page.getByLabel(/ماه گزارش|Report month/).fill(archiveMonth);
+      await expect(historicalRow).toHaveCount(0);
+      const futureAfter = await read<FinanceSummaryDTO>(
+        request,
+        "finance_summary",
+        { month: archiveMonth },
+      );
+      expect(futureAfter.monthly_cost_cents).toBe(
+        futureBefore.monthly_cost_cents - futurePlan.monthly_equivalent_cents!,
+      );
+      await expect(
+        page
+          .locator(".finance-metrics .metric-card")
+          .nth(0)
+          .locator("strong .finance-money"),
+      ).toHaveText(money(futureAfter.recurring_monthly_cents));
+    } finally {
+      const archivedPlan = (
+        await all<FinancePlanDTO>(request, "finance_plan_list", {
+          month: archiveMonth,
+          archived: true,
+        })
+      ).find((item) => item.plan_id === planId);
+      if (archivedPlan)
+        await mutate(
+          request,
+          "finance_plan_restore",
+          { plan_id: planId, effective_month: archiveMonth },
+          archivedPlan.revision,
+        );
+    }
   } finally {
     await cleanup(request, prefix);
   }

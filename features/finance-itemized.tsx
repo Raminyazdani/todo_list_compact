@@ -35,7 +35,7 @@ const monthlyKinds = new Set<FinancePlanKind>([
   "reserve",
 ]);
 
-/** Read the same plans as the editor; no second ledger or additional request. */
+/** Itemize selected-month versions without recalculating financial totals. */
 export function FinanceItemizedPlans({
   plans,
   loading,
@@ -53,7 +53,10 @@ export function FinanceItemizedPlans({
   const isSelectedMonthly = (plan: FinancePlanDTO) =>
     plan.state === "active" && plan.included && monthlyKinds.has(plan.kind);
   const rows = plans
-    .filter((plan) => plan.applicable && !plan.archived_at)
+    .filter(
+      (plan) =>
+        plan.applicable && (!plan.archived_at || plan.state === "active"),
+    )
     .sort(
       (left, right) =>
         Number(isSelectedMonthly(right)) - Number(isSelectedMonthly(left)),
@@ -108,6 +111,7 @@ export function FinanceItemizedPlans({
     <section
       className="panel finance-itemized"
       aria-label={t("ریز هزینه‌های این ماه", "Itemized costs this month")}
+      aria-busy={loading}
     >
       <SectionHeading
         title={t("ریز هزینه‌های این ماه", "Itemized costs this month")}
@@ -145,15 +149,25 @@ export function FinanceItemizedPlans({
                   <span className="finance-pill">
                     {labels.state[plan.state]}
                   </span>
+                  {plan.archived_at && (
+                    <span className="finance-pill finance-itemized-archived">
+                      {t(
+                        "بایگانی‌شده؛ نسخهٔ این ماه",
+                        "Archived; this month's version",
+                      )}
+                    </span>
+                  )}
                   <span>{categoryName(plan.category_id)}</span>
                 </div>
               </div>
-              <Button
-                aria-label={`${t("ویرایش", "Edit")} ${plan.title}`}
-                onClick={() => onEdit(plan)}
-              >
-                <Pencil size={14} /> {t("ویرایش", "Edit")}
-              </Button>
+              {!plan.archived_at && (
+                <Button
+                  aria-label={`${t("ویرایش", "Edit")} ${plan.title}`}
+                  onClick={() => onEdit(plan)}
+                >
+                  <Pencil size={14} /> {t("ویرایش", "Edit")}
+                </Button>
+              )}
             </div>
             <dl className="finance-itemized-facts">
               <div>
